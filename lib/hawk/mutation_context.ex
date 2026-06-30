@@ -1,0 +1,127 @@
+defmodule Hawk.MutationContext do
+  @moduledoc """
+  Write-side state object shared by writer helpers and repository boundaries.
+
+  A mutation context carries one model, incoming attributes, authority,
+  validation state, policy-validation state, and operation metadata through a
+  guarded writer pipeline.
+  """
+
+  alias Ecto.Changeset
+  alias Hawk.Authority
+
+  @type error :: :none | :invalid | :not_authorized
+  @type operation :: :create | :update | :delete | nil
+
+  @type t :: %__MODULE__{
+          model: struct(),
+          attrs: map(),
+          authority: Authority.t(),
+          changeset: Changeset.t(),
+          error: error(),
+          policy_validated?: boolean(),
+          operation: operation(),
+          meta: map()
+        }
+
+  @operations [:create, :update, :delete, nil]
+
+  @enforce_keys [:model, :attrs, :authority, :changeset]
+  defstruct [
+    :model,
+    :attrs,
+    :authority,
+    :changeset,
+    :operation,
+    error: :none,
+    policy_validated?: false,
+    meta: %{}
+  ]
+
+  @doc """
+  Builds a fresh mutation context.
+  """
+  @spec new(struct(), map(), Authority.t(), operation()) :: t()
+  def new(model, attrs, %Authority{} = authority, operation \\ nil)
+      when is_struct(model) and is_map(attrs) do
+    validate_operation!(operation)
+
+    %__MODULE__{
+      model: model,
+      attrs: attrs,
+      authority: authority,
+      changeset: Changeset.change(model),
+      operation: operation
+    }
+  end
+
+  @doc """
+  Adds a field validation error and marks the context invalid.
+  """
+  @spec add_error(t(), atom(), String.t(), keyword()) :: t()
+  def add_error(%__MODULE__{} = context, field, message, opts \\ []) when is_atom(field) do
+    %{
+      context
+      | changeset: Changeset.add_error(context.changeset, field, message, opts),
+        error: :invalid
+    }
+  end
+
+  @doc """
+  Runs a function only while the context has no error.
+  """
+  @spec guard(t(), (t() -> t())) :: t()
+  def guard(%__MODULE__{error: :none} = context, fun) when is_function(fun, 1) do
+    fun.(context)
+  end
+
+  def guard(%__MODULE__{} = context, fun) when is_function(fun, 1), do: context
+
+  @doc """
+  Stores pipeline metadata.
+  """
+  @spec put_meta(t(), atom(), term()) :: t()
+  def put_meta(%__MODULE__{meta: meta} = context, key, value) when is_atom(key) do
+    %{context | meta: Map.put(meta, key, value)}
+  end
+
+  @doc """
+  Evaluates write policy if the context is still valid.
+  """
+  @spec validate_policy(t(), (t() -> boolean())) :: t()
+  def validate_policy(%__MODULE__{} = context, predicate) when is_function(predicate, 1) do
+    guard(context, fn context ->
+      if predicate.(context) do
+        mark_policy_validated(context)
+      else
+        context
+        |> mark_policy_validated()
+        |> put_error(:not_authorized)
+      end
+    end)
+  end
+
+  @doc """
+  Marks the context as having completed write-policy validation.
+  """
+  @spec mark_policy_validated(t()) :: t()
+  def mark_policy_validated(%__MODULE__{} = context) do
+    %{context | policy_validated?: true}
+  end
+
+  @doc """
+  Sets the high-level context error.
+  """
+  @spec put_error(t(), error()) :: t()
+  def put_error(%__MODULE__{} = context, error)
+      when error in [:none, :invalid, :not_authorized] do
+    %{context | error: error}
+  end
+
+  defp validate_operation!(operation) when operation in @operations, do: :ok
+
+  defp validate_operation!(operation) do
+    raise ArgumentError,
+          "operation must be one of #{inspect(@operations)}, got: #{inspect(operation)}"
+  end
+end
