@@ -1,0 +1,185 @@
+defmodule Hawk.WriterTest do
+  use ExUnit.Case, async: true
+
+  alias Ecto.Changeset
+  alias Hawk.Authority
+  alias Hawk.MutationContext
+  alias Hawk.TestSupport.School.Student
+  alias Hawk.Writer
+
+  describe "defaults/2" do
+    test "puts defaults only when attrs are missing" do
+      context =
+        %Student{}
+        |> context(%{name: "Ada", active: false})
+        |> Writer.defaults(active: true, school_id: 7)
+
+      assert context.attrs == %{name: "Ada", active: false, school_id: 7}
+    end
+
+    test "evaluates zero-arity function defaults only when used" do
+      context =
+        %Student{}
+        |> context(%{name: "Ada"})
+        |> Writer.defaults(school_id: fn -> 7 end)
+
+      assert context.attrs.school_id == 7
+    end
+
+    test "is guarded" do
+      context =
+        %Student{}
+        |> context(%{})
+        |> MutationContext.add_error(:name, "can't be blank")
+
+      assert Writer.defaults(context, name: "Ada") == context
+    end
+  end
+
+  describe "cast/2" do
+    test "casts permitted attrs into the changeset" do
+      context =
+        %Student{}
+        |> context(%{name: "Ada", active: "false", school_id: 7, ignored: "value"})
+        |> Writer.cast([:name, :active, :school_id])
+
+      assert context.error == :none
+      assert Changeset.get_change(context.changeset, :name) == "Ada"
+      assert Changeset.get_change(context.changeset, :active) == false
+      assert Changeset.get_change(context.changeset, :school_id) == 7
+      refute Changeset.get_change(context.changeset, :ignored)
+    end
+
+    test "marks the context invalid when casting fails" do
+      context =
+        %Student{}
+        |> context(%{active: "not-a-boolean"})
+        |> Writer.cast([:active])
+
+      assert context.error == :invalid
+      assert {"is invalid", _opts} = context.changeset.errors[:active]
+    end
+  end
+
+  describe "validate_required/2" do
+    test "keeps the context valid when required fields are present" do
+      context =
+        %Student{}
+        |> context(%{name: "Ada", school_id: 7})
+        |> Writer.cast([:name, :school_id])
+        |> Writer.validate_required([:name, :school_id])
+
+      assert context.error == :none
+    end
+
+    test "marks the context invalid when required fields are missing" do
+      context =
+        %Student{}
+        |> context(%{name: "Ada"})
+        |> Writer.cast([:name, :school_id])
+        |> Writer.validate_required([:name, :school_id])
+
+      assert context.error == :invalid
+      assert {"can't be blank", _opts} = context.changeset.errors[:school_id]
+    end
+  end
+
+  describe "normalize/2" do
+    test "trims changed string fields and converts blank strings to nil" do
+      context =
+        %Student{}
+        |> context(%{name: "  Ada  "})
+        |> Writer.cast([:name])
+        |> Writer.normalize([:name])
+
+      assert Changeset.get_change(context.changeset, :name) == "Ada"
+
+      blank_context =
+        %Student{}
+        |> context(%{name: "   "})
+        |> Writer.cast([:name])
+        |> Writer.normalize([:name])
+
+      assert Changeset.get_change(blank_context.changeset, :name) == nil
+    end
+
+    test "does not normalize fields that were not cast" do
+      context =
+        %Student{}
+        |> context(%{name: "  Ada  "})
+        |> Writer.cast([])
+        |> Writer.normalize([:name])
+
+      refute Changeset.get_change(context.changeset, :name)
+    end
+
+    test "accepts a custom normalization function" do
+      context =
+        %Student{}
+        |> context(%{name: "Ada"})
+        |> Writer.cast([:name])
+        |> Writer.normalize([:name], &String.upcase/1)
+
+      assert Changeset.get_change(context.changeset, :name) == "ADA"
+    end
+  end
+
+  describe "validate/2" do
+    test "accepts ok validators" do
+      context =
+        %Student{}
+        |> context(%{})
+        |> Writer.validate(fn _context -> :ok end)
+
+      assert context.error == :none
+    end
+
+    test "accepts a single field error" do
+      context =
+        %Student{}
+        |> context(%{})
+        |> Writer.validate(fn _context -> {:error, :name, "is reserved"} end)
+
+      assert context.error == :invalid
+      assert context.changeset.errors[:name] == {"is reserved", []}
+    end
+
+    test "accepts a list of field errors" do
+      context =
+        %Student{}
+        |> context(%{})
+        |> Writer.validate(fn _context ->
+          [
+            {:error, :name, "is reserved"},
+            {:error, :school_id, "is unavailable"}
+          ]
+        end)
+
+      assert context.error == :invalid
+      assert context.changeset.errors[:name] == {"is reserved", []}
+      assert context.changeset.errors[:school_id] == {"is unavailable", []}
+    end
+
+    test "raises when custom validators return an unsupported shape" do
+      context = context(%Student{}, %{})
+
+      assert_raise ArgumentError, ~r/unsupported validator result/, fn ->
+        Writer.validate(context, fn _context -> :bad end)
+      end
+    end
+
+    test "is guarded" do
+      context =
+        %Student{}
+        |> context(%{})
+        |> MutationContext.add_error(:name, "can't be blank")
+
+      assert Writer.validate(context, fn _context -> flunk("validator should not run") end) ==
+               context
+    end
+  end
+
+  defp context(model, attrs) do
+    MutationContext.new(model, attrs, Authority.system(), :create)
+  end
+end
