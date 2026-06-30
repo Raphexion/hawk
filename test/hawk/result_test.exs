@@ -4,7 +4,7 @@ defmodule Hawk.ResultTest do
   alias Hawk.Authority
   alias Hawk.MutationContext
   alias Hawk.Result
-  alias Hawk.TestSupport.School.Student
+  alias Videdal.Student
 
   test "returns ok for a valid mutation context" do
     model = %Student{id: 1, name: "Ada"}

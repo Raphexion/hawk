@@ -3,7 +3,7 @@ defmodule Hawk.MutationContextTest do
 
   alias Hawk.Authority
   alias Hawk.MutationContext
-  alias Hawk.TestSupport.School.Student
+  alias Videdal.Student
 
   describe "new/4" do
     test "initializes write state" do

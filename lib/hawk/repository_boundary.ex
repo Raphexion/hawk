@@ -1,0 +1,139 @@
+defmodule Hawk.RepositoryBoundary do
+  @moduledoc """
+  Enforcing persistence boundary for Hawk writer pipelines.
+
+  Host applications provide the repo module. Hawk verifies mutation-context
+  state before delegating to that repo and normalizes persistence results back
+  into framework result tuples.
+  """
+
+  alias Ecto.Changeset
+  alias Hawk.Authority
+  alias Hawk.MutationContext
+  alias Hawk.Result
+
+  @type audit_event :: %{
+          operation: :insert | :update | :delete,
+          authority: Authority.t(),
+          model: struct()
+        }
+
+  @type repo :: module()
+  @type opts :: keyword()
+
+  @doc """
+  Inserts the context changeset through the host repo.
+  """
+  @spec insert(MutationContext.t(), repo(), opts()) :: Result.t(struct())
+  def insert(%MutationContext{} = context, repo, opts \\ []) do
+    persist(context, repo, :insert, opts, fn ->
+      repo.insert(context.changeset, repo_opts(opts))
+    end)
+  end
+
+  @doc """
+  Updates the context changeset through the host repo.
+
+  No-op updates return the unchanged model without touching the repo or audit
+  hook.
+  """
+  @spec update(MutationContext.t(), repo(), opts()) :: Result.t(struct())
+  def update(%MutationContext{} = context, repo, opts \\ []) do
+    with :ok <- preflight(context) do
+      if context.changeset.changes == %{} do
+        {:ok, context.model}
+      else
+        persist_preflighted(context, repo, :update, opts, fn ->
+          repo.update(context.changeset, repo_opts(opts))
+        end)
+      end
+    end
+  end
+
+  @doc """
+  Deletes the context model through the host repo.
+  """
+  @spec delete(MutationContext.t(), repo(), opts()) :: Result.t(struct())
+  def delete(%MutationContext{} = context, repo, opts \\ []) do
+    persist(context, repo, :delete, opts, fn ->
+      repo.delete(context.model, repo_opts(opts))
+    end)
+  end
+
+  defp persist(%MutationContext{} = context, repo, operation, opts, repo_fun) do
+    with :ok <- preflight(context) do
+      persist_preflighted(context, repo, operation, opts, repo_fun)
+    end
+  end
+
+  defp persist_preflighted(context, repo, operation, opts, repo_fun) do
+    repo.transaction(fn ->
+      repo_fun.()
+      |> normalize_repo_result(context, operation, opts)
+    end)
+    |> unwrap_transaction()
+  end
+
+  defp preflight(%MutationContext{error: :invalid} = context), do: {:invalid, context}
+
+  defp preflight(%MutationContext{error: :not_authorized} = context) do
+    {:not_authorized, context}
+  end
+
+  defp preflight(%MutationContext{error: :none} = context) do
+    validate_policy_marker!(context)
+  end
+
+  defp validate_policy_marker!(%MutationContext{authority: authority})
+       when authority.system? do
+    :ok
+  end
+
+  defp validate_policy_marker!(%MutationContext{policy_validated?: true}), do: :ok
+
+  defp validate_policy_marker!(%MutationContext{}) do
+    raise "write policy has not been validated"
+  end
+
+  defp normalize_repo_result({:ok, model}, context, operation, opts) do
+    audit(context, operation, model, opts)
+    {:ok, model}
+  end
+
+  defp normalize_repo_result({:error, %Changeset{} = changeset}, context, _operation, _opts) do
+    context =
+      context
+      |> Map.put(:changeset, changeset)
+      |> MutationContext.put_error(:invalid)
+
+    Result.from_context(context, context.model)
+  end
+
+  defp normalize_repo_result({:error, message}, _context, _operation, _opts)
+       when is_binary(message) do
+    Result.error(message)
+  end
+
+  defp normalize_repo_result(result, _context, _operation, _opts) do
+    raise "unsupported repo result: #{inspect(result)}"
+  end
+
+  defp unwrap_transaction({:ok, result}), do: result
+  defp unwrap_transaction({:error, message}) when is_binary(message), do: Result.error(message)
+  defp unwrap_transaction(result), do: result
+
+  defp audit(context, operation, model, opts) do
+    case Keyword.get(opts, :audit) do
+      nil ->
+        :ok
+
+      audit_fun when is_function(audit_fun, 1) ->
+        audit_fun.(%{operation: operation, authority: context.authority, model: model})
+        :ok
+    end
+  end
+
+  defp repo_opts(opts) do
+    Keyword.get(opts, :repo_opts, [])
+  end
+end

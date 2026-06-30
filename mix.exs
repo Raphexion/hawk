@@ -29,6 +29,6 @@ defmodule Hawk.MixProject do
     ]
   end
 
-  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(:test), do: ["lib", "test/videdal"]
   defp elixirc_paths(_env), do: ["lib"]
 end

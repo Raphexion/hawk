@@ -4,8 +4,8 @@ defmodule Hawk.WriterTest do
   alias Ecto.Changeset
   alias Hawk.Authority
   alias Hawk.MutationContext
-  alias Hawk.TestSupport.School.Student
   alias Hawk.Writer
+  alias Videdal.Student
 
   describe "defaults/2" do
     test "puts defaults only when attrs are missing" do
