@@ -6,6 +6,7 @@ defmodule Hawk.RepositoryBoundaryTest do
   alias Hawk.RepositoryBoundary
   alias Hawk.Writer
   alias Videdal.Repo
+  alias Videdal.School
   alias Videdal.Student
 
   describe "insert/3" do
@@ -74,6 +75,39 @@ defmodule Hawk.RepositoryBoundaryTest do
       assert returned_context.changeset.errors[:active]
       refute_received {:audit, _event}
     end
+
+    test "preserves resolved belongs-to relations when the foreign key was persisted" do
+      school = %School{id: 7, name: "Videdal Skole"}
+
+      context =
+        %Student{}
+        |> MutationContext.new(
+          %{name: "Ada", school_id: school.id, school: school},
+          Authority.system(),
+          :create
+        )
+        |> Writer.cast([:name, :school_id])
+
+      assert {:ok, %Student{school_id: 7, school: ^school}} =
+               RepositoryBoundary.insert(context, Repo)
+    end
+
+    test "does not preserve relations when the foreign key was not persisted" do
+      school = %School{id: 7, name: "Videdal Skole"}
+
+      context =
+        %Student{}
+        |> MutationContext.new(
+          %{name: "Ada", school_id: school.id, school: school},
+          Authority.system(),
+          :create
+        )
+        |> Writer.cast([:name])
+
+      assert {:ok, %Student{} = student} = RepositoryBoundary.insert(context, Repo)
+      refute Ecto.assoc_loaded?(student.school)
+      assert student.school_id == nil
+    end
   end
 
   describe "update/3" do
@@ -88,6 +122,22 @@ defmodule Hawk.RepositoryBoundaryTest do
 
       assert_received {:videdal_repo, :update, _changeset}
       assert_received {:audit, %{operation: :update, model: %Student{name: "Grace"}}}
+    end
+
+    test "preserves resolved belongs-to relations when the foreign key changed" do
+      school = %School{id: 8, name: "New School"}
+
+      context =
+        %Student{id: 1, name: "Ada", school_id: 7}
+        |> MutationContext.new(
+          %{school_id: school.id, school: school},
+          Authority.system(),
+          :update
+        )
+        |> Writer.cast([:school_id])
+
+      assert {:ok, %Student{school_id: 8, school: ^school}} =
+               RepositoryBoundary.update(context, Repo)
     end
 
     test "returns unchanged model without repo update or audit when nothing changed" do

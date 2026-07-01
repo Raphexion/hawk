@@ -96,6 +96,8 @@ defmodule Hawk.RepositoryBoundary do
   end
 
   defp normalize_repo_result({:ok, model}, context, operation, opts) do
+    model = preserve_loaded_relations(context, model, operation)
+
     audit(context, operation, model, opts)
     {:ok, model}
   end
@@ -121,6 +123,59 @@ defmodule Hawk.RepositoryBoundary do
   defp unwrap_transaction({:ok, result}), do: result
   defp unwrap_transaction({:error, message}) when is_binary(message), do: Result.error(message)
   defp unwrap_transaction(result), do: result
+
+  defp preserve_loaded_relations(context, model, operation)
+       when operation in [:insert, :update] do
+    model
+    |> schema_associations()
+    |> Enum.reduce(model, fn association, model ->
+      preserve_loaded_relation(context, model, association)
+    end)
+  end
+
+  defp preserve_loaded_relations(_context, model, _operation), do: model
+
+  defp preserve_loaded_relation(context, model, association) do
+    case schema_association(model, association) do
+      %Ecto.Association.BelongsTo{} = belongs_to ->
+        preserve_belongs_to(context, model, belongs_to)
+
+      _other ->
+        model
+    end
+  end
+
+  defp preserve_belongs_to(context, model, association) do
+    with true <- Map.has_key?(context.changeset.changes, association.owner_key),
+         {:ok, relation} <- Map.fetch(context.attrs, association.field),
+         true <- relation_matches_owner_key?(model, relation, association) do
+      Map.put(model, association.field, relation)
+    else
+      _other -> model
+    end
+  end
+
+  defp relation_matches_owner_key?(model, nil, association) do
+    Map.get(model, association.owner_key) == nil
+  end
+
+  defp relation_matches_owner_key?(model, relation, association) when is_struct(relation) do
+    Map.get(model, association.owner_key) == Map.get(relation, association.related_key)
+  end
+
+  defp relation_matches_owner_key?(_model, _relation, _association), do: false
+
+  defp schema_associations(%module{}) do
+    if function_exported?(module, :__schema__, 1) do
+      module.__schema__(:associations)
+    else
+      []
+    end
+  end
+
+  defp schema_association(%module{}, association) do
+    module.__schema__(:association, association)
+  end
 
   defp audit(context, operation, model, opts) do
     case Keyword.get(opts, :audit) do
