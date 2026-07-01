@@ -1,6 +1,6 @@
 defmodule Videdal.Enrollment do
   @moduledoc """
-  Join schema connecting students to courses.
+  Enrollment schema connecting students to courses in the Videdal example.
   """
 
   use Ecto.Schema

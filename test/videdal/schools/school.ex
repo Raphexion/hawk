@@ -1,6 +1,6 @@
 defmodule Videdal.School do
   @moduledoc """
-  A school owns students, teachers, and courses in the Videdal example domain.
+  School schema used by the Videdal example resources.
   """
 
   use Ecto.Schema

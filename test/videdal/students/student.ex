@@ -1,6 +1,9 @@
 defmodule Videdal.Student do
   @moduledoc """
-  A student belongs to one school and can be enrolled in courses.
+  Student model for the Videdal `Students` resource.
+
+  The model owns schema shape and pure student behavior. Query construction,
+  authorization, and mutation orchestration live in sibling resource modules.
   """
 
   use Ecto.Schema

@@ -2,7 +2,7 @@ defmodule Hawk.FilterTest do
   use ExUnit.Case, async: true
 
   alias Hawk.Filter
-  alias Videdal
+  alias Videdal.Students.Reader
 
   describe "normalize/1" do
     test "keeps identity filters" do
@@ -95,14 +95,14 @@ defmodule Hawk.FilterTest do
     test "accepts filters containing only known school-domain keys" do
       filter = {:and, %{school_id: 1}, {:or, %{teacher_id: 2}, %{student_id: 3}}}
 
-      assert Filter.validate_keys!(filter, Videdal.reader_filter_keys()) == :ok
+      assert Filter.validate_keys!(filter, Reader.filter_keys()) == :ok
     end
 
     test "raises for unknown filter keys" do
       filter = %{school_id: 1, unknown_campus_id: 2}
 
       assert_raise ArgumentError, ~r/unknown filter key :unknown_campus_id/, fn ->
-        Filter.validate_keys!(filter, Videdal.reader_filter_keys())
+        Filter.validate_keys!(filter, Reader.filter_keys())
       end
     end
   end

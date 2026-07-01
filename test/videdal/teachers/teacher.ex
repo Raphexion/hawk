@@ -1,6 +1,6 @@
 defmodule Videdal.Teacher do
   @moduledoc """
-  A teacher belongs to one school and may teach many courses.
+  Teacher schema used by the Videdal example resources.
   """
 
   use Ecto.Schema
