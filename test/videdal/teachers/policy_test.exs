@@ -15,7 +15,7 @@ defmodule Videdal.Teachers.PolicyTest do
   test "teachers are scoped to their teacher record" do
     authority = Authority.new(:teacher, 12, scopes: %{school_id: 7, teacher_id: 12})
 
-    assert Policy.read_filter(authority) == %{school_id: 7, id: 12}
+    assert Policy.read_filter(authority) == %{school_id: 7, teacher_id: 12}
   end
 
   test "students cannot read teacher records through this resource" do

@@ -1,6 +1,8 @@
 defmodule Hawk.Reader.FilterCompilerTest do
   use ExUnit.Case, async: true
 
+  import Ecto.Query
+
   alias Hawk.Reader.FilterCompiler
   alias Videdal.Student
 
@@ -63,6 +65,41 @@ defmodule Hawk.Reader.FilterCompilerTest do
       assert_query(query, "s0.active == ^true")
       assert_query(query, "and")
       assert_query(query, "s0.school_id == ^7")
+    end
+
+    test "uses custom handlers before falling back to schema fields" do
+      handlers = %{
+        student_id: fn {:eq, student_id} ->
+          dynamic([student], student.id == ^student_id)
+        end
+      }
+
+      query = FilterCompiler.compile(Student, Student, %{student_id: 12}, handlers)
+
+      assert_query(query, "s0.id == ^12")
+    end
+
+    test "composes custom handlers with direct field filters" do
+      handlers = %{
+        student_id: fn {:eq, student_id} ->
+          dynamic([student], student.id == ^student_id)
+        end
+      }
+
+      query = FilterCompiler.compile(Student, Student, %{student_id: 12, active: true}, handlers)
+
+      assert_query(query, "s0.id == ^12")
+      assert_query(query, "s0.active == ^true")
+    end
+
+    test "raises when a handler returns an unsupported value" do
+      handlers = %{student_id: fn _value -> :bad end}
+
+      assert_raise ArgumentError,
+                   ~r/filter handler :student_id returned unsupported value :bad/,
+                   fn ->
+                     FilterCompiler.compile(Student, Student, %{student_id: 12}, handlers)
+                   end
     end
 
     test "raises for fields that are not on the schema" do

@@ -20,6 +20,7 @@ defmodule Hawk.Reader do
           required(:schema) => module(),
           required(:filter_keys) => Enumerable.t(),
           required(:read_filter) => (term() -> Filter.t()),
+          optional(:filter_handlers) => FilterCompiler.handlers(),
           optional(:forced_filter) => Filter.t()
         }
 
@@ -74,7 +75,7 @@ defmodule Hawk.Reader do
     Filter.validate_keys!(filter, config.filter_keys)
 
     config.schema
-    |> FilterCompiler.compile(config.schema, filter)
+    |> FilterCompiler.compile(config.schema, filter, Map.get(config, :filter_handlers, %{}))
     |> apply_sort(page)
     |> apply_limit(page)
   end

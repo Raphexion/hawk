@@ -93,7 +93,7 @@ defmodule Hawk.FilterTest do
 
   describe "validate_keys!/2" do
     test "accepts filters containing only known school-domain keys" do
-      filter = {:and, %{school_id: 1}, {:or, %{teacher_id: 2}, %{student_id: 3}}}
+      filter = {:and, %{school_id: 1}, {:or, %{active: true}, %{student_id: 3}}}
 
       assert Filter.validate_keys!(filter, Reader.filter_keys()) == :ok
     end

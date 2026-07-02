@@ -3,25 +3,17 @@ defmodule Videdal.Teachers.Reader do
   Reader declaration module for the Videdal `Teachers` resource.
   """
 
-  alias Hawk.Reader, as: HawkReader
-  alias Videdal.{Repo, Teacher}
-  alias Videdal.Teachers.Policy
+  use Hawk.Reader.Resource,
+    repo: Videdal.Repo,
+    schema: Videdal.Teacher,
+    policy: &Videdal.Teachers.Policy.read_filter/1
 
-  @filter_keys MapSet.new([:id, :school_id])
+  filter(:id)
+  filter(:school_id)
 
-  def filter_keys, do: @filter_keys
-  def read_filter(authority), do: Policy.read_filter(authority)
-
-  def one(opts), do: HawkReader.one(config(), opts)
-  def one!(opts), do: HawkReader.one!(config(), opts)
-  def all(opts), do: HawkReader.all(config(), opts)
-
-  defp config do
-    %{
-      repo: Repo,
-      schema: Teacher,
-      filter_keys: filter_keys(),
-      read_filter: &read_filter/1
-    }
+  filter :teacher_id do
+    fn {:eq, teacher_id} ->
+      dynamic([teacher], teacher.id == ^teacher_id)
+    end
   end
 end

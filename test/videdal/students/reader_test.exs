@@ -8,7 +8,7 @@ defmodule Videdal.Students.ReaderTest do
 
   test "declares the resource filter keys" do
     assert MapSet.subset?(
-             MapSet.new([:id, :school_id, :student_id, :teacher_id, :active]),
+             MapSet.new([:id, :school_id, :student_id, :active]),
              Reader.filter_keys()
            )
   end
@@ -31,6 +31,15 @@ defmodule Videdal.Students.ReaderTest do
     assert inspected =~ "s0.active == ^true"
     assert inspected =~ "s0.school_id == ^7"
     assert inspected =~ "order_by: [asc: s0.id]"
+  end
+
+  test "all/1 applies the student_id custom filter handler" do
+    put_repo_results([])
+
+    assert Students.all(authority: Authority.system(), filter: %{student_id: 12}) == []
+
+    assert_received {:videdal_repo, :all, query}
+    assert inspect(query) =~ "s0.id == ^12"
   end
 
   test "all/1 applies limit from page size" do

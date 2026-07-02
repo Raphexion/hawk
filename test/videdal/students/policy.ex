@@ -19,7 +19,7 @@ defmodule Videdal.Students.Policy do
         PolicySupport.scoped_filter(authority, [:school_id])
 
       authority.role == :teacher ->
-        PolicySupport.scoped_filter(authority, [:school_id, :teacher_id])
+        PolicySupport.scoped_filter(authority, [:school_id])
 
       authority.role == :student ->
         PolicySupport.scoped_filter(authority, [:school_id, :student_id], %{active: true})

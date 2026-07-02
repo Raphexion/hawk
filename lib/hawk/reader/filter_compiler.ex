@@ -12,42 +12,69 @@ defmodule Hawk.Reader.FilterCompiler do
 
   @operators [:eq, :neq, :in, :not_in, :lt, :lte, :gt, :gte, :like, :ilike]
 
+  @type handler :: (Filter.value() -> Ecto.Query.dynamic_expr() | :all | :none)
+  @type handlers :: %{optional(atom()) => handler()}
+
   @doc """
   Applies a filter AST to an Ecto queryable.
 
-  `schema` is used to validate direct fields. Unknown fields fail loudly.
+  `schema` is used to validate direct fields. Unknown fields fail loudly unless
+  a custom handler exists for the key.
   """
-  @spec compile(Ecto.Queryable.t(), module(), Filter.t()) :: Ecto.Query.t()
-  def compile(queryable, schema, filter) when is_atom(schema) do
-    reject_unsupported_operator_shorthand!(filter)
-
+  @spec compile(Ecto.Queryable.t(), module(), Filter.t(), handlers()) :: Ecto.Query.t()
+  def compile(queryable, schema, filter, handlers \\ %{}) when is_atom(schema) do
+    reject_unsupported_operator_shorthand!(filter, handlers)
     query = Ecto.Queryable.to_query(queryable)
 
-    case compile_filter(schema, Filter.normalize(filter)) do
+    case compile_filter(schema, Filter.normalize(filter), handlers) do
       :all -> query
       :none -> where(query, false)
       dynamic -> where(query, ^dynamic)
     end
   end
 
-  defp compile_filter(_schema, :all), do: :all
-  defp compile_filter(_schema, :none), do: :none
+  defp compile_filter(_schema, :all, _handlers), do: :all
+  defp compile_filter(_schema, :none, _handlers), do: :none
 
-  defp compile_filter(schema, {:and, left, right}) do
-    combine(:and, compile_filter(schema, left), compile_filter(schema, right))
+  defp compile_filter(schema, {:and, left, right}, handlers) do
+    combine(:and, compile_filter(schema, left, handlers), compile_filter(schema, right, handlers))
   end
 
-  defp compile_filter(schema, {:or, left, right}) do
-    combine(:or, compile_filter(schema, left), compile_filter(schema, right))
+  defp compile_filter(schema, {:or, left, right}, handlers) do
+    combine(:or, compile_filter(schema, left, handlers), compile_filter(schema, right, handlers))
   end
 
-  defp compile_filter(schema, filter) when is_map(filter) do
+  defp compile_filter(schema, filter, handlers) when is_map(filter) do
     Enum.reduce(filter, :all, fn {field, value}, acc ->
-      combine(:and, acc, compile_value(schema, field, value))
+      combine(:and, acc, compile_value(schema, field, value, handlers))
     end)
   end
 
-  defp compile_value(schema, field, value) do
+  defp compile_value(schema, field, value, handlers) do
+    case Map.fetch(handlers, field) do
+      {:ok, handler} -> run_handler!(field, handler, value)
+      :error -> compile_root_field_value(schema, field, value)
+    end
+  end
+
+  defp run_handler!(field, handler, value) when is_function(handler, 1) do
+    case handler.(value) do
+      %Ecto.Query.DynamicExpr{} = dynamic ->
+        dynamic
+
+      :all ->
+        :all
+
+      :none ->
+        :none
+
+      unsupported ->
+        raise ArgumentError,
+              "filter handler #{inspect(field)} returned unsupported value #{inspect(unsupported)}"
+    end
+  end
+
+  defp compile_root_field_value(schema, field, value) do
     validate_field!(schema, field)
 
     case value do
@@ -88,22 +115,26 @@ defmodule Hawk.Reader.FilterCompiler do
     end
   end
 
-  defp reject_unsupported_operator_shorthand!(:all), do: :ok
-  defp reject_unsupported_operator_shorthand!(:none), do: :ok
+  defp reject_unsupported_operator_shorthand!(:all, _handlers), do: :ok
+  defp reject_unsupported_operator_shorthand!(:none, _handlers), do: :ok
 
-  defp reject_unsupported_operator_shorthand!({operator, left, right})
+  defp reject_unsupported_operator_shorthand!({operator, left, right}, handlers)
        when operator in [:and, :or] do
-    reject_unsupported_operator_shorthand!(left)
-    reject_unsupported_operator_shorthand!(right)
+    reject_unsupported_operator_shorthand!(left, handlers)
+    reject_unsupported_operator_shorthand!(right, handlers)
   end
 
-  defp reject_unsupported_operator_shorthand!(filter) when is_map(filter) do
+  defp reject_unsupported_operator_shorthand!(filter, handlers) when is_map(filter) do
     Enum.each(filter, fn
-      {_field, {operator, _value}} when is_atom(operator) and operator not in @operators ->
-        raise ArgumentError, "unsupported filter operator #{inspect(operator)}"
+      {field, {operator, _value}} when is_atom(operator) and operator not in @operators ->
+        if Map.has_key?(handlers, field), do: :ok, else: raise_unsupported_operator!(operator)
 
       _entry ->
         :ok
     end)
+  end
+
+  defp raise_unsupported_operator!(operator) do
+    raise ArgumentError, "unsupported filter operator #{inspect(operator)}"
   end
 end

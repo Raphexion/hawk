@@ -24,10 +24,10 @@ defmodule Videdal.Students.PolicyTest do
     assert Policy.read_filter(Authority.new(:school_admin, 10)) == :none
   end
 
-  test "teachers are scoped by school and teacher" do
+  test "teachers are scoped by school" do
     authority = Authority.new(:teacher, 42, scopes: %{school_id: 3, teacher_id: 42})
 
-    assert Policy.read_filter(authority) == %{school_id: 3, teacher_id: 42}
+    assert Policy.read_filter(authority) == %{school_id: 3}
   end
 
   test "students are scoped by school, student, and active records" do
@@ -42,16 +42,15 @@ defmodule Videdal.Students.PolicyTest do
       |> Authority.new(42, scopes: %{school_id: 3, teacher_id: 42})
       |> Authority.readonly()
 
-    assert Policy.read_filter(authority) == %{school_id: 3, teacher_id: 42}
+    assert Policy.read_filter(authority) == %{school_id: 3}
   end
 
   test "policy filters compose with caller filters" do
     authority = Authority.new(:teacher, 42, scopes: %{school_id: 3, teacher_id: 42})
 
-    assert Filter.and(%{course_id: 5}, Policy.read_filter(authority)) == %{
-             course_id: {:eq, 5},
-             school_id: {:eq, 3},
-             teacher_id: {:eq, 42}
+    assert Filter.and(%{active: true}, Policy.read_filter(authority)) == %{
+             active: {:eq, true},
+             school_id: {:eq, 3}
            }
   end
 
