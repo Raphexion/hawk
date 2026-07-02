@@ -8,6 +8,11 @@ defmodule Videdal.Repo do
 
   alias Ecto.Changeset
 
+  def all(query) do
+    send(self(), {:videdal_repo, :all, query})
+    Process.get({__MODULE__, :all_results}, [])
+  end
+
   def transaction(fun) when is_function(fun, 0) do
     send(self(), {:videdal_repo, :transaction})
     {:ok, fun.()}

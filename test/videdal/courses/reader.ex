@@ -3,6 +3,8 @@ defmodule Videdal.Courses.Reader do
   Reader declaration module for the Videdal `Courses` resource.
   """
 
+  alias Hawk.Reader, as: HawkReader
+  alias Videdal.{Course, Repo}
   alias Videdal.Courses.Policy
 
   @filter_keys MapSet.new([:id, :school_id, :teacher_id])
@@ -10,11 +12,16 @@ defmodule Videdal.Courses.Reader do
   def filter_keys, do: @filter_keys
   def read_filter(authority), do: Policy.read_filter(authority)
 
-  def one(_opts), do: reader_runtime_not_implemented!()
-  def one!(_opts), do: reader_runtime_not_implemented!()
-  def all(_opts), do: reader_runtime_not_implemented!()
+  def one(opts), do: HawkReader.one(config(), opts)
+  def one!(opts), do: HawkReader.one!(config(), opts)
+  def all(opts), do: HawkReader.all(config(), opts)
 
-  defp reader_runtime_not_implemented! do
-    raise "Videdal.Courses.Reader will delegate to Hawk's reader runtime once it exists"
+  defp config do
+    %{
+      repo: Repo,
+      schema: Course,
+      filter_keys: filter_keys(),
+      read_filter: &read_filter/1
+    }
   end
 end
