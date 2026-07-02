@@ -6,7 +6,7 @@ defmodule Videdal.Students.Reader do
   use Hawk.Reader.Resource,
     repo: Videdal.Repo,
     schema: Videdal.Student,
-    policy: &Videdal.Students.Policy.read_filter/1
+    policy: Videdal.Students.Policy
 
   filter(:id)
   filter(:school_id)

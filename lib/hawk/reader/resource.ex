@@ -80,7 +80,7 @@ defmodule Hawk.Reader.Resource do
       end
 
       def read_filter(authority) do
-        @hawk_reader_policy.(authority)
+        @hawk_reader_policy.read_filter(authority)
       end
 
       def one(opts), do: Hawk.Reader.one(config(), opts)

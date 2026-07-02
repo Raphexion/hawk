@@ -10,7 +10,7 @@ defmodule Hawk.Reader.ResourceTest.Reader do
   use Hawk.Reader.Resource,
     repo: Videdal.Repo,
     schema: Videdal.Student,
-    policy: &Hawk.Reader.ResourceTest.Policy.read_filter/1
+    policy: Hawk.Reader.ResourceTest.Policy
 
   filter(:id)
   filter(:school_id)
