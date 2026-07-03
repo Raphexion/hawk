@@ -24,12 +24,12 @@ defmodule Hawk.MixProject do
     [
       # Hawk provides reusable Ecto/PostgreSQL infrastructure, but host
       # applications own their concrete Repo modules and database config.
-      {:ecto, "~> 3.14"},
-      {:ecto_sql, "~> 3.14"},
-      {:postgrex, "~> 0.22.2"},
+      {:ecto, ">= 3.5.0 and < 4.0.0"},
+      {:ecto_sql, ">= 3.5.0 and < 4.0.0"},
+      {:postgrex, ">= 0.15.0 and < 1.0.0"},
       # Code quality
       {:dialyxir, "~> 1.3", only: [:dev, :test], runtime: false},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
   end
 
