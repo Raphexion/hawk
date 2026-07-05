@@ -26,7 +26,8 @@ defmodule Hawk.Reader do
           optional(:join_plan) => [JoinPlan.rule()],
           optional(:forced_filter) => Filter.t(),
           optional(:preload_keys) => Enumerable.t(),
-          optional(:preload_readers) => %{optional(atom()) => module()}
+          optional(:preload_readers) => %{optional(atom()) => module()},
+          optional(:sort_keys) => Enumerable.t()
         }
 
   @doc """
@@ -80,6 +81,8 @@ defmodule Hawk.Reader do
     authority = Map.fetch!(opts, :authority)
     caller_filter = Map.fetch!(opts, :filter)
     page = Map.fetch!(opts, :page)
+
+    validate_sort_key!(config, page.column)
 
     config.schema
     |> from(as: :root)
@@ -152,6 +155,21 @@ defmodule Hawk.Reader do
       size: Map.get(page, :size),
       cursor: Map.get(page, :cursor)
     }
+  end
+
+  defp validate_sort_key!(config, column) do
+    sort_keys =
+      config
+      |> Map.get(:sort_keys, [:id])
+      |> Enum.to_list()
+      |> case do
+        [] -> [:id]
+        keys -> keys
+      end
+
+    unless column in sort_keys do
+      raise ArgumentError, "unsupported sort column #{inspect(column)}"
+    end
   end
 
   defp apply_sort(query, %{column: column, dir: dir}) do

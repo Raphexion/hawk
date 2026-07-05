@@ -18,7 +18,9 @@ defmodule Hawk.Reader.Resource do
 
     quote do
       import Ecto.Query, except: [preload: 2]
-      import Hawk.Reader.Resource, only: [attach: 3, filter: 1, filter: 2, preload: 1, preload: 2]
+
+      import Hawk.Reader.Resource,
+        only: [attach: 3, filter: 1, filter: 2, preload: 1, preload: 2, sort: 1]
 
       @hawk_reader_repo unquote(repo)
       @hawk_reader_schema unquote(schema)
@@ -30,6 +32,7 @@ defmodule Hawk.Reader.Resource do
       Module.register_attribute(__MODULE__, :hawk_reader_join_rules, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_preload_keys, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_preload_readers, accumulate: true)
+      Module.register_attribute(__MODULE__, :hawk_reader_sort_keys, accumulate: true)
 
       @before_compile Hawk.Reader.Resource
     end
@@ -52,6 +55,12 @@ defmodule Hawk.Reader.Resource do
         handler = unquote(block)
         handler.(value)
       end
+    end
+  end
+
+  defmacro sort(key) when is_atom(key) do
+    quote do
+      @hawk_reader_sort_keys unquote(key)
     end
   end
 
@@ -111,7 +120,8 @@ defmodule Hawk.Reader.Resource do
       filter_handlers: reversed_attribute(module, :hawk_reader_filter_handlers),
       join_rules: reversed_attribute(module, :hawk_reader_join_rules),
       preload_keys: reversed_attribute(module, :hawk_reader_preload_keys),
-      preload_readers: reversed_attribute(module, :hawk_reader_preload_readers)
+      preload_readers: reversed_attribute(module, :hawk_reader_preload_readers),
+      sort_keys: reversed_attribute(module, :hawk_reader_sort_keys)
     }
   end
 
@@ -135,6 +145,7 @@ defmodule Hawk.Reader.Resource do
     preload_reader_entries = quote_preload_readers(declarations.preload_readers)
     filter_keys = declarations.filter_keys
     preload_keys = declarations.preload_keys
+    sort_keys = declarations.sort_keys
 
     quote do
       def filter_keys, do: MapSet.new(unquote(filter_keys))
@@ -142,6 +153,7 @@ defmodule Hawk.Reader.Resource do
       def join_plan, do: [unquote_splicing(join_rule_entries)]
       def preload_keys, do: MapSet.new(unquote(preload_keys))
       def preload_readers, do: Map.new([unquote_splicing(preload_reader_entries)])
+      def sort_keys, do: MapSet.new(unquote(sort_keys))
       def read_filter(authority), do: @hawk_reader_policy.read_filter(authority)
     end
   end
@@ -170,7 +182,8 @@ defmodule Hawk.Reader.Resource do
           read_filter: &read_filter/1,
           forced_filter: @hawk_reader_forced_filter,
           preload_keys: preload_keys(),
-          preload_readers: preload_readers()
+          preload_readers: preload_readers(),
+          sort_keys: sort_keys()
         }
       end
     end

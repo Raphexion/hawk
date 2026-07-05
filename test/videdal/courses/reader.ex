@@ -11,6 +11,9 @@ defmodule Videdal.Courses.Reader do
   filter(:school_id)
   filter(:teacher_id)
 
+  sort(:id)
+  sort(:title)
+
   preload(:school)
   preload(:teacher)
   preload(:grades)

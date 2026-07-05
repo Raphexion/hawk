@@ -25,11 +25,16 @@ defmodule Hawk.LiveViewTest do
     courses = [%Course{id: 1, title: "Math"}]
     Process.put({Videdal.Repo, :all_results}, courses)
 
-    socket = CourseIndexLive.assign_index(socket(), Authority.system())
+    socket =
+      CourseIndexLive.assign_index(socket(), Authority.system(),
+        page: %{column: :title, dir: :asc, size: 10}
+      )
 
     assert socket.assigns.courses == courses
     assert socket.assigns.hawk_resource == :course
-    assert_received {:videdal_repo, :all, _query}
+    assert socket.assigns.hawk_page == %{column: :title, dir: :asc, size: 10}
+    assert_received {:videdal_repo, :all, query}
+    assert inspect(query) =~ "order_by: [asc: c0.title]"
   end
 
   test "assign_show loads one resource into predictable singular assigns" do

@@ -45,6 +45,7 @@ defmodule Hawk.LiveView do
 
     socket
     |> assign(:hawk_resource, as)
+    |> assign(:hawk_page, Keyword.get(opts, :page, %{}))
     |> assign(plural_as, results)
   end
 
