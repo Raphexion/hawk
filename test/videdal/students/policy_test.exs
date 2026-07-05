@@ -57,7 +57,7 @@ defmodule Videdal.Students.PolicyTest do
   test "readonly authorities cannot write" do
     context =
       %Videdal.Student{}
-      |> Hawk.MutationContext.new(%{}, Authority.new(:school_admin, 1), :create)
+      |> Hawk.MutationContext.create(%{}, Authority.new(:school_admin, 1))
       |> Map.update!(:authority, &Authority.readonly/1)
 
     refute Policy.create?(context)

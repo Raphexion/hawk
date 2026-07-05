@@ -5,13 +5,13 @@ defmodule Hawk.MutationContextTest do
   alias Hawk.MutationContext
   alias Videdal.Student
 
-  describe "new/4" do
+  describe "create/3" do
     test "initializes write state" do
       model = %Student{}
       attrs = %{name: "Ada"}
       authority = Authority.new(:school_admin, 1, scopes: %{school_id: 3})
 
-      context = MutationContext.new(model, attrs, authority, :create)
+      context = MutationContext.create(model, attrs, authority)
 
       assert context.model == model
       assert context.attrs == attrs
@@ -19,14 +19,7 @@ defmodule Hawk.MutationContextTest do
       assert context.changeset.data == model
       assert context.error == :none
       refute context.policy_validated?
-      assert context.operation == :create
       assert context.meta == %{}
-    end
-
-    test "rejects unknown operations" do
-      assert_raise ArgumentError, ~r/operation must be one of/, fn ->
-        MutationContext.new(%Student{}, %{}, Authority.system(), :archive)
-      end
     end
   end
 
@@ -34,7 +27,7 @@ defmodule Hawk.MutationContextTest do
     test "marks the context invalid and adds a changeset error" do
       context =
         %Student{}
-        |> MutationContext.new(%{}, Authority.system(), :create)
+        |> MutationContext.create(%{}, Authority.system())
         |> MutationContext.add_error(:name, "can't be blank")
 
       assert context.error == :invalid
@@ -44,7 +37,7 @@ defmodule Hawk.MutationContextTest do
 
   describe "guard/2" do
     test "runs when the context has no error" do
-      context = MutationContext.new(%Student{}, %{}, Authority.system(), :update)
+      context = MutationContext.update(%Student{}, %{}, Authority.system())
 
       context =
         MutationContext.guard(context, fn context ->
@@ -57,7 +50,7 @@ defmodule Hawk.MutationContextTest do
     test "does not run after an error" do
       context =
         %Student{}
-        |> MutationContext.new(%{}, Authority.system(), :update)
+        |> MutationContext.update(%{}, Authority.system())
         |> MutationContext.add_error(:name, "can't be blank")
 
       guarded =
@@ -71,7 +64,7 @@ defmodule Hawk.MutationContextTest do
 
   describe "validate_policy/2" do
     test "marks the context policy-validated when allowed" do
-      context = MutationContext.new(%Student{}, %{}, Authority.system(), :delete)
+      context = MutationContext.delete(%Student{}, Authority.system())
 
       context = MutationContext.validate_policy(context, fn _context -> true end)
 
@@ -80,7 +73,7 @@ defmodule Hawk.MutationContextTest do
     end
 
     test "marks the context not authorized when denied" do
-      context = MutationContext.new(%Student{}, %{}, Authority.system(), :delete)
+      context = MutationContext.delete(%Student{}, Authority.system())
 
       context = MutationContext.validate_policy(context, fn _context -> false end)
 
@@ -91,7 +84,7 @@ defmodule Hawk.MutationContextTest do
     test "does not run after an error" do
       context =
         %Student{}
-        |> MutationContext.new(%{}, Authority.system(), :delete)
+        |> MutationContext.delete(Authority.system())
         |> MutationContext.add_error(:name, "can't be blank")
 
       guarded =

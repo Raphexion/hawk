@@ -13,7 +13,7 @@ defmodule Hawk.RepositoryBoundaryTest do
     test "persists valid system contexts without explicit policy validation" do
       context =
         %Student{}
-        |> MutationContext.new(%{name: "Ada", school_id: 7}, Authority.system(), :create)
+        |> MutationContext.create(%{name: "Ada", school_id: 7}, Authority.system())
         |> Writer.cast([:name, :school_id])
 
       assert {:ok, %Student{name: "Ada", school_id: 7}} =
@@ -29,7 +29,7 @@ defmodule Hawk.RepositoryBoundaryTest do
 
       context =
         %Student{}
-        |> MutationContext.new(%{name: "Ada", school_id: 7}, authority, :create)
+        |> MutationContext.create(%{name: "Ada", school_id: 7}, authority)
         |> Writer.cast([:name, :school_id])
         |> MutationContext.mark_policy_validated()
 
@@ -42,7 +42,7 @@ defmodule Hawk.RepositoryBoundaryTest do
 
       context =
         %Student{}
-        |> MutationContext.new(%{name: "Ada", school_id: 7}, authority, :create)
+        |> MutationContext.create(%{name: "Ada", school_id: 7}, authority)
         |> Writer.cast([:name, :school_id])
 
       assert_raise RuntimeError, ~r/write policy has not been validated/, fn ->
@@ -55,7 +55,7 @@ defmodule Hawk.RepositoryBoundaryTest do
     test "does not persist invalid contexts" do
       context =
         %Student{}
-        |> MutationContext.new(%{name: "Ada"}, Authority.system(), :create)
+        |> MutationContext.create(%{name: "Ada"}, Authority.system())
         |> Writer.cast([:name, :school_id])
         |> Writer.validate_required([:name, :school_id])
 
@@ -66,7 +66,7 @@ defmodule Hawk.RepositoryBoundaryTest do
     test "maps repo changeset errors back into an invalid context" do
       context =
         %Student{}
-        |> MutationContext.new(%{active: "not-a-boolean"}, Authority.system(), :create)
+        |> MutationContext.create(%{active: "not-a-boolean"}, Authority.system())
         |> Writer.cast([:active])
         |> MutationContext.put_error(:none)
 
@@ -81,10 +81,9 @@ defmodule Hawk.RepositoryBoundaryTest do
 
       context =
         %Student{}
-        |> MutationContext.new(
+        |> MutationContext.create(
           %{name: "Ada", school_id: school.id, school: school},
-          Authority.system(),
-          :create
+          Authority.system()
         )
         |> Writer.cast([:name, :school_id])
 
@@ -97,10 +96,9 @@ defmodule Hawk.RepositoryBoundaryTest do
 
       context =
         %Student{}
-        |> MutationContext.new(
+        |> MutationContext.create(
           %{name: "Ada", school_id: school.id, school: school},
-          Authority.system(),
-          :create
+          Authority.system()
         )
         |> Writer.cast([:name])
 
@@ -114,7 +112,7 @@ defmodule Hawk.RepositoryBoundaryTest do
     test "persists changed fields and audits successful updates" do
       context =
         %Student{id: 1, name: "Ada"}
-        |> MutationContext.new(%{name: "Grace"}, Authority.system(), :update)
+        |> MutationContext.update(%{name: "Grace"}, Authority.system())
         |> Writer.cast([:name])
 
       assert {:ok, %Student{id: 1, name: "Grace"}} =
@@ -129,10 +127,9 @@ defmodule Hawk.RepositoryBoundaryTest do
 
       context =
         %Student{id: 1, name: "Ada", school_id: 7}
-        |> MutationContext.new(
+        |> MutationContext.update(
           %{school_id: school.id, school: school},
-          Authority.system(),
-          :update
+          Authority.system()
         )
         |> Writer.cast([:school_id])
 
@@ -142,7 +139,7 @@ defmodule Hawk.RepositoryBoundaryTest do
 
     test "returns unchanged model without repo update or audit when nothing changed" do
       model = %Student{id: 1, name: "Ada"}
-      context = MutationContext.new(model, %{}, Authority.system(), :update)
+      context = MutationContext.update(model, %{}, Authority.system())
 
       assert RepositoryBoundary.update(context, Repo, audit: audit_to_self()) == {:ok, model}
       refute_received {:videdal_repo, :update, _changeset}
@@ -153,7 +150,7 @@ defmodule Hawk.RepositoryBoundaryTest do
   describe "delete/3" do
     test "deletes valid contexts and audits successful deletes" do
       model = %Student{id: 1, name: "Ada"}
-      context = MutationContext.new(model, %{}, Authority.system(), :delete)
+      context = MutationContext.delete(model, Authority.system())
 
       assert RepositoryBoundary.delete(context, Repo, audit: audit_to_self()) == {:ok, model}
       assert_received {:videdal_repo, :delete, ^model}
@@ -163,7 +160,7 @@ defmodule Hawk.RepositoryBoundaryTest do
     test "does not delete unauthorized contexts" do
       context =
         %Student{id: 1, name: "Ada"}
-        |> MutationContext.new(%{}, Authority.system(), :delete)
+        |> MutationContext.delete(Authority.system())
         |> MutationContext.validate_policy(fn _context -> false end)
 
       assert {:not_authorized, ^context} = RepositoryBoundary.delete(context, Repo)

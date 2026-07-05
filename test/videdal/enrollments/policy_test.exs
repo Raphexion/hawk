@@ -29,6 +29,6 @@ defmodule Videdal.Enrollments.PolicyTest do
   end
 
   defp context(authority) do
-    MutationContext.new(%Enrollment{}, %{}, authority, :create)
+    MutationContext.create(%Enrollment{}, %{}, authority)
   end
 end

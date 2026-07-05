@@ -29,6 +29,6 @@ defmodule Videdal.Courses.PolicyTest do
   end
 
   defp context(authority) do
-    MutationContext.new(%Course{}, %{}, authority, :create)
+    MutationContext.create(%Course{}, %{}, authority)
   end
 end

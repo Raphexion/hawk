@@ -10,8 +10,7 @@ defmodule Videdal.Enrollments.Writer do
   alias Videdal.Enrollments.Policy
 
   def create(attrs, authority) do
-    %Enrollment{}
-    |> MutationContext.new(attrs, authority, :create)
+    MutationContext.create(%Enrollment{}, attrs, authority)
     |> Writer.cast([:school_id, :student_id, :course_id, :enrolled_on])
     |> Writer.validate_required([:school_id, :student_id, :course_id])
     |> MutationContext.validate_policy(&Policy.create?/1)
@@ -19,16 +18,14 @@ defmodule Videdal.Enrollments.Writer do
   end
 
   def update(%Enrollment{} = enrollment, attrs, authority) do
-    enrollment
-    |> MutationContext.new(attrs, authority, :update)
+    MutationContext.update(enrollment, attrs, authority)
     |> Writer.cast([:school_id, :student_id, :course_id, :enrolled_on])
     |> MutationContext.validate_policy(&Policy.update?/1)
     |> RepositoryBoundary.update(Repo)
   end
 
   def delete(%Enrollment{} = enrollment, authority) do
-    enrollment
-    |> MutationContext.new(%{}, authority, :delete)
+    MutationContext.delete(enrollment, authority)
     |> MutationContext.validate_policy(&Policy.delete?/1)
     |> RepositoryBoundary.delete(Repo)
   end

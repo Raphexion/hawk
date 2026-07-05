@@ -8,7 +8,7 @@ defmodule Hawk.ResultTest do
 
   test "returns ok for a valid mutation context" do
     model = %Student{id: 1, name: "Ada"}
-    context = MutationContext.new(model, %{}, Authority.system(), :update)
+    context = MutationContext.update(model, %{}, Authority.system())
 
     assert Result.from_context(context, model) == {:ok, model}
   end
@@ -16,7 +16,7 @@ defmodule Hawk.ResultTest do
   test "returns invalid with context for validation errors" do
     context =
       %Student{}
-      |> MutationContext.new(%{}, Authority.system(), :create)
+      |> MutationContext.create(%{}, Authority.system())
       |> MutationContext.add_error(:name, "can't be blank")
 
     assert Result.from_context(context, context.model) == {:invalid, context}
@@ -25,7 +25,7 @@ defmodule Hawk.ResultTest do
   test "returns not authorized with context for policy errors" do
     context =
       %Student{}
-      |> MutationContext.new(%{}, Authority.system(), :delete)
+      |> MutationContext.delete(Authority.system())
       |> MutationContext.validate_policy(fn _context -> false end)
 
     assert Result.from_context(context, context.model) == {:not_authorized, context}

@@ -180,6 +180,6 @@ defmodule Hawk.WriterTest do
   end
 
   defp context(model, attrs) do
-    MutationContext.new(model, attrs, Authority.system(), :create)
+    MutationContext.create(model, attrs, Authority.system())
   end
 end

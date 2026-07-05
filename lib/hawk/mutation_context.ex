@@ -3,15 +3,14 @@ defmodule Hawk.MutationContext do
   Write-side state object shared by writer helpers and repository boundaries.
 
   A mutation context carries one model, incoming attributes, authority,
-  validation state, policy-validation state, and operation metadata through a
-  guarded writer pipeline.
+  validation state, policy-validation state, and metadata through a guarded
+  writer pipeline.
   """
 
   alias Ecto.Changeset
   alias Hawk.Authority
 
   @type error :: :none | :invalid | :not_authorized
-  @type operation :: :create | :update | :delete | nil
 
   @type t :: %__MODULE__{
           model: struct(),
@@ -20,11 +19,8 @@ defmodule Hawk.MutationContext do
           changeset: Changeset.t(),
           error: error(),
           policy_validated?: boolean(),
-          operation: operation(),
           meta: map()
         }
-
-  @operations [:create, :update, :delete, nil]
 
   @enforce_keys [:model, :attrs, :authority, :changeset]
   defstruct [
@@ -32,27 +28,34 @@ defmodule Hawk.MutationContext do
     :attrs,
     :authority,
     :changeset,
-    :operation,
     error: :none,
     policy_validated?: false,
     meta: %{}
   ]
 
   @doc """
-  Builds a fresh mutation context.
+  Builds a fresh create context.
   """
-  @spec new(struct(), map(), Authority.t(), operation()) :: t()
-  def new(model, attrs, %Authority{} = authority, operation \\ nil)
-      when is_struct(model) and is_map(attrs) do
-    validate_operation!(operation)
+  @spec create(struct(), map(), Authority.t()) :: t()
+  def create(model, attrs, %Authority{} = authority) when is_struct(model) and is_map(attrs) do
+    build(model, attrs, authority)
+  end
 
-    %__MODULE__{
-      model: model,
-      attrs: attrs,
-      authority: authority,
-      changeset: Changeset.change(model),
-      operation: operation
-    }
+  @doc """
+  Builds a fresh update context.
+  """
+  @spec update(struct(), map(), Authority.t()) :: t()
+  def update(model, attrs, %Authority{} = authority) when is_struct(model) and is_map(attrs) do
+    build(model, attrs, authority)
+  end
+
+  @doc """
+  Builds a fresh delete context.
+  """
+  @spec delete(struct(), Authority.t(), map()) :: t()
+  def delete(model, %Authority{} = authority, attrs \\ %{})
+      when is_struct(model) and is_map(attrs) do
+    build(model, attrs, authority)
   end
 
   @doc """
@@ -118,10 +121,12 @@ defmodule Hawk.MutationContext do
     %{context | error: error}
   end
 
-  defp validate_operation!(operation) when operation in @operations, do: :ok
-
-  defp validate_operation!(operation) do
-    raise ArgumentError,
-          "operation must be one of #{inspect(@operations)}, got: #{inspect(operation)}"
+  defp build(model, attrs, authority) do
+    %__MODULE__{
+      model: model,
+      attrs: attrs,
+      authority: authority,
+      changeset: Changeset.change(model)
+    }
   end
 end

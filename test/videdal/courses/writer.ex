@@ -10,8 +10,7 @@ defmodule Videdal.Courses.Writer do
   alias Videdal.Courses.Policy
 
   def create(attrs, authority) do
-    %Course{}
-    |> MutationContext.new(attrs, authority, :create)
+    MutationContext.create(%Course{}, attrs, authority)
     |> Writer.cast([:title, :school_id, :teacher_id])
     |> Writer.validate_required([:title, :school_id, :teacher_id])
     |> MutationContext.validate_policy(&Policy.create?/1)
@@ -19,16 +18,14 @@ defmodule Videdal.Courses.Writer do
   end
 
   def update(%Course{} = course, attrs, authority) do
-    course
-    |> MutationContext.new(attrs, authority, :update)
+    MutationContext.update(course, attrs, authority)
     |> Writer.cast([:title, :school_id, :teacher_id])
     |> MutationContext.validate_policy(&Policy.update?/1)
     |> RepositoryBoundary.update(Repo)
   end
 
   def delete(%Course{} = course, authority) do
-    course
-    |> MutationContext.new(%{}, authority, :delete)
+    MutationContext.delete(course, authority)
     |> MutationContext.validate_policy(&Policy.delete?/1)
     |> RepositoryBoundary.delete(Repo)
   end

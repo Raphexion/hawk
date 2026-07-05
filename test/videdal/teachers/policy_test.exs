@@ -29,6 +29,6 @@ defmodule Videdal.Teachers.PolicyTest do
   end
 
   defp context(authority) do
-    MutationContext.new(%Teacher{}, %{}, authority, :create)
+    MutationContext.create(%Teacher{}, %{}, authority)
   end
 end
