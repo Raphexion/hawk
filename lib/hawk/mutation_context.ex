@@ -17,6 +17,7 @@ defmodule Hawk.MutationContext do
           attrs: map(),
           authority: Authority.t(),
           changeset: Changeset.t(),
+          operation: :create | :update | :delete,
           error: error(),
           policy_validated?: boolean(),
           meta: map()
@@ -28,6 +29,7 @@ defmodule Hawk.MutationContext do
     :attrs,
     :authority,
     :changeset,
+    :operation,
     error: :none,
     policy_validated?: false,
     meta: %{}
@@ -38,7 +40,7 @@ defmodule Hawk.MutationContext do
   """
   @spec create(struct(), map(), Authority.t()) :: t()
   def create(model, attrs, %Authority{} = authority) when is_struct(model) and is_map(attrs) do
-    build(model, attrs, authority)
+    build(model, attrs, authority, :create)
   end
 
   @doc """
@@ -46,7 +48,7 @@ defmodule Hawk.MutationContext do
   """
   @spec update(struct(), map(), Authority.t()) :: t()
   def update(model, attrs, %Authority{} = authority) when is_struct(model) and is_map(attrs) do
-    build(model, attrs, authority)
+    build(model, attrs, authority, :update)
   end
 
   @doc """
@@ -55,7 +57,7 @@ defmodule Hawk.MutationContext do
   @spec delete(struct(), Authority.t(), map()) :: t()
   def delete(model, %Authority{} = authority, attrs \\ %{})
       when is_struct(model) and is_map(attrs) do
-    build(model, attrs, authority)
+    build(model, attrs, authority, :delete)
   end
 
   @doc """
@@ -94,12 +96,24 @@ defmodule Hawk.MutationContext do
   @spec validate_policy(t(), (t() -> boolean())) :: t()
   def validate_policy(%__MODULE__{} = context, predicate) when is_function(predicate, 1) do
     guard(context, fn context ->
-      if predicate.(context) do
-        mark_policy_validated(context)
-      else
-        context
-        |> mark_policy_validated()
-        |> put_error(:not_authorized)
+      case predicate.(context) do
+        true ->
+          mark_policy_validated(context)
+
+        :ok ->
+          mark_policy_validated(context)
+
+        false ->
+          context
+          |> put_authorization_error(default_authorization_error(context))
+          |> mark_policy_validated()
+          |> put_error(:not_authorized)
+
+        {:error, error} when is_map(error) ->
+          context
+          |> put_authorization_error(error)
+          |> mark_policy_validated()
+          |> put_error(:not_authorized)
       end
     end)
   end
@@ -121,12 +135,55 @@ defmodule Hawk.MutationContext do
     %{context | error: error}
   end
 
-  defp build(model, attrs, authority) do
+  defp put_authorization_error(%__MODULE__{} = context, error) do
+    put_meta(context, :authorization_error, error)
+  end
+
+  defp default_authorization_error(%__MODULE__{} = context) do
+    %{
+      code: :not_authorized,
+      title: "Not authorized",
+      detail: "You are not allowed to #{context.operation} this #{resource_name(context.model)}."
+    }
+  end
+
+  defp resource_name(%module{}) do
+    if function_exported?(module, :__hawk_json_api__, 0) do
+      module.__hawk_json_api__()
+      |> Map.fetch!(:type)
+      |> singular_resource_type()
+    else
+      module
+      |> Module.split()
+      |> List.last()
+      |> Macro.underscore()
+      |> String.replace("_", " ")
+    end
+  end
+
+  defp singular_resource_type(type) do
+    type
+    |> String.split("-")
+    |> List.last()
+    |> singularize()
+  end
+
+  defp singularize(type) do
+    cond do
+      String.ends_with?(type, "ies") -> String.replace_suffix(type, "ies", "y")
+      String.ends_with?(type, "ses") -> String.replace_suffix(type, "ses", "sis")
+      String.ends_with?(type, "s") -> String.trim_trailing(type, "s")
+      true -> type
+    end
+  end
+
+  defp build(model, attrs, authority, operation) do
     %__MODULE__{
       model: model,
       attrs: attrs,
       authority: authority,
-      changeset: Changeset.change(model)
+      changeset: Changeset.change(model),
+      operation: operation
     }
   end
 end
