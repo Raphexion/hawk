@@ -11,6 +11,8 @@ defmodule Videdal.Teachers.Reader do
   filter(:id)
   filter(:school_id)
 
+  preload(:school)
+
   filter :teacher_id do
     fn {:eq, teacher_id} ->
       dynamic([teacher], teacher.id == ^teacher_id)

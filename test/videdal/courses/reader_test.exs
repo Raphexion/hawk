@@ -5,9 +5,11 @@ defmodule Videdal.Courses.ReaderTest do
   alias Videdal.Courses
   alias Videdal.Courses.Reader
 
-  test "declares the resource filter keys" do
+  test "declares the resource filter keys and preloads" do
     assert Reader.filter_keys() ==
              MapSet.new([:id, :school_id, :teacher_id, :school_name, :teacher_name])
+
+    assert Reader.preload_keys() == MapSet.new([:school, :teacher])
   end
 
   test "delegates read policy to the resource policy module" do
@@ -30,5 +32,16 @@ defmodule Videdal.Courses.ReaderTest do
     assert inspected =~ "join: t2 in assoc(c0, :teacher)"
     assert inspected =~ ~s(s1.name == ^"Videdal")
     assert inspected =~ ~s(t2.name == ^"Grace")
+  end
+
+  test "all/1 preloads declared school and teacher associations once" do
+    results = [%Videdal.Course{id: 1, school_id: 7, teacher_id: 12}]
+    Process.put({Videdal.Repo, :all_results}, results)
+
+    assert Courses.all(authority: Authority.system(), preloads: [:school, :teacher]) == results
+
+    assert_received {:videdal_repo, :all, _query}
+    assert_received {:videdal_repo, :preload, ^results, [:school, :teacher]}
+    refute_received {:videdal_repo, :preload, _other_results, _preloads}
   end
 end

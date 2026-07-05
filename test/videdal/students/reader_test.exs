@@ -63,6 +63,23 @@ defmodule Videdal.Students.ReaderTest do
     assert inspect(query) =~ "limit: ^5"
   end
 
+  test "all/1 preloads declared associations" do
+    results = [%Student{id: 1, name: "Ada", school_id: 7}]
+    put_repo_results(results)
+
+    assert Students.all(authority: Authority.system(), preloads: [:school]) == results
+
+    assert_received {:videdal_repo, :all, _query}
+    assert_received {:videdal_repo, :preload, ^results, [:school]}
+    refute_received {:videdal_repo, :preload, _other_results, [:school]}
+  end
+
+  test "all/1 rejects undeclared preloads" do
+    assert_raise ArgumentError, ~r/unknown reader preload :courses/, fn ->
+      Students.all(authority: Authority.system(), preloads: [:courses])
+    end
+  end
+
   test "all/1 rejects unknown options" do
     assert_raise ArgumentError, ~r/unknown reader option :unexpected/, fn ->
       Students.all(authority: Authority.system(), unexpected: true)

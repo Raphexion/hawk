@@ -4,8 +4,9 @@ defmodule Videdal.Teachers.ReaderTest do
   alias Hawk.Authority
   alias Videdal.Teachers.Reader
 
-  test "declares the resource filter keys" do
+  test "declares the resource filter keys and preloads" do
     assert Reader.filter_keys() == MapSet.new([:id, :school_id, :teacher_id, :school_name])
+    assert Reader.preload_keys() == MapSet.new([:school])
   end
 
   test "delegates read policy to the resource policy module" do
@@ -33,5 +34,16 @@ defmodule Videdal.Teachers.ReaderTest do
     inspected = inspect(query)
     assert inspected =~ "join: s1 in assoc(t0, :school)"
     assert inspected =~ ~s(s1.name == ^"Videdal")
+  end
+
+  test "all/1 preloads declared school association once" do
+    results = [%Videdal.Teacher{id: 12, school_id: 7}]
+    Process.put({Videdal.Repo, :all_results}, results)
+
+    assert Videdal.Teachers.all(authority: Authority.system(), preloads: [:school]) == results
+
+    assert_received {:videdal_repo, :all, _query}
+    assert_received {:videdal_repo, :preload, ^results, [:school]}
+    refute_received {:videdal_repo, :preload, _other_results, _preloads}
   end
 end

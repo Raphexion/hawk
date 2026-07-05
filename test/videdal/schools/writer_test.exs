@@ -15,4 +15,24 @@ defmodule Videdal.Schools.WriterTest do
 
     assert {:not_authorized, _context} = Schools.create(%{name: "Videdal Skole"}, authority)
   end
+
+  test "update changes permitted fields through the repository boundary" do
+    school = %School{id: 7, name: "Old"}
+
+    assert {:ok, %School{id: 7, name: "New"}} =
+             Schools.update(school, %{name: "New", ignored: true}, Authority.new(:principal, 1))
+
+    assert_received {:videdal_repo, :transaction}
+    assert_received {:videdal_repo, :update, changeset}
+    assert changeset.changes == %{name: "New"}
+  end
+
+  test "delete runs through the repository boundary" do
+    school = %School{id: 7, name: "Videdal Skole"}
+
+    assert {:ok, ^school} = Schools.delete(school, Authority.new(:principal, 1))
+
+    assert_received {:videdal_repo, :transaction}
+    assert_received {:videdal_repo, :delete, ^school}
+  end
 end

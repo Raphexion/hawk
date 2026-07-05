@@ -13,6 +13,10 @@ defmodule Videdal.Enrollments.Reader do
   filter(:student_id)
   filter(:course_id)
 
+  preload(:school)
+  preload(:student)
+  preload(:course)
+
   filter :enrolled_on_or_after do
     fn
       {:eq, date} -> dynamic([enrollment], enrollment.enrolled_on >= ^date)

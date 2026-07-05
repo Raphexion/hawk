@@ -16,6 +16,8 @@ defmodule Hawk.Reader.ResourceTest.Reader do
   filter(:school_id)
   filter(:active)
 
+  preload(:school)
+
   filter :student_id do
     fn {:eq, student_id} ->
       dynamic([student], student.id == ^student_id)
@@ -41,11 +43,14 @@ defmodule Hawk.Reader.ResourceTest do
   alias Videdal.Student
 
   test "generates reader metadata functions" do
-    assert Reader.filter_keys() == MapSet.new([:id, :school_id, :active, :student_id, :school_name])
+    assert Reader.filter_keys() ==
+             MapSet.new([:id, :school_id, :active, :student_id, :school_name])
+
     assert Map.has_key?(Reader.filter_handlers(), :student_id)
     assert [%{name: :school, when_filter: when_filter, when_sort: when_sort}] = Reader.join_plan()
     assert when_filter == MapSet.new([:school_name])
     assert when_sort == MapSet.new([:school_name])
+    assert Reader.preload_keys() == MapSet.new([:school])
     assert Reader.read_filter(Authority.system()) == %{school_id: 7}
   end
 
@@ -71,6 +76,23 @@ defmodule Hawk.Reader.ResourceTest do
     inspected = inspect(query)
     assert inspected =~ "join: s1 in assoc(s0, :school)"
     assert inspected =~ ~s(s1.name == ^"Videdal Skole")
+  end
+
+  test "preloads declared associations after fetching rows" do
+    results = [%Student{id: 12, school_id: 7}]
+    Process.put({Videdal.Repo, :all_results}, results)
+
+    assert Reader.all(authority: Authority.system(), preloads: [:school]) == results
+
+    assert_received {:videdal_repo, :all, _query}
+    assert_received {:videdal_repo, :preload, ^results, [:school]}
+    refute_received {:videdal_repo, :preload, _other_results, [:school]}
+  end
+
+  test "rejects undeclared preloads" do
+    assert_raise ArgumentError, ~r/unknown reader preload :courses/, fn ->
+      Reader.all(authority: Authority.system(), preloads: [:courses])
+    end
   end
 
   test "generates one/1 and one!/1" do

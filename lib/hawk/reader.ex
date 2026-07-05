@@ -12,6 +12,7 @@ defmodule Hawk.Reader do
   alias Hawk.Filter
   alias Hawk.Reader.FilterCompiler
   alias Hawk.Reader.JoinPlan
+  alias Hawk.Reader.Preloader
 
   @allowed_options MapSet.new([:authority, :filter, :page, :preloads])
   @sort_dirs [:asc, :desc, :asc_nulls_first, :asc_nulls_last, :desc_nulls_first, :desc_nulls_last]
@@ -23,7 +24,8 @@ defmodule Hawk.Reader do
           required(:read_filter) => (term() -> Filter.t()),
           optional(:filter_handlers) => FilterCompiler.handlers(),
           optional(:join_plan) => [JoinPlan.rule()],
-          optional(:forced_filter) => Filter.t()
+          optional(:forced_filter) => Filter.t(),
+          optional(:preload_keys) => Enumerable.t()
         }
 
   @doc """
@@ -31,9 +33,12 @@ defmodule Hawk.Reader do
   """
   @spec all(config(), keyword() | map()) :: [struct()]
   def all(config, opts) do
+    opts = normalize_options(opts)
+
     config
     |> build_query(opts)
     |> config.repo.all()
+    |> Preloader.preload(config.repo, opts.preloads, Map.get(config, :preload_keys, []))
   end
 
   @doc """

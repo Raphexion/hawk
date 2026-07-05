@@ -12,6 +12,9 @@ defmodule Videdal.Courses.Reader do
   filter(:school_id)
   filter(:teacher_id)
 
+  preload(:school)
+  preload(:teacher)
+
   attach :school, when_filter: [:school_name] do
     join(query, :inner, [root: course], school in assoc(course, :school), as: :school)
   end

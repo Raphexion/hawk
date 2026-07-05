@@ -18,6 +18,11 @@ defmodule Videdal.Repo do
     {:ok, fun.()}
   end
 
+  def preload(results, preloads) do
+    send(self(), {:videdal_repo, :preload, results, preloads})
+    results
+  end
+
   def insert(%Changeset{} = changeset, _opts \\ []) do
     send(self(), {:videdal_repo, :insert, changeset})
     apply_changeset(changeset)

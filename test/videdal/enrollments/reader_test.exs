@@ -4,7 +4,7 @@ defmodule Videdal.Enrollments.ReaderTest do
   alias Hawk.Authority
   alias Videdal.Enrollments.Reader
 
-  test "declares the resource filter keys" do
+  test "declares the resource filter keys and preloads" do
     assert Reader.filter_keys() ==
              MapSet.new([
                :id,
@@ -15,6 +15,8 @@ defmodule Videdal.Enrollments.ReaderTest do
                :student_name,
                :course_title
              ])
+
+    assert Reader.preload_keys() == MapSet.new([:school, :student, :course])
   end
 
   test "delegates read policy to the resource policy module" do
@@ -49,5 +51,17 @@ defmodule Videdal.Enrollments.ReaderTest do
     assert inspected =~ "join: c2 in assoc(e0, :course)"
     assert inspected =~ ~s(s1.name == ^"Ada")
     assert inspected =~ ~s(c2.title == ^"Math")
+  end
+
+  test "all/1 preloads declared nested associations once" do
+    results = [%Videdal.Enrollment{id: 1, school_id: 7, student_id: 8, course_id: 3}]
+    preloads = [:school, student: [:school], course: [:teacher]]
+    Process.put({Videdal.Repo, :all_results}, results)
+
+    assert Videdal.Enrollments.all(authority: Authority.system(), preloads: preloads) == results
+
+    assert_received {:videdal_repo, :all, _query}
+    assert_received {:videdal_repo, :preload, ^results, ^preloads}
+    refute_received {:videdal_repo, :preload, _other_results, _preloads}
   end
 end

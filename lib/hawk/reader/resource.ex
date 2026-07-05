@@ -18,7 +18,7 @@ defmodule Hawk.Reader.Resource do
 
     quote do
       import Ecto.Query
-      import Hawk.Reader.Resource, only: [attach: 3, filter: 1, filter: 2]
+      import Hawk.Reader.Resource, only: [attach: 3, filter: 1, filter: 2, preload: 1]
 
       @hawk_reader_repo unquote(repo)
       @hawk_reader_schema unquote(schema)
@@ -28,6 +28,7 @@ defmodule Hawk.Reader.Resource do
       Module.register_attribute(__MODULE__, :hawk_reader_filter_keys, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_filter_handlers, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_join_rules, accumulate: true)
+      Module.register_attribute(__MODULE__, :hawk_reader_preload_keys, accumulate: true)
 
       @before_compile Hawk.Reader.Resource
     end
@@ -50,6 +51,12 @@ defmodule Hawk.Reader.Resource do
         handler = unquote(block)
         handler.(value)
       end
+    end
+  end
+
+  defmacro preload(key) when is_atom(key) do
+    quote do
+      @hawk_reader_preload_keys unquote(key)
     end
   end
 
@@ -86,7 +93,13 @@ defmodule Hawk.Reader.Resource do
       |> Module.get_attribute(:hawk_reader_join_rules)
       |> Enum.reverse()
 
+    preload_keys =
+      env.module
+      |> Module.get_attribute(:hawk_reader_preload_keys)
+      |> Enum.reverse()
+
     validate_join_rules!(join_rules)
+    validate_preload_keys!(preload_keys)
 
     handler_entries =
       Enum.map(filter_handlers, fn {key, handler_name} ->
@@ -120,6 +133,10 @@ defmodule Hawk.Reader.Resource do
         [unquote_splicing(join_rule_entries)]
       end
 
+      def preload_keys do
+        MapSet.new(unquote(preload_keys))
+      end
+
       def read_filter(authority) do
         @hawk_reader_policy.read_filter(authority)
       end
@@ -136,7 +153,8 @@ defmodule Hawk.Reader.Resource do
           filter_handlers: filter_handlers(),
           join_plan: join_plan(),
           read_filter: &read_filter/1,
-          forced_filter: @hawk_reader_forced_filter
+          forced_filter: @hawk_reader_forced_filter,
+          preload_keys: preload_keys()
         }
       end
     end
@@ -167,6 +185,25 @@ defmodule Hawk.Reader.Resource do
 
       names ->
         raise ArgumentError, "duplicate reader join aliases #{inspect(names)}"
+    end
+  end
+
+  defp validate_preload_keys!(preload_keys) do
+    duplicate_keys =
+      preload_keys
+      |> Enum.frequencies()
+      |> Enum.filter(fn {_key, count} -> count > 1 end)
+      |> Enum.map(fn {key, _count} -> key end)
+
+    case duplicate_keys do
+      [] ->
+        :ok
+
+      [key] ->
+        raise ArgumentError, "duplicate reader preload #{inspect(key)}"
+
+      keys ->
+        raise ArgumentError, "duplicate reader preloads #{inspect(keys)}"
     end
   end
 

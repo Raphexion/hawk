@@ -41,6 +41,7 @@ defmodule Hawk.Reader.JoinPlan do
   end
 
   defp triggered?(rule, active_keys, sort_key) do
-    not MapSet.disjoint?(rule.when_filter, active_keys) or MapSet.member?(rule.when_sort, sort_key)
+    not MapSet.disjoint?(rule.when_filter, active_keys) or
+      MapSet.member?(rule.when_sort, sort_key)
   end
 end
