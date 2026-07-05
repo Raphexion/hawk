@@ -37,6 +37,13 @@ defmodule Hawk.Reader do
   def all(config, opts) do
     opts = normalize_options(opts)
 
+    Preloader.validate_preloads!(
+      opts.preloads,
+      Map.get(config, :preload_keys, []),
+      config.schema,
+      Map.get(config, :preload_readers, %{})
+    )
+
     config
     |> build_query(opts)
     |> config.repo.all()

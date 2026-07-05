@@ -91,8 +91,7 @@ defmodule Hawk.OpenApi do
       name: "include",
       in: "query",
       schema: %{
-        enum:
-          resource.json_api.relationships |> Map.keys() |> Enum.map(&to_string/1) |> Enum.sort()
+        enum: include_values(resource)
       }
     }
   end
@@ -255,6 +254,67 @@ defmodule Hawk.OpenApi do
   end
 
   defp resource_name(resource), do: resource.json_api.type |> String.trim_trailing("s")
+
+  defp include_values(resource) do
+    resource.model
+    |> include_values(resource.resource |> Module.concat(Reader), 2, [])
+    |> Enum.sort()
+  end
+
+  defp include_values(schema, reader, depth, seen) do
+    if {schema, reader} in seen do
+      []
+    else
+      seen = [{schema, reader} | seen]
+
+      reader
+      |> preload_keys()
+      |> Enum.flat_map(fn key ->
+        nested = nested_include_values(schema, reader, key, depth, seen)
+        [to_string(key) | Enum.map(nested, &"#{key}.#{&1}")]
+      end)
+    end
+  end
+
+  defp nested_include_values(_schema, _reader, _key, 1, _seen), do: []
+
+  defp nested_include_values(schema, reader, key, depth, seen) do
+    with {:ok, association} <- fetch_association(schema, key),
+         {:ok, nested_reader} <- fetch_preload_reader(schema, reader, key) do
+      include_values(association.related, nested_reader, depth - 1, seen)
+    else
+      :error -> []
+    end
+  end
+
+  defp preload_keys(reader) do
+    if Code.ensure_loaded?(reader) and function_exported?(reader, :preload_keys, 0) do
+      reader.preload_keys() |> Enum.sort()
+    else
+      []
+    end
+  end
+
+  defp fetch_association(schema, key) do
+    case schema.__schema__(:association, key) do
+      nil -> :error
+      association -> {:ok, association}
+    end
+  end
+
+  defp fetch_preload_reader(schema, reader, key) do
+    reader_readers =
+      if Code.ensure_loaded?(reader) and function_exported?(reader, :preload_readers, 0) do
+        reader.preload_readers()
+      else
+        %{}
+      end
+
+    case Map.fetch(reader_readers, key) do
+      {:ok, nested_reader} -> {:ok, nested_reader}
+      :error -> schema.__hawk_association_reader__(key)
+    end
+  end
 
   defp sort_values(resource) do
     resource.resource

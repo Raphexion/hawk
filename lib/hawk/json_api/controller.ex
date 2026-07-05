@@ -67,7 +67,16 @@ defmodule Hawk.JsonApi.Controller do
   def index(conn, resource, _model, params, public? \\ false) do
     authority = authority!(conn, public?)
     opts = params |> Hawk.JsonApi.request_options() |> Keyword.put(:authority, authority)
-    json(conn, 200, Hawk.JsonApi.document(resource.all(opts)))
+
+    try do
+      json(
+        conn,
+        200,
+        Hawk.JsonApi.document(resource.all(opts), preloads: Keyword.get(opts, :preloads, []))
+      )
+    rescue
+      error in ArgumentError -> json(conn, 400, bad_request(error.message))
+    end
   end
 
   def show(conn, resource, _model, %{"id" => id}, public? \\ false) do
@@ -123,6 +132,14 @@ defmodule Hawk.JsonApi.Controller do
 
   defp respond({:error, _message} = result, conn, _status),
     do: json(conn, 500, Hawk.Errors.to_json_api(result))
+
+  defp bad_request(message) do
+    %{
+      errors: [
+        %{status: "400", code: "bad_request", title: "Bad request", detail: message}
+      ]
+    }
+  end
 
   defp authority!(%{assigns: %{authority: authority}}, _public?), do: authority
   defp authority!(_conn, true), do: Hawk.Authority.public()

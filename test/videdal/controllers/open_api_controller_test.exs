@@ -28,7 +28,20 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
     spec = OpenApiController.spec()
     parameters = spec.paths["/courses"].get.parameters
 
-    assert %{name: "include", in: "query", schema: %{enum: ["grades", "school", "teacher"]}} in parameters
+    assert %{
+             name: "include",
+             in: "query",
+             schema: %{
+               enum: [
+                 "grades",
+                 "grades.course",
+                 "grades.student",
+                 "school",
+                 "teacher",
+                 "teacher.school"
+               ]
+             }
+           } in parameters
 
     assert %{name: "sort", in: "query", schema: %{enum: ["id", "-id", "title", "-title"]}} in parameters
 

@@ -74,6 +74,31 @@ defmodule Hawk.Reader.Preloader do
     raise ArgumentError, "preloads must be a list, got: #{inspect(requested)}"
   end
 
+  @spec validate_preloads!([preload()], Enumerable.t(), module(), map()) :: :ok
+  def validate_preloads!(requested, allowed_keys, root_schema, readers) when is_list(requested) do
+    validate_preloads!(requested, allowed_keys)
+
+    Enum.each(requested, fn
+      key when is_atom(key) ->
+        :ok
+
+      {key, nested} when is_atom(key) and is_list(nested) ->
+        reader = fetch_reader!(root_schema, key, readers)
+        association = root_schema.__schema__(:association, key)
+
+        validate_preloads!(
+          nested,
+          reader_preload_keys!(reader),
+          association.related,
+          reader_preload_readers(reader)
+        )
+    end)
+  end
+
+  def validate_preloads!(requested, _allowed_keys, _root_schema, _readers) do
+    raise ArgumentError, "preloads must be a list, got: #{inspect(requested)}"
+  end
+
   defp apply_preload_policies([], requested, _authority, _policies), do: requested
 
   defp apply_preload_policies([first | _rest], requested, authority, policies)

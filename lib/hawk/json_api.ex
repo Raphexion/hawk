@@ -6,12 +6,14 @@ defmodule Hawk.JsonApi do
   declarations. Runtime request/response helpers can build on the same metadata.
   """
 
-  def document(models) when is_list(models) do
-    %{data: Enum.map(models, &resource_object/1)}
+  def document(models, opts \\ [])
+
+  def document(models, opts) when is_list(models) do
+    %{data: Enum.map(models, &resource_object(&1, opts))}
   end
 
-  def document(model) when is_struct(model) do
-    %{data: resource_object(model)}
+  def document(model, opts) when is_struct(model) do
+    %{data: resource_object(model, opts)}
   end
 
   def attributes(params, model, capability) when capability in [:creatable, :updatable] do
@@ -51,14 +53,14 @@ defmodule Hawk.JsonApi do
     }
   end
 
-  defp resource_object(model) do
+  defp resource_object(model, opts) do
     json_api = model.__struct__.__hawk_json_api__()
 
     %{
       type: json_api.type,
       id: to_string(Map.get(model, :id)),
       attributes: resource_attributes(model, json_api),
-      relationships: resource_relationships(model, json_api)
+      relationships: resource_relationships(model, json_api, Keyword.get(opts, :preloads, []))
     }
   end
 
@@ -66,18 +68,18 @@ defmodule Hawk.JsonApi do
     Map.new(json_api.attributes, fn {name, _metadata} -> {name, Map.get(model, name)} end)
   end
 
-  defp resource_relationships(model, json_api) do
+  defp resource_relationships(model, json_api, preloads) do
     Map.new(json_api.relationships, fn {name, _metadata} ->
-      {name, %{data: relationship_data(model, name)}}
+      {name, %{data: relationship_data(model, name, preloads)}}
     end)
   end
 
-  defp relationship_data(model, name) do
+  defp relationship_data(model, name, preloads) do
     association = model.__struct__.__schema__(:association, name)
 
     case association.cardinality do
       :one -> belongs_to_identifier(model, association)
-      :many -> many_identifiers(Map.get(model, name))
+      :many -> many_identifiers(Map.get(model, name), preload_requested?(preloads, name))
     end
   end
 
@@ -88,15 +90,24 @@ defmodule Hawk.JsonApi do
     if is_nil(id), do: nil, else: %{type: type, id: to_string(id)}
   end
 
-  defp many_identifiers(%Ecto.Association.NotLoaded{}), do: []
-  defp many_identifiers(nil), do: []
+  defp many_identifiers(_models, false), do: []
+  defp many_identifiers(%Ecto.Association.NotLoaded{}, true), do: []
+  defp many_identifiers(nil, true), do: []
 
-  defp many_identifiers(models),
+  defp many_identifiers(models, true),
     do:
       Enum.map(
         models,
         &%{type: &1.__struct__.__hawk_json_api__().type, id: to_string(Map.get(&1, :id))}
       )
+
+  defp preload_requested?(preloads, name) do
+    Enum.any?(preloads, fn
+      ^name -> true
+      {^name, _nested} -> true
+      _other -> false
+    end)
+  end
 
   defp atomize_allowed(attrs, allowed) do
     Map.new(attrs, fn {key, value} -> {String.to_atom(key), value} end)
@@ -199,7 +210,7 @@ defmodule Hawk.JsonApi do
   defp preload_key?(_preload, _key), do: false
 
   defp merge_nested_preloads({_key, existing}, nested),
-    do: Enum.reduce(nested, existing, &merge_preload/2)
+    do: nested |> Enum.reduce(existing, &merge_preload/2) |> Enum.reverse()
 
   defp merge_nested_preloads(_key, nested), do: nested
 
