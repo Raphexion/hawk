@@ -10,7 +10,11 @@ defmodule Videdal.Repo do
 
   def all(query) do
     send(self(), {:videdal_repo, :all, query})
-    Process.get({__MODULE__, :all_results}, [])
+
+    Process.get(
+      {__MODULE__, :all_results, query.from.source |> elem(1)},
+      Process.get({__MODULE__, :all_results}, [])
+    )
   end
 
   def transaction(fun) when is_function(fun, 0) do

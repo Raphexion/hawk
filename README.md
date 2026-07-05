@@ -168,7 +168,9 @@ npx openapi-typescript http://localhost:4000/openapi.json -o src/api/types.ts
 Hawk intentionally stays centered on the backend contract instead of owning a
 frontend generator or client runtime.
 
-### LiveView helper
+### LiveView helpers
+
+For simple single-resource pages:
 
 ```elixir
 defmodule MyAppWeb.CourseIndexLive do
@@ -181,6 +183,33 @@ end
 This provides helpers such as `assign_index/3`, `assign_show/4`, and a default
 `"hawk:delete"` event handler that routes mutations through the writer and maps
 errors into LiveView-friendly assigns.
+
+For richer workspace pages that coordinate related resources:
+
+```elixir
+defmodule MyAppWeb.CourseWorkspaceLive do
+  use Hawk.LiveView.Page,
+    resources: [
+      course: [resource: MyApp.Courses],
+      students: [resource: MyApp.Students],
+      grades: [resource: MyApp.Grades]
+    ]
+end
+```
+
+Then load the page with per-resource read specs:
+
+```elixir
+CourseWorkspaceLive.assign_page(socket, authority,
+  course: {:one, filter: %{id: course_id}, preloads: [:teacher]},
+  students: {:all, filter: %{school_id: school_id}},
+  grades: {:all, filter: %{course_id: course_id}, preloads: [:student]}
+)
+```
+
+Each resource still goes through its own reader and policy. The page helper just
+composes the reads and shared mutation events; it does not create a new bypass
+around Hawk's authorization model.
 
 ### Resource contract test
 
