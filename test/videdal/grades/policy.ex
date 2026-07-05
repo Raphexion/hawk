@@ -10,6 +10,7 @@ defmodule Videdal.Grades.Policy do
   """
 
   alias Hawk.Authority
+  alias Hawk.MutationContext
   alias Videdal.PolicySupport
 
   def read_filter(%Authority{} = authority) do
@@ -32,6 +33,14 @@ defmodule Videdal.Grades.Policy do
       true ->
         :none
     end
+  end
+
+  def create?(%MutationContext{} = context), do: write_allowed?(context.authority)
+  def update?(%MutationContext{} = context), do: write_allowed?(context.authority)
+  def delete?(%MutationContext{} = context), do: write_allowed?(context.authority)
+
+  defp write_allowed?(%Authority{} = authority) do
+    PolicySupport.write_allowed?(authority, [:principal, :school_admin, :teacher])
   end
 
   def preload_query(query, authority) do

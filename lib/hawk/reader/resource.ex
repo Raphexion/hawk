@@ -89,89 +89,65 @@ defmodule Hawk.Reader.Resource do
   end
 
   defmacro __before_compile__(env) do
-    filter_keys =
-      env.module
-      |> Module.get_attribute(:hawk_reader_filter_keys)
-      |> Enum.reverse()
+    declarations = reader_declarations(env.module)
 
-    filter_handlers =
-      env.module
-      |> Module.get_attribute(:hawk_reader_filter_handlers)
-      |> Enum.reverse()
+    validate_join_rules!(declarations.join_rules)
+    validate_preload_keys!(declarations.preload_keys)
 
-    join_rules =
-      env.module
-      |> Module.get_attribute(:hawk_reader_join_rules)
-      |> Enum.reverse()
+    quote_reader(declarations)
+  end
 
-    preload_keys =
-      env.module
-      |> Module.get_attribute(:hawk_reader_preload_keys)
-      |> Enum.reverse()
+  defp reader_declarations(module) do
+    %{
+      filter_keys: reversed_attribute(module, :hawk_reader_filter_keys),
+      filter_handlers: reversed_attribute(module, :hawk_reader_filter_handlers),
+      join_rules: reversed_attribute(module, :hawk_reader_join_rules),
+      preload_keys: reversed_attribute(module, :hawk_reader_preload_keys),
+      preload_policies: reversed_attribute(module, :hawk_reader_preload_policies)
+    }
+  end
 
-    preload_policies =
-      env.module
-      |> Module.get_attribute(:hawk_reader_preload_policies)
-      |> Enum.reverse()
+  defp reversed_attribute(module, attribute) do
+    module
+    |> Module.get_attribute(attribute)
+    |> Enum.reverse()
+  end
 
-    validate_join_rules!(join_rules)
-    validate_preload_keys!(preload_keys)
+  defp quote_reader(declarations) do
+    [
+      quote_metadata_functions(declarations),
+      quote_public_reader_functions(),
+      quote_config_function()
+    ]
+  end
 
-    handler_entries =
-      Enum.map(filter_handlers, fn {key, handler_name} ->
-        quote do
-          {unquote(key), fn value -> unquote(handler_name)(value) end}
-        end
-      end)
-
-    join_rule_entries =
-      Enum.map(join_rules, fn {name, when_filter, when_sort, handler_name} ->
-        quote do
-          %{
-            name: unquote(name),
-            when_filter: MapSet.new(unquote(when_filter)),
-            when_sort: MapSet.new(unquote(when_sort)),
-            apply: fn query -> unquote(handler_name)(query) end
-          }
-        end
-      end)
-
-    preload_policy_entries =
-      Enum.map(preload_policies, fn {key, policy} ->
-        quote do
-          {unquote(key), unquote(policy)}
-        end
-      end)
+  defp quote_metadata_functions(declarations) do
+    handler_entries = quote_filter_handlers(declarations.filter_handlers)
+    join_rule_entries = quote_join_rules(declarations.join_rules)
+    preload_policy_entries = quote_preload_policies(declarations.preload_policies)
+    filter_keys = declarations.filter_keys
+    preload_keys = declarations.preload_keys
 
     quote do
-      def filter_keys do
-        MapSet.new(unquote(filter_keys))
-      end
+      def filter_keys, do: MapSet.new(unquote(filter_keys))
+      def filter_handlers, do: Map.new([unquote_splicing(handler_entries)])
+      def join_plan, do: [unquote_splicing(join_rule_entries)]
+      def preload_keys, do: MapSet.new(unquote(preload_keys))
+      def preload_policies, do: Map.new([unquote_splicing(preload_policy_entries)])
+      def read_filter(authority), do: @hawk_reader_policy.read_filter(authority)
+    end
+  end
 
-      def filter_handlers do
-        Map.new([unquote_splicing(handler_entries)])
-      end
-
-      def join_plan do
-        [unquote_splicing(join_rule_entries)]
-      end
-
-      def preload_keys do
-        MapSet.new(unquote(preload_keys))
-      end
-
-      def preload_policies do
-        Map.new([unquote_splicing(preload_policy_entries)])
-      end
-
-      def read_filter(authority) do
-        @hawk_reader_policy.read_filter(authority)
-      end
-
+  defp quote_public_reader_functions do
+    quote do
       def one(opts), do: Hawk.Reader.one(config(), opts)
       def one!(opts), do: Hawk.Reader.one!(config(), opts)
       def all(opts), do: Hawk.Reader.all(config(), opts)
+    end
+  end
 
+  defp quote_config_function do
+    quote do
       defp config do
         %{
           repo: @hawk_reader_repo,
@@ -186,6 +162,35 @@ defmodule Hawk.Reader.Resource do
         }
       end
     end
+  end
+
+  defp quote_filter_handlers(filter_handlers) do
+    Enum.map(filter_handlers, fn {key, handler_name} ->
+      quote do
+        {unquote(key), fn value -> unquote(handler_name)(value) end}
+      end
+    end)
+  end
+
+  defp quote_join_rules(join_rules) do
+    Enum.map(join_rules, fn {name, when_filter, when_sort, handler_name} ->
+      quote do
+        %{
+          name: unquote(name),
+          when_filter: MapSet.new(unquote(when_filter)),
+          when_sort: MapSet.new(unquote(when_sort)),
+          apply: fn query -> unquote(handler_name)(query) end
+        }
+      end
+    end)
+  end
+
+  defp quote_preload_policies(preload_policies) do
+    Enum.map(preload_policies, fn {key, policy} ->
+      quote do
+        {unquote(key), unquote(policy)}
+      end
+    end)
   end
 
   defp validate_options!(opts) do

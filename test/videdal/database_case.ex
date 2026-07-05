@@ -30,6 +30,7 @@ defmodule Videdal.DatabaseCase do
   def reset_schema! do
     repo = Videdal.SandboxRepo
 
+    Ecto.Adapters.SQL.query!(repo, "DROP VIEW IF EXISTS course_grade_summaries", [])
     Ecto.Adapters.SQL.query!(repo, "DROP TABLE IF EXISTS grades", [])
     Ecto.Adapters.SQL.query!(repo, "DROP TABLE IF EXISTS enrollments", [])
     Ecto.Adapters.SQL.query!(repo, "DROP TABLE IF EXISTS parent_students", [])
@@ -137,6 +138,22 @@ defmodule Videdal.DatabaseCase do
         student_id bigint NOT NULL REFERENCES students(id),
         course_id bigint NOT NULL REFERENCES courses(id)
       )
+      """,
+      []
+    )
+
+    Ecto.Adapters.SQL.query!(
+      repo,
+      """
+      CREATE VIEW course_grade_summaries AS
+      SELECT
+        course_id AS id,
+        school_id,
+        course_id,
+        count(*)::integer AS grade_count,
+        avg(score)::float AS average_score
+      FROM grades
+      GROUP BY school_id, course_id
       """,
       []
     )

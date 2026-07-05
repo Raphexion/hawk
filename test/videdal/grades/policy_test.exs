@@ -28,6 +28,18 @@ defmodule Videdal.Grades.PolicyTest do
     assert Policy.read_filter(authority) == %{school_id: 7, student_id: 8}
   end
 
+  test "students without a student scope fail closed" do
+    authority = Authority.new(:student, 8, scopes: %{school_id: 7})
+
+    assert Policy.read_filter(authority) == :none
+  end
+
+  test "parents without a parent scope fail closed" do
+    authority = Authority.new(:parent, 4, scopes: %{school_id: 7})
+
+    assert Policy.read_filter(authority) == :none
+  end
+
   test "parents are scoped through their linked students" do
     authority = Authority.new(:parent, 4, scopes: %{school_id: 7, parent_id: 4})
 
