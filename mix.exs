@@ -9,7 +9,20 @@ defmodule Hawk.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      dialyzer: dialyzer()
+      dialyzer: dialyzer(),
+      aliases: aliases()
+    ]
+  end
+
+  def cli do
+    [
+      preferred_envs: [
+        "ecto.create": :test,
+        "ecto.drop": :test,
+        "ecto.setup": :test,
+        "ecto.reset": :test,
+        "test.database": :test
+      ]
     ]
   end
 
@@ -35,6 +48,17 @@ defmodule Hawk.MixProject do
 
   defp elixirc_paths(:test), do: ["lib", "test/videdal"]
   defp elixirc_paths(_env), do: ["lib"]
+
+  defp aliases do
+    [
+      "ecto.setup": [
+        "ecto.create --quiet",
+        "run -e \"Videdal.DatabaseCase.start_repo!(); Videdal.DatabaseCase.reset_schema!()\""
+      ],
+      "ecto.reset": ["ecto.drop --quiet", "ecto.setup"],
+      "test.database": ["ecto.setup", "test"]
+    ]
+  end
 
   defp dialyzer do
     [
