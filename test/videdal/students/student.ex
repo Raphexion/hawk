@@ -12,5 +12,7 @@ defmodule Videdal.Student do
     field(:name, :string)
     field(:active, :boolean, default: true)
     belongs_to(:school, Videdal.School)
+    has_many(:grades, Videdal.Grade)
+    has_many(:parent_students, Videdal.ParentStudent)
   end
 end

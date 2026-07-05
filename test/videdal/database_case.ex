@@ -30,7 +30,10 @@ defmodule Videdal.DatabaseCase do
   def reset_schema! do
     repo = Videdal.SandboxRepo
 
+    Ecto.Adapters.SQL.query!(repo, "DROP TABLE IF EXISTS grades", [])
     Ecto.Adapters.SQL.query!(repo, "DROP TABLE IF EXISTS enrollments", [])
+    Ecto.Adapters.SQL.query!(repo, "DROP TABLE IF EXISTS parent_students", [])
+    Ecto.Adapters.SQL.query!(repo, "DROP TABLE IF EXISTS parents", [])
     Ecto.Adapters.SQL.query!(repo, "DROP TABLE IF EXISTS courses", [])
     Ecto.Adapters.SQL.query!(repo, "DROP TABLE IF EXISTS students", [])
     Ecto.Adapters.SQL.query!(repo, "DROP TABLE IF EXISTS teachers", [])
@@ -75,6 +78,31 @@ defmodule Videdal.DatabaseCase do
     Ecto.Adapters.SQL.query!(
       repo,
       """
+      CREATE TABLE parents (
+        id bigserial PRIMARY KEY,
+        name text NOT NULL,
+        school_id bigint NOT NULL REFERENCES schools(id)
+      )
+      """,
+      []
+    )
+
+    Ecto.Adapters.SQL.query!(
+      repo,
+      """
+      CREATE TABLE parent_students (
+        id bigserial PRIMARY KEY,
+        school_id bigint NOT NULL REFERENCES schools(id),
+        parent_id bigint NOT NULL REFERENCES parents(id),
+        student_id bigint NOT NULL REFERENCES students(id)
+      )
+      """,
+      []
+    )
+
+    Ecto.Adapters.SQL.query!(
+      repo,
+      """
       CREATE TABLE courses (
         id bigserial PRIMARY KEY,
         title text NOT NULL,
@@ -91,6 +119,20 @@ defmodule Videdal.DatabaseCase do
       CREATE TABLE enrollments (
         id bigserial PRIMARY KEY,
         enrolled_on date,
+        school_id bigint NOT NULL REFERENCES schools(id),
+        student_id bigint NOT NULL REFERENCES students(id),
+        course_id bigint NOT NULL REFERENCES courses(id)
+      )
+      """,
+      []
+    )
+
+    Ecto.Adapters.SQL.query!(
+      repo,
+      """
+      CREATE TABLE grades (
+        id bigserial PRIMARY KEY,
+        score integer NOT NULL,
         school_id bigint NOT NULL REFERENCES schools(id),
         student_id bigint NOT NULL REFERENCES students(id),
         course_id bigint NOT NULL REFERENCES courses(id)

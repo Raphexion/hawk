@@ -21,6 +21,9 @@ defmodule Videdal.Courses.Policy do
       authority.role == :student ->
         PolicySupport.scoped_filter(authority, [:school_id])
 
+      authority.role == :parent ->
+        PolicySupport.scoped_filter(authority, [:school_id])
+
       true ->
         :none
     end

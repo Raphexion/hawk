@@ -9,5 +9,6 @@ defmodule Videdal.Course do
     field(:title, :string)
     belongs_to(:school, Videdal.School)
     belongs_to(:teacher, Videdal.Teacher)
+    has_many(:grades, Videdal.Grade)
   end
 end

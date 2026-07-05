@@ -94,7 +94,7 @@ defmodule Hawk.Reader.Preloader do
   end
 
   defp association_query(root_schema, key, policy, authority) when is_atom(policy) do
-    unless function_exported?(policy, :read_filter, 1) do
+    unless Code.ensure_loaded?(policy) and function_exported?(policy, :read_filter, 1) do
       raise ArgumentError,
             "reader preload #{inspect(key)} policy #{inspect(policy)} must define read_filter/1"
     end
@@ -102,9 +102,13 @@ defmodule Hawk.Reader.Preloader do
     association = root_schema.__schema__(:association, key)
     schema = association.related
 
-    schema
-    |> from(as: :root)
-    |> FilterCompiler.compile(schema, policy.read_filter(authority), %{})
+    query = from(schema, as: :root)
+
+    if function_exported?(policy, :preload_query, 2) do
+      policy.preload_query(query, authority)
+    else
+      FilterCompiler.compile(query, schema, policy.read_filter(authority), %{})
+    end
   end
 
   defp top_level_keys(requested) do
