@@ -3,25 +3,32 @@ defmodule Videdal.Courses.Reader do
   Reader declaration module for the Videdal `Courses` resource.
   """
 
-  alias Hawk.Reader, as: HawkReader
-  alias Videdal.{Course, Repo}
-  alias Videdal.Courses.Policy
+  use Hawk.Reader.Resource,
+    repo: Videdal.Repo,
+    schema: Videdal.Course,
+    policy: Videdal.Courses.Policy
 
-  @filter_keys MapSet.new([:id, :school_id, :teacher_id])
+  filter(:id)
+  filter(:school_id)
+  filter(:teacher_id)
 
-  def filter_keys, do: @filter_keys
-  def read_filter(authority), do: Policy.read_filter(authority)
+  attach :school, when_filter: [:school_name] do
+    join(query, :inner, [root: course], school in assoc(course, :school), as: :school)
+  end
 
-  def one(opts), do: HawkReader.one(config(), opts)
-  def one!(opts), do: HawkReader.one!(config(), opts)
-  def all(opts), do: HawkReader.all(config(), opts)
+  attach :teacher, when_filter: [:teacher_name] do
+    join(query, :inner, [root: course], teacher in assoc(course, :teacher), as: :teacher)
+  end
 
-  defp config do
-    %{
-      repo: Repo,
-      schema: Course,
-      filter_keys: filter_keys(),
-      read_filter: &read_filter/1
-    }
+  filter :school_name do
+    fn {:eq, school_name} ->
+      dynamic([school: school], school.name == ^school_name)
+    end
+  end
+
+  filter :teacher_name do
+    fn {:eq, teacher_name} ->
+      dynamic([teacher: teacher], teacher.name == ^teacher_name)
+    end
   end
 end

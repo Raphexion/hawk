@@ -19,4 +19,24 @@ defmodule Videdal.Enrollments.Reader do
       {:gte, date} -> dynamic([enrollment], enrollment.enrolled_on >= ^date)
     end
   end
+
+  attach :student, when_filter: [:student_name] do
+    join(query, :inner, [root: enrollment], student in assoc(enrollment, :student), as: :student)
+  end
+
+  attach :course, when_filter: [:course_title] do
+    join(query, :inner, [root: enrollment], course in assoc(enrollment, :course), as: :course)
+  end
+
+  filter :student_name do
+    fn {:eq, student_name} ->
+      dynamic([student: student], student.name == ^student_name)
+    end
+  end
+
+  filter :course_title do
+    fn {:eq, course_title} ->
+      dynamic([course: course], course.title == ^course_title)
+    end
+  end
 end

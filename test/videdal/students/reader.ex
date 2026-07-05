@@ -17,4 +17,14 @@ defmodule Videdal.Students.Reader do
       dynamic([student], student.id == ^student_id)
     end
   end
+
+  attach :school, when_filter: [:school_name] do
+    join(query, :inner, [root: student], school in assoc(student, :school), as: :school)
+  end
+
+  filter :school_name do
+    fn {:eq, school_name} ->
+      dynamic([school: school], school.name == ^school_name)
+    end
+  end
 end

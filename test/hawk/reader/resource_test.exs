@@ -21,6 +21,16 @@ defmodule Hawk.Reader.ResourceTest.Reader do
       dynamic([student], student.id == ^student_id)
     end
   end
+
+  attach :school, when_filter: [:school_name], when_sort: [:school_name] do
+    join(query, :inner, [root: student], school in assoc(student, :school), as: :school)
+  end
+
+  filter :school_name do
+    fn {:eq, school_name} ->
+      dynamic([school: school], school.name == ^school_name)
+    end
+  end
 end
 
 defmodule Hawk.Reader.ResourceTest do
@@ -31,8 +41,11 @@ defmodule Hawk.Reader.ResourceTest do
   alias Videdal.Student
 
   test "generates reader metadata functions" do
-    assert Reader.filter_keys() == MapSet.new([:id, :school_id, :active, :student_id])
+    assert Reader.filter_keys() == MapSet.new([:id, :school_id, :active, :student_id, :school_name])
     assert Map.has_key?(Reader.filter_handlers(), :student_id)
+    assert [%{name: :school, when_filter: when_filter, when_sort: when_sort}] = Reader.join_plan()
+    assert when_filter == MapSet.new([:school_name])
+    assert when_sort == MapSet.new([:school_name])
     assert Reader.read_filter(Authority.system()) == %{school_id: 7}
   end
 
@@ -46,6 +59,18 @@ defmodule Hawk.Reader.ResourceTest do
     inspected = inspect(query)
     assert inspected =~ "s0.id == ^12"
     assert inspected =~ "s0.school_id == ^7"
+    refute inspected =~ "join:"
+  end
+
+  test "applies explicit join steps only when triggered by filters" do
+    Process.put({Videdal.Repo, :all_results}, [%Student{id: 12, school_id: 7}])
+
+    Reader.all(authority: Authority.system(), filter: %{school_name: "Videdal Skole"})
+
+    assert_received {:videdal_repo, :all, query}
+    inspected = inspect(query)
+    assert inspected =~ "join: s1 in assoc(s0, :school)"
+    assert inspected =~ ~s(s1.name == ^"Videdal Skole")
   end
 
   test "generates one/1 and one!/1" do

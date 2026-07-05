@@ -6,7 +6,15 @@ defmodule Videdal.Enrollments.ReaderTest do
 
   test "declares the resource filter keys" do
     assert Reader.filter_keys() ==
-             MapSet.new([:id, :school_id, :student_id, :course_id, :enrolled_on_or_after])
+             MapSet.new([
+               :id,
+               :school_id,
+               :student_id,
+               :course_id,
+               :enrolled_on_or_after,
+               :student_name,
+               :course_title
+             ])
   end
 
   test "delegates read policy to the resource policy module" do
@@ -25,5 +33,21 @@ defmodule Videdal.Enrollments.ReaderTest do
 
     assert_received {:videdal_repo, :all, query}
     assert inspect(query) =~ "e0.enrolled_on >= ^~D[2026-01-01]"
+  end
+
+  test "all/1 applies explicit joins for related student and course filters" do
+    Process.put({Videdal.Repo, :all_results}, [])
+
+    assert Videdal.Enrollments.all(
+             authority: Authority.system(),
+             filter: %{student_name: "Ada", course_title: "Math"}
+           ) == []
+
+    assert_received {:videdal_repo, :all, query}
+    inspected = inspect(query)
+    assert inspected =~ "join: s1 in assoc(e0, :student)"
+    assert inspected =~ "join: c2 in assoc(e0, :course)"
+    assert inspected =~ ~s(s1.name == ^"Ada")
+    assert inspected =~ ~s(c2.title == ^"Math")
   end
 end

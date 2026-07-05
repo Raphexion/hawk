@@ -8,7 +8,7 @@ defmodule Videdal.Students.ReaderTest do
 
   test "declares the resource filter keys" do
     assert MapSet.subset?(
-             MapSet.new([:id, :school_id, :student_id, :active]),
+             MapSet.new([:id, :school_id, :student_id, :active, :school_name]),
              Reader.filter_keys()
            )
   end
@@ -40,6 +40,18 @@ defmodule Videdal.Students.ReaderTest do
 
     assert_received {:videdal_repo, :all, query}
     assert inspect(query) =~ "s0.id == ^12"
+  end
+
+  test "all/1 applies explicit school joins only when a related filter is active" do
+    put_repo_results([])
+
+    assert Students.all(authority: Authority.system(), filter: %{school_name: "Videdal Skole"}) ==
+             []
+
+    assert_received {:videdal_repo, :all, query}
+    inspected = inspect(query)
+    assert inspected =~ "join: s1 in assoc(s0, :school)"
+    assert inspected =~ ~s(s1.name == ^"Videdal Skole")
   end
 
   test "all/1 applies limit from page size" do

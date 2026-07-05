@@ -11,6 +11,7 @@ defmodule Hawk.Reader do
 
   alias Hawk.Filter
   alias Hawk.Reader.FilterCompiler
+  alias Hawk.Reader.JoinPlan
 
   @allowed_options MapSet.new([:authority, :filter, :page, :preloads])
   @sort_dirs [:asc, :desc, :asc_nulls_first, :asc_nulls_last, :desc_nulls_first, :desc_nulls_last]
@@ -21,6 +22,7 @@ defmodule Hawk.Reader do
           required(:filter_keys) => Enumerable.t(),
           required(:read_filter) => (term() -> Filter.t()),
           optional(:filter_handlers) => FilterCompiler.handlers(),
+          optional(:join_plan) => [JoinPlan.rule()],
           optional(:forced_filter) => Filter.t()
         }
 
@@ -75,6 +77,8 @@ defmodule Hawk.Reader do
     Filter.validate_keys!(filter, config.filter_keys)
 
     config.schema
+    |> from(as: :root)
+    |> JoinPlan.apply(Map.get(config, :join_plan, []), filter, page.column)
     |> FilterCompiler.compile(config.schema, filter, Map.get(config, :filter_handlers, %{}))
     |> apply_sort(page)
     |> apply_limit(page)
@@ -123,7 +127,7 @@ defmodule Hawk.Reader do
   end
 
   defp apply_sort(query, %{column: column, dir: dir}) do
-    order_by(query, [row], [{^dir, field(row, ^column)}])
+    order_by(query, [root: row], [{^dir, field(row, ^column)}])
   end
 
   defp apply_limit(query, %{size: nil}), do: query
