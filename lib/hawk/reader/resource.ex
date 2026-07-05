@@ -17,8 +17,8 @@ defmodule Hawk.Reader.Resource do
     forced_filter = Keyword.get(opts, :forced_filter, :all)
 
     quote do
-      import Ecto.Query
-      import Hawk.Reader.Resource, only: [attach: 3, filter: 1, filter: 2, preload: 1]
+      import Ecto.Query, except: [preload: 2]
+      import Hawk.Reader.Resource, only: [attach: 3, filter: 1, filter: 2, preload: 1, preload: 2]
 
       @hawk_reader_repo unquote(repo)
       @hawk_reader_schema unquote(schema)
@@ -29,6 +29,7 @@ defmodule Hawk.Reader.Resource do
       Module.register_attribute(__MODULE__, :hawk_reader_filter_handlers, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_join_rules, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_preload_keys, accumulate: true)
+      Module.register_attribute(__MODULE__, :hawk_reader_preload_policies, accumulate: true)
 
       @before_compile Hawk.Reader.Resource
     end
@@ -57,6 +58,16 @@ defmodule Hawk.Reader.Resource do
   defmacro preload(key) when is_atom(key) do
     quote do
       @hawk_reader_preload_keys unquote(key)
+    end
+  end
+
+  defmacro preload(key, opts) when is_atom(key) and is_list(opts) do
+    policy = opts |> Keyword.get(:policy) |> Macro.expand(__CALLER__)
+    validate_preload_policy!(key, policy)
+
+    quote do
+      @hawk_reader_preload_keys unquote(key)
+      @hawk_reader_preload_policies {unquote(key), unquote(policy)}
     end
   end
 
@@ -98,6 +109,11 @@ defmodule Hawk.Reader.Resource do
       |> Module.get_attribute(:hawk_reader_preload_keys)
       |> Enum.reverse()
 
+    preload_policies =
+      env.module
+      |> Module.get_attribute(:hawk_reader_preload_policies)
+      |> Enum.reverse()
+
     validate_join_rules!(join_rules)
     validate_preload_keys!(preload_keys)
 
@@ -120,6 +136,13 @@ defmodule Hawk.Reader.Resource do
         end
       end)
 
+    preload_policy_entries =
+      Enum.map(preload_policies, fn {key, policy} ->
+        quote do
+          {unquote(key), unquote(policy)}
+        end
+      end)
+
     quote do
       def filter_keys do
         MapSet.new(unquote(filter_keys))
@@ -135,6 +158,10 @@ defmodule Hawk.Reader.Resource do
 
       def preload_keys do
         MapSet.new(unquote(preload_keys))
+      end
+
+      def preload_policies do
+        Map.new([unquote_splicing(preload_policy_entries)])
       end
 
       def read_filter(authority) do
@@ -154,7 +181,8 @@ defmodule Hawk.Reader.Resource do
           join_plan: join_plan(),
           read_filter: &read_filter/1,
           forced_filter: @hawk_reader_forced_filter,
-          preload_keys: preload_keys()
+          preload_keys: preload_keys(),
+          preload_policies: preload_policies()
         }
       end
     end
@@ -166,6 +194,15 @@ defmodule Hawk.Reader.Resource do
         raise ArgumentError, "missing required reader option #{inspect(option)}"
       end
     end)
+  end
+
+  defp validate_preload_policy!(_key, nil), do: :ok
+
+  defp validate_preload_policy!(_key, policy) when is_atom(policy), do: :ok
+
+  defp validate_preload_policy!(key, policy) do
+    raise ArgumentError,
+          "reader preload #{inspect(key)} policy must be a module, got: #{inspect(policy)}"
   end
 
   defp validate_join_rules!(join_rules) do

@@ -10,7 +10,7 @@ defmodule Videdal.Integration.ReaderPreloadTest.Reader do
   filter(:school_id)
   filter(:active)
 
-  preload(:school)
+  preload(:school, policy: Videdal.Schools.Policy)
 end
 
 defmodule Videdal.Integration.ReaderPreloadTest.Policy do
@@ -47,6 +47,25 @@ defmodule Videdal.Integration.ReaderPreloadTest do
     assert Enum.map(students, & &1.name) == ["Ada", "Grace"]
     assert Enum.all?(students, &Ecto.assoc_loaded?(&1.school))
     assert Enum.map(students, & &1.school.name) == ["Videdal Skole", "Videdal Skole"]
+    assert query_count == 2
+  end
+
+  test "preload policy scopes loaded relations without changing the root result set" do
+    visible_school = SandboxRepo.insert!(%School{name: "Visible Skole"})
+    hidden_school = SandboxRepo.insert!(%School{name: "Hidden Skole"})
+
+    SandboxRepo.insert!(%Student{name: "Ada", school_id: visible_school.id})
+    SandboxRepo.insert!(%Student{name: "Grace", school_id: hidden_school.id})
+
+    authority = Authority.new(:school_admin, 1, scopes: %{school_id: visible_school.id})
+
+    {students, query_count} =
+      count_queries(fn ->
+        Reader.all(authority: authority, preloads: [:school])
+      end)
+
+    assert Enum.map(students, & &1.name) == ["Ada", "Grace"]
+    assert [%Student{school: %School{name: "Visible Skole"}}, %Student{school: nil}] = students
     assert query_count == 2
   end
 

@@ -25,7 +25,8 @@ defmodule Hawk.Reader do
           optional(:filter_handlers) => FilterCompiler.handlers(),
           optional(:join_plan) => [JoinPlan.rule()],
           optional(:forced_filter) => Filter.t(),
-          optional(:preload_keys) => Enumerable.t()
+          optional(:preload_keys) => Enumerable.t(),
+          optional(:preload_policies) => %{optional(atom()) => (term() -> Filter.t())}
         }
 
   @doc """
@@ -38,7 +39,13 @@ defmodule Hawk.Reader do
     config
     |> build_query(opts)
     |> config.repo.all()
-    |> Preloader.preload(config.repo, opts.preloads, Map.get(config, :preload_keys, []))
+    |> Preloader.preload(
+      config.repo,
+      opts.preloads,
+      Map.get(config, :preload_keys, []),
+      opts.authority,
+      Map.get(config, :preload_policies, %{})
+    )
   end
 
   @doc """

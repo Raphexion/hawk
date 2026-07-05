@@ -16,7 +16,7 @@ defmodule Hawk.Reader.ResourceTest.Reader do
   filter(:school_id)
   filter(:active)
 
-  preload(:school)
+  preload(:school, policy: Videdal.Schools.Policy)
 
   filter :student_id do
     fn {:eq, student_id} ->
@@ -51,6 +51,9 @@ defmodule Hawk.Reader.ResourceTest do
     assert when_filter == MapSet.new([:school_name])
     assert when_sort == MapSet.new([:school_name])
     assert Reader.preload_keys() == MapSet.new([:school])
+
+    assert Reader.preload_policies() == %{school: Videdal.Schools.Policy}
+
     assert Reader.read_filter(Authority.system()) == %{school_id: 7}
   end
 
@@ -85,8 +88,8 @@ defmodule Hawk.Reader.ResourceTest do
     assert Reader.all(authority: Authority.system(), preloads: [:school]) == results
 
     assert_received {:videdal_repo, :all, _query}
-    assert_received {:videdal_repo, :preload, ^results, [:school]}
-    refute_received {:videdal_repo, :preload, _other_results, [:school]}
+    assert_received {:videdal_repo, :preload, ^results, [school: %Ecto.Query{}]}
+    refute_received {:videdal_repo, :preload, _other_results, _preloads}
   end
 
   test "rejects undeclared preloads" do
