@@ -43,7 +43,7 @@ defmodule Videdal.Teachers.ReaderTest do
     assert Videdal.Teachers.all(authority: Authority.system(), preloads: [:school]) == results
 
     assert_received {:videdal_repo, :all, _query}
-    assert_received {:videdal_repo, :preload, ^results, [:school]}
+    assert_received {:videdal_repo, :preload, ^results, [school: %Ecto.Query{}]}
     refute_received {:videdal_repo, :preload, _other_results, _preloads}
   end
 end

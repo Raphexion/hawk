@@ -3,12 +3,12 @@ defmodule Videdal.Course do
   Course schema used by the Videdal example resources.
   """
 
-  use Ecto.Schema
+  use Hawk.Model
 
-  schema "courses" do
+  model "courses" do
     field(:title, :string)
-    belongs_to(:school, Videdal.School)
-    belongs_to(:teacher, Videdal.Teacher)
-    has_many(:grades, Videdal.Grade)
+    belongs_to(:school, Videdal.School, policy: Videdal.Schools.Policy)
+    belongs_to(:teacher, Videdal.Teacher, policy: Videdal.Teachers.Policy)
+    has_many(:grades, Videdal.Grade, policy: Videdal.Grades.Policy)
   end
 end

@@ -3,9 +3,9 @@ defmodule Videdal.School do
   School schema used by the Videdal example resources.
   """
 
-  use Ecto.Schema
+  use Hawk.Model
 
-  schema "schools" do
+  model "schools" do
     field(:name, :string)
   end
 end

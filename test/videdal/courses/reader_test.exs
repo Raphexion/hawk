@@ -9,7 +9,8 @@ defmodule Videdal.Courses.ReaderTest do
     assert Reader.filter_keys() ==
              MapSet.new([:id, :school_id, :teacher_id, :school_name, :teacher_name])
 
-    assert Reader.preload_keys() == MapSet.new([:school, :teacher])
+    assert Reader.preload_keys() == MapSet.new([:school, :teacher, :grades])
+    assert Reader.preload_policies() == %{}
   end
 
   test "delegates read policy to the resource policy module" do
@@ -41,7 +42,10 @@ defmodule Videdal.Courses.ReaderTest do
     assert Courses.all(authority: Authority.system(), preloads: [:school, :teacher]) == results
 
     assert_received {:videdal_repo, :all, _query}
-    assert_received {:videdal_repo, :preload, ^results, [:school, :teacher]}
+
+    assert_received {:videdal_repo, :preload, ^results,
+                     [school: %Ecto.Query{}, teacher: %Ecto.Query{}]}
+
     refute_received {:videdal_repo, :preload, _other_results, _preloads}
   end
 end

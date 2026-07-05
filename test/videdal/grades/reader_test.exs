@@ -21,10 +21,7 @@ defmodule Videdal.Grades.ReaderTest do
 
     assert Reader.preload_keys() == MapSet.new([:student, :course])
 
-    assert Reader.preload_policies() == %{
-             student: Videdal.Students.Policy,
-             course: Videdal.Courses.Policy
-           }
+    assert Reader.preload_policies() == %{}
   end
 
   test "teacher policy filters trigger the explicit course join" do

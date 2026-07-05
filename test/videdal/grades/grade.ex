@@ -3,12 +3,12 @@ defmodule Videdal.Grade do
   Grade schema used by the Videdal example resources.
   """
 
-  use Ecto.Schema
+  use Hawk.Model
 
-  schema "grades" do
+  model "grades" do
     field(:score, :integer)
-    belongs_to(:school, Videdal.School)
-    belongs_to(:student, Videdal.Student)
-    belongs_to(:course, Videdal.Course)
+    belongs_to(:school, Videdal.School, policy: Videdal.Schools.Policy)
+    belongs_to(:student, Videdal.Student, policy: Videdal.Students.Policy)
+    belongs_to(:course, Videdal.Course, policy: Videdal.Courses.Policy)
   end
 end

@@ -3,11 +3,11 @@ defmodule Videdal.Parent do
   Parent schema used by the Videdal example resources.
   """
 
-  use Ecto.Schema
+  use Hawk.Model
 
-  schema "parents" do
+  model "parents" do
     field(:name, :string)
-    belongs_to(:school, Videdal.School)
-    has_many(:parent_students, Videdal.ParentStudent)
+    belongs_to(:school, Videdal.School, policy: Videdal.Schools.Policy)
+    has_many(:parent_students, Videdal.ParentStudent, policy: Videdal.Parents.Policy)
   end
 end

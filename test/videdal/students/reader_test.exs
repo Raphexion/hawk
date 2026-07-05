@@ -70,8 +70,8 @@ defmodule Videdal.Students.ReaderTest do
     assert Students.all(authority: Authority.system(), preloads: [:school]) == results
 
     assert_received {:videdal_repo, :all, _query}
-    assert_received {:videdal_repo, :preload, ^results, [:school]}
-    refute_received {:videdal_repo, :preload, _other_results, [:school]}
+    assert_received {:videdal_repo, :preload, ^results, [school: %Ecto.Query{}]}
+    refute_received {:videdal_repo, :preload, _other_results, _preloads}
   end
 
   test "all/1 rejects undeclared preloads" do

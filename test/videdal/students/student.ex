@@ -6,13 +6,13 @@ defmodule Videdal.Student do
   authorization, and mutation orchestration live in sibling resource modules.
   """
 
-  use Ecto.Schema
+  use Hawk.Model
 
-  schema "students" do
+  model "students" do
     field(:name, :string)
     field(:active, :boolean, default: true)
-    belongs_to(:school, Videdal.School)
-    has_many(:grades, Videdal.Grade)
-    has_many(:parent_students, Videdal.ParentStudent)
+    belongs_to(:school, Videdal.School, policy: Videdal.Schools.Policy)
+    has_many(:grades, Videdal.Grade, policy: Videdal.Grades.Policy)
+    has_many(:parent_students, Videdal.ParentStudent, policy: Videdal.Parents.Policy)
   end
 end

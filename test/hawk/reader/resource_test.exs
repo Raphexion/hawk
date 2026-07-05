@@ -16,7 +16,7 @@ defmodule Hawk.Reader.ResourceTest.Reader do
   filter(:school_id)
   filter(:active)
 
-  preload(:school, policy: Videdal.Schools.Policy)
+  preload(:school)
 
   filter :student_id do
     fn {:eq, student_id} ->
@@ -52,7 +52,7 @@ defmodule Hawk.Reader.ResourceTest do
     assert when_sort == MapSet.new([:school_name])
     assert Reader.preload_keys() == MapSet.new([:school])
 
-    assert Reader.preload_policies() == %{school: Videdal.Schools.Policy}
+    assert Reader.preload_policies() == %{}
 
     assert Reader.read_filter(Authority.system()) == %{school_id: 7}
   end

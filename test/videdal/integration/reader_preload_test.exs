@@ -10,7 +10,7 @@ defmodule Videdal.Integration.ReaderPreloadTest.Reader do
   filter(:school_id)
   filter(:active)
 
-  preload(:school, policy: Videdal.Schools.Policy)
+  preload(:school)
 end
 
 defmodule Videdal.Integration.ReaderPreloadTest.Policy do

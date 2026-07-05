@@ -12,8 +12,8 @@ defmodule Videdal.Integration.GradesReaderTest.Reader do
   filter(:course_id)
   filter(:score)
 
-  preload(:student, policy: Videdal.Students.Policy)
-  preload(:course, policy: Videdal.Courses.Policy)
+  preload(:student)
+  preload(:course)
 
   attach :student, when_filter: [:student_name, :parent_id] do
     join(query, :inner, [root: grade], student in assoc(grade, :student), as: :student)

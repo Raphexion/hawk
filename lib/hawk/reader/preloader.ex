@@ -20,8 +20,15 @@ defmodule Hawk.Reader.Preloader do
   before the repo is called.
   """
   @spec preload([struct()], module(), [preload()], Enumerable.t()) :: [struct()]
-  def preload(results, repo, requested, allowed_keys) do
-    preload(results, repo, requested, allowed_keys, nil, %{})
+  def preload(results, _repo, [], _allowed_keys), do: results
+
+  def preload(results, repo, requested, allowed_keys) when is_list(requested) do
+    validate_preloads!(requested, allowed_keys)
+    repo.preload(results, requested)
+  end
+
+  def preload(_results, _repo, requested, _allowed_keys) do
+    raise ArgumentError, "preloads must be a list, got: #{inspect(requested)}"
   end
 
   @spec preload([struct()], module(), [preload()], Enumerable.t(), term(), map()) :: [struct()]
@@ -79,17 +86,31 @@ defmodule Hawk.Reader.Preloader do
   end
 
   defp apply_preload_policy(root_schema, key, authority, policies) when is_atom(key) do
-    case Map.fetch(policies, key) do
-      {:ok, policy} -> {key, association_query(root_schema, key, policy, authority)}
-      :error -> key
-    end
+    policy = fetch_policy!(root_schema, key, policies)
+    {key, association_query(root_schema, key, policy, authority)}
   end
 
   defp apply_preload_policy(root_schema, {key, nested}, authority, policies)
        when is_atom(key) and is_list(nested) do
-    case Map.fetch(policies, key) do
-      {:ok, policy} -> {key, {association_query(root_schema, key, policy, authority), nested}}
-      :error -> {key, nested}
+    policy = fetch_policy!(root_schema, key, policies)
+    {key, {association_query(root_schema, key, policy, authority), nested}}
+  end
+
+  defp fetch_policy!(root_schema, key, policies) do
+    with :error <- Map.fetch(policies, key),
+         :error <- fetch_model_policy(root_schema, key) do
+      raise ArgumentError,
+            "reader preload #{inspect(key)} must declare a policy module on the reader or model association"
+    else
+      {:ok, policy} -> policy
+    end
+  end
+
+  defp fetch_model_policy(root_schema, key) do
+    if function_exported?(root_schema, :__hawk_association_policy__, 1) do
+      root_schema.__hawk_association_policy__(key)
+    else
+      :error
     end
   end
 

@@ -3,10 +3,10 @@ defmodule Videdal.Teacher do
   Teacher schema used by the Videdal example resources.
   """
 
-  use Ecto.Schema
+  use Hawk.Model
 
-  schema "teachers" do
+  model "teachers" do
     field(:name, :string)
-    belongs_to(:school, Videdal.School)
+    belongs_to(:school, Videdal.School, policy: Videdal.Schools.Policy)
   end
 end
