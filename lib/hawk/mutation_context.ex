@@ -171,7 +171,6 @@ defmodule Hawk.MutationContext do
   defp singularize(type) do
     cond do
       String.ends_with?(type, "ies") -> String.replace_suffix(type, "ies", "y")
-      String.ends_with?(type, "ses") -> String.replace_suffix(type, "ses", "sis")
       String.ends_with?(type, "s") -> String.trim_trailing(type, "s")
       true -> type
     end

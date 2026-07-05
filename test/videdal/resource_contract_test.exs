@@ -45,3 +45,17 @@ defmodule Videdal.TeachersContractTest do
     resource: Videdal.Teachers,
     model: Videdal.Teacher
 end
+
+defmodule Videdal.ParentStudentContractTest do
+  use ExUnit.Case, async: true
+
+  test "Hawk model declarations are consistent" do
+    assert Videdal.ParentStudent.__hawk_resource__() == Videdal.ParentStudents
+    assert :ok = contract_result(Videdal.ParentStudent)
+  end
+
+  defp contract_result(model) do
+    Hawk.ResourceContract.validate_model!(model)
+    :ok
+  end
+end
