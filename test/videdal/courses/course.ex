@@ -8,16 +8,8 @@ defmodule Videdal.Course do
   model "courses" do
     field(:title, :string)
 
-    belongs_to(:school, Videdal.School,
-      policy: Videdal.Schools.Policy,
-      reader: Videdal.Schools.Reader
-    )
-
-    belongs_to(:teacher, Videdal.Teacher,
-      policy: Videdal.Teachers.Policy,
-      reader: Videdal.Teachers.Reader
-    )
-
-    has_many(:grades, Videdal.Grade, policy: Videdal.Grades.Policy, reader: Videdal.Grades.Reader)
+    belongs_to(:school, Videdal.School)
+    belongs_to(:teacher, Videdal.Teacher)
+    has_many(:grades, Videdal.Grade)
   end
 end

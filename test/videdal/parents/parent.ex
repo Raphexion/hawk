@@ -8,10 +8,7 @@ defmodule Videdal.Parent do
   model "parents" do
     field(:name, :string)
 
-    belongs_to(:school, Videdal.School,
-      policy: Videdal.Schools.Policy,
-      reader: Videdal.Schools.Reader
-    )
+    belongs_to(:school, Videdal.School)
 
     has_many(:parent_students, Videdal.ParentStudent,
       policy: Videdal.Parents.Policy,

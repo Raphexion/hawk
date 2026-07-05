@@ -5,8 +5,7 @@ defmodule Videdal.Grades.Reader do
 
   use Hawk.Reader.Resource,
     repo: Videdal.Repo,
-    schema: Videdal.Grade,
-    policy: Videdal.Grades.Policy
+    schema: Videdal.Grade
 
   filter(:id)
   filter(:school_id)

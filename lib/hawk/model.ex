@@ -36,7 +36,11 @@ defmodule Hawk.Model do
     policies = env.module |> Module.get_attribute(:hawk_association_policies) |> Enum.reverse()
     readers = env.module |> Module.get_attribute(:hawk_association_readers) |> Enum.reverse()
 
+    resource = convention_resource(env.module)
+
     quote do
+      def __hawk_resource__, do: unquote(resource)
+
       unquote(quote_fetch_function(:__hawk_association_policy__, policies))
       unquote(quote_fetch_function(:__hawk_association_reader__, readers))
     end
@@ -80,10 +84,26 @@ defmodule Hawk.Model do
     end)
   end
 
+  defp rewrite_expression({kind, meta, [name, schema]}, metadata, caller)
+       when kind in [:belongs_to, :has_many] do
+    rewrite_association(kind, meta, name, schema, [], metadata, caller)
+  end
+
   defp rewrite_expression({kind, meta, [name, schema, opts]}, metadata, caller)
        when kind in [:belongs_to, :has_many] and is_list(opts) do
+    rewrite_association(kind, meta, name, schema, opts, metadata, caller)
+  end
+
+  defp rewrite_expression(expression, metadata, _caller), do: {expression, metadata}
+
+  defp rewrite_association(kind, meta, name, schema, opts, metadata, caller) do
     {policy, opts} = Keyword.pop(opts, :policy)
     {reader, opts} = Keyword.pop(opts, :reader)
+    {resource, opts} = Keyword.pop(opts, :resource)
+
+    resource = expand_resource(resource, schema, caller)
+    policy = policy || Module.concat(resource, Policy)
+    reader = reader || Module.concat(resource, Reader)
 
     metadata = put_module_metadata(metadata, :policies, kind, name, policy, caller)
     metadata = put_module_metadata(metadata, :readers, kind, name, reader, caller)
@@ -91,9 +111,56 @@ defmodule Hawk.Model do
     {{kind, meta, [name, schema, opts]}, metadata}
   end
 
-  defp rewrite_expression(expression, metadata, _caller), do: {expression, metadata}
+  defp expand_resource(nil, schema, caller), do: convention_resource(schema, caller)
 
-  defp put_module_metadata(metadata, _field, _kind, _name, nil, _caller), do: metadata
+  defp expand_resource(resource, _schema, caller), do: Macro.expand(resource, caller)
+
+  defp convention_resource({:__aliases__, _meta, parts}, caller) do
+    parts
+    |> Module.concat()
+    |> convention_resource(caller)
+  end
+
+  defp convention_resource(module, caller) do
+    module
+    |> Macro.expand(caller)
+    |> convention_resource()
+  end
+
+  defp convention_resource(module) do
+    parts = Module.split(module)
+    resource = parts |> List.last() |> pluralize_resource_name()
+
+    parts
+    |> Enum.drop(-1)
+    |> Kernel.++([resource])
+    |> Module.concat()
+  end
+
+  defp pluralize_resource_name(name) do
+    cond do
+      String.ends_with?(name, "sis") ->
+        String.replace_suffix(name, "sis", "ses")
+
+      String.ends_with?(name, "y") and not vowel_before_suffix?(name, "y") ->
+        String.replace_suffix(name, "y", "ies")
+
+      Regex.match?(~r/(s|x|z|ch|sh)$/, name) ->
+        name <> "es"
+
+      true ->
+        name <> "s"
+    end
+  end
+
+  defp vowel_before_suffix?(name, suffix) do
+    base = String.replace_suffix(name, suffix, "")
+
+    case String.last(base) do
+      nil -> false
+      char -> char in ["a", "e", "i", "o", "u"]
+    end
+  end
 
   defp put_module_metadata(metadata, field, kind, name, module, caller) do
     module = Macro.expand(module, caller)

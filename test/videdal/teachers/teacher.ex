@@ -8,9 +8,6 @@ defmodule Videdal.Teacher do
   model "teachers" do
     field(:name, :string)
 
-    belongs_to(:school, Videdal.School,
-      policy: Videdal.Schools.Policy,
-      reader: Videdal.Schools.Reader
-    )
+    belongs_to(:school, Videdal.School)
   end
 end

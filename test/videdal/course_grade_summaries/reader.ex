@@ -5,8 +5,7 @@ defmodule Videdal.CourseGradeSummaries.Reader do
 
   use Hawk.Reader.Resource,
     repo: Videdal.Repo,
-    schema: Videdal.CourseGradeSummary,
-    policy: Videdal.CourseGradeSummaries.Policy
+    schema: Videdal.CourseGradeSummary
 
   filter(:school_id)
   filter(:course_id)

@@ -5,8 +5,7 @@ defmodule Videdal.Teachers.Reader do
 
   use Hawk.Reader.Resource,
     repo: Videdal.Repo,
-    schema: Videdal.Teacher,
-    policy: Videdal.Teachers.Policy
+    schema: Videdal.Teacher
 
   filter(:id)
   filter(:school_id)

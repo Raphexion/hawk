@@ -8,19 +8,8 @@ defmodule Videdal.Grade do
   model "grades" do
     field(:score, :integer)
 
-    belongs_to(:school, Videdal.School,
-      policy: Videdal.Schools.Policy,
-      reader: Videdal.Schools.Reader
-    )
-
-    belongs_to(:student, Videdal.Student,
-      policy: Videdal.Students.Policy,
-      reader: Videdal.Students.Reader
-    )
-
-    belongs_to(:course, Videdal.Course,
-      policy: Videdal.Courses.Policy,
-      reader: Videdal.Courses.Reader
-    )
+    belongs_to(:school, Videdal.School)
+    belongs_to(:student, Videdal.Student)
+    belongs_to(:course, Videdal.Course)
   end
 end

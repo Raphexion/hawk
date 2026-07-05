@@ -6,14 +6,14 @@ defmodule Hawk.Reader.Resource do
   public reader API by delegating execution to `Hawk.Reader`.
   """
 
-  @required_options [:repo, :schema, :policy]
+  @required_options [:repo, :schema]
 
   defmacro __using__(opts) do
     validate_options!(opts)
 
     repo = Keyword.fetch!(opts, :repo)
     schema = Keyword.fetch!(opts, :schema)
-    policy = Keyword.fetch!(opts, :policy)
+    policy = Keyword.get(opts, :policy) || convention_policy(__CALLER__.module)
     forced_filter = Keyword.get(opts, :forced_filter, :all)
 
     quote do
@@ -95,6 +95,14 @@ defmodule Hawk.Reader.Resource do
     validate_preload_keys!(declarations.preload_keys)
 
     quote_reader(declarations)
+  end
+
+  defp convention_policy(reader_module) do
+    reader_module
+    |> Module.split()
+    |> Enum.drop(-1)
+    |> Kernel.++(["Policy"])
+    |> Module.concat()
   end
 
   defp reader_declarations(module) do
