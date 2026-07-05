@@ -65,60 +65,66 @@ defmodule Hawk.JsonApi.Controller do
   end
 
   def index(conn, resource, _model, params, public? \\ false) do
-    authority = authority!(conn, public?)
-    opts = params |> Hawk.JsonApi.request_options() |> Keyword.put(:authority, authority)
+    with_error_boundary(conn, fn ->
+      authority = authority!(conn, public?)
+      opts = params |> Hawk.JsonApi.request_options() |> Keyword.put(:authority, authority)
 
-    try do
       json(
         conn,
         200,
         Hawk.JsonApi.document(resource.all(opts), preloads: Keyword.get(opts, :preloads, []))
       )
-    rescue
-      error in ArgumentError -> json(conn, 400, bad_request(error.message))
-    end
+    end)
   end
 
   def show(conn, resource, _model, %{"id" => id}, public? \\ false) do
-    authority = authority!(conn, public?)
+    with_error_boundary(conn, fn ->
+      authority = authority!(conn, public?)
 
-    case resource.one(authority: authority, filter: %{id: normalize_id(id)}) do
-      {:ok, model} -> json(conn, 200, Hawk.JsonApi.document(model))
-      :not_found -> json(conn, 404, not_found(resource))
-    end
+      case resource.one(authority: authority, filter: %{id: normalize_id(id)}) do
+        {:ok, model} -> json(conn, 200, Hawk.JsonApi.document(model))
+        :not_found -> json(conn, 404, not_found(resource))
+      end
+    end)
   end
 
   def create(conn, resource, model, params, public? \\ false) do
-    authority = authority!(conn, public?)
+    with_error_boundary(conn, fn ->
+      authority = authority!(conn, public?)
 
-    params
-    |> Hawk.JsonApi.attributes(model, :creatable)
-    |> resource.create(authority)
-    |> respond(conn, 201)
+      params
+      |> Hawk.JsonApi.attributes(model, :creatable)
+      |> resource.create(authority)
+      |> respond(conn, 201)
+    end)
   end
 
   def update(conn, resource, model, %{"id" => id} = params, public? \\ false) do
-    authority = authority!(conn, public?)
+    with_error_boundary(conn, fn ->
+      authority = authority!(conn, public?)
 
-    case resource.one(authority: authority, filter: %{id: normalize_id(id)}) do
-      {:ok, existing} ->
-        params
-        |> Hawk.JsonApi.attributes(model, :updatable)
-        |> then(&resource.update(existing, &1, authority))
-        |> respond(conn, 200)
+      case resource.one(authority: authority, filter: %{id: normalize_id(id)}) do
+        {:ok, existing} ->
+          params
+          |> Hawk.JsonApi.attributes(model, :updatable)
+          |> then(&resource.update(existing, &1, authority))
+          |> respond(conn, 200)
 
-      :not_found ->
-        json(conn, 404, not_found(resource))
-    end
+        :not_found ->
+          json(conn, 404, not_found(resource))
+      end
+    end)
   end
 
   def delete(conn, resource, _model, %{"id" => id}, public? \\ false) do
-    authority = authority!(conn, public?)
+    with_error_boundary(conn, fn ->
+      authority = authority!(conn, public?)
 
-    case resource.one(authority: authority, filter: %{id: normalize_id(id)}) do
-      {:ok, existing} -> existing |> resource.delete(authority) |> respond(conn, 200)
-      :not_found -> json(conn, 404, not_found(resource))
-    end
+      case resource.one(authority: authority, filter: %{id: normalize_id(id)}) do
+        {:ok, existing} -> existing |> resource.delete(authority) |> respond(conn, 200)
+        :not_found -> json(conn, 404, not_found(resource))
+      end
+    end)
   end
 
   defp respond({:ok, model}, conn, status), do: json(conn, status, Hawk.JsonApi.document(model))
@@ -132,6 +138,12 @@ defmodule Hawk.JsonApi.Controller do
 
   defp respond({:error, _message} = result, conn, _status),
     do: json(conn, 500, Hawk.Errors.to_json_api(result))
+
+  defp with_error_boundary(conn, fun) when is_function(fun, 0) do
+    fun.()
+  rescue
+    error in ArgumentError -> json(conn, 400, bad_request(error.message))
+  end
 
   defp bad_request(message) do
     %{
