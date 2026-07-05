@@ -65,8 +65,8 @@ defmodule Videdal.Enrollments.ReaderTest do
     assert_received {:videdal_repo, :preload, ^results,
                      [
                        school: %Ecto.Query{},
-                       student: {%Ecto.Query{}, [:school]},
-                       course: {%Ecto.Query{}, [:teacher]}
+                       student: {%Ecto.Query{}, [school: %Ecto.Query{}]},
+                       course: {%Ecto.Query{}, [teacher: %Ecto.Query{}]}
                      ]}
 
     refute_received {:videdal_repo, :preload, _other_results, _preloads}

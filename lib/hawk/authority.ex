@@ -17,6 +17,7 @@ defmodule Hawk.Authority do
           identity: identity(),
           readonly?: boolean(),
           system?: boolean(),
+          public?: boolean(),
           scopes: scopes(),
           meta: map()
         }
@@ -27,6 +28,7 @@ defmodule Hawk.Authority do
     :identity,
     readonly?: false,
     system?: false,
+    public?: false,
     scopes: %{},
     meta: %{}
   ]
@@ -38,11 +40,21 @@ defmodule Hawk.Authority do
   def new(role, identity, opts \\ [])
 
   def new(role, identity, opts) when is_atom(role) do
-    build(role, identity, false, opts)
+    build(role, identity, false, false, opts)
   end
 
   def new(_role, _identity, _opts) do
     raise ArgumentError, "role must be an atom"
+  end
+
+  @doc """
+  Builds a readonly public authority for endpoints without an authenticated actor.
+  """
+  @spec public(keyword()) :: t()
+  def public(opts \\ []) do
+    identity = Keyword.get(opts, :identity, :public)
+
+    build(:public, identity, false, true, Keyword.put(opts, :readonly?, true))
   end
 
   @doc """
@@ -52,8 +64,14 @@ defmodule Hawk.Authority do
   def system(opts \\ []) do
     identity = Keyword.get(opts, :identity, :system)
 
-    build(:system, identity, true, opts)
+    build(:system, identity, true, false, opts)
   end
+
+  @doc """
+  Returns true when the authority is public anonymous access.
+  """
+  @spec public?(t()) :: boolean()
+  def public?(%__MODULE__{public?: public?}), do: public?
 
   @doc """
   Returns true when the authority is system-level.
@@ -109,6 +127,7 @@ defmodule Hawk.Authority do
     {
       __MODULE__,
       authority.system?,
+      authority.public?,
       authority.role,
       authority.identity,
       authority.readonly?,
@@ -116,7 +135,7 @@ defmodule Hawk.Authority do
     }
   end
 
-  defp build(role, identity, system?, opts) when is_list(opts) do
+  defp build(role, identity, system?, public?, opts) when is_list(opts) do
     scopes = opts |> Keyword.get(:scopes, %{}) |> validate_map!(:scopes)
     meta = opts |> Keyword.get(:meta, %{}) |> validate_map!(:meta)
 
@@ -124,13 +143,14 @@ defmodule Hawk.Authority do
       role: role,
       identity: identity,
       system?: system?,
+      public?: public?,
       readonly?: Keyword.get(opts, :readonly?, false),
       scopes: validate_scope_keys!(scopes),
       meta: meta
     }
   end
 
-  defp build(_role, _identity, _system?, _opts) do
+  defp build(_role, _identity, _system?, _public?, _opts) do
     raise ArgumentError, "authority options must be a keyword list"
   end
 

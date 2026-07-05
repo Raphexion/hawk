@@ -7,6 +7,7 @@ defmodule Videdal.Courses.Policy do
 
   read do
     role(:system, :all)
+    role(:public, :all)
     role(:principal, :all)
     role(:school_admin, scopes: [:school_id])
     role(:teacher, scopes: [:school_id, :teacher_id])

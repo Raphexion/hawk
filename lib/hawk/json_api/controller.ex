@@ -9,38 +9,69 @@ defmodule Hawk.JsonApi.Controller do
   defmacro __using__(opts) do
     resource = Keyword.fetch!(opts, :resource)
     model = Keyword.fetch!(opts, :model)
+    public? = Keyword.get(opts, :public, false)
 
     quote do
       def index(conn, params) do
-        Hawk.JsonApi.Controller.index(conn, unquote(resource), unquote(model), params)
+        Hawk.JsonApi.Controller.index(
+          conn,
+          unquote(resource),
+          unquote(model),
+          params,
+          unquote(public?)
+        )
       end
 
       def show(conn, params) do
-        Hawk.JsonApi.Controller.show(conn, unquote(resource), unquote(model), params)
+        Hawk.JsonApi.Controller.show(
+          conn,
+          unquote(resource),
+          unquote(model),
+          params,
+          unquote(public?)
+        )
       end
 
       def create(conn, params) do
-        Hawk.JsonApi.Controller.create(conn, unquote(resource), unquote(model), params)
+        Hawk.JsonApi.Controller.create(
+          conn,
+          unquote(resource),
+          unquote(model),
+          params,
+          unquote(public?)
+        )
       end
 
       def update(conn, params) do
-        Hawk.JsonApi.Controller.update(conn, unquote(resource), unquote(model), params)
+        Hawk.JsonApi.Controller.update(
+          conn,
+          unquote(resource),
+          unquote(model),
+          params,
+          unquote(public?)
+        )
       end
 
       def delete(conn, params) do
-        Hawk.JsonApi.Controller.delete(conn, unquote(resource), unquote(model), params)
+        Hawk.JsonApi.Controller.delete(
+          conn,
+          unquote(resource),
+          unquote(model),
+          params,
+          unquote(public?)
+        )
       end
     end
   end
 
-  def index(conn, resource, _model, params) do
-    authority = authority!(conn)
+  def index(conn, resource, _model, params, public? \\ false) do
+    authority = authority!(conn, public?)
     opts = params |> Hawk.JsonApi.request_options() |> Keyword.put(:authority, authority)
     json(conn, 200, Hawk.JsonApi.document(resource.all(opts)))
   end
 
-  def show(conn, resource, _model, %{"id" => id}) do
-    authority = authority!(conn)
+  def show(conn, resource, _model, %{"id" => id}, public? \\ false) do
+    authority = authority!(conn, public?)
 
     case resource.one(authority: authority, filter: %{id: normalize_id(id)}) do
       {:ok, model} -> json(conn, 200, Hawk.JsonApi.document(model))
@@ -48,8 +79,8 @@ defmodule Hawk.JsonApi.Controller do
     end
   end
 
-  def create(conn, resource, model, params) do
-    authority = authority!(conn)
+  def create(conn, resource, model, params, public? \\ false) do
+    authority = authority!(conn, public?)
 
     params
     |> Hawk.JsonApi.attributes(model, :creatable)
@@ -57,8 +88,8 @@ defmodule Hawk.JsonApi.Controller do
     |> respond(conn, 201)
   end
 
-  def update(conn, resource, model, %{"id" => id} = params) do
-    authority = authority!(conn)
+  def update(conn, resource, model, %{"id" => id} = params, public? \\ false) do
+    authority = authority!(conn, public?)
 
     case resource.one(authority: authority, filter: %{id: normalize_id(id)}) do
       {:ok, existing} ->
@@ -72,8 +103,8 @@ defmodule Hawk.JsonApi.Controller do
     end
   end
 
-  def delete(conn, resource, _model, %{"id" => id}) do
-    authority = authority!(conn)
+  def delete(conn, resource, _model, %{"id" => id}, public? \\ false) do
+    authority = authority!(conn, public?)
 
     case resource.one(authority: authority, filter: %{id: normalize_id(id)}) do
       {:ok, existing} -> existing |> resource.delete(authority) |> respond(conn, 200)
@@ -93,7 +124,8 @@ defmodule Hawk.JsonApi.Controller do
   defp respond({:error, _message} = result, conn, _status),
     do: json(conn, 500, Hawk.Errors.to_json_api(result))
 
-  defp authority!(%{assigns: %{authority: authority}}), do: authority
+  defp authority!(%{assigns: %{authority: authority}}, _public?), do: authority
+  defp authority!(_conn, true), do: Hawk.Authority.public()
 
   defp json(conn, status, body) do
     phoenix_controller = Module.concat([Phoenix, Controller])

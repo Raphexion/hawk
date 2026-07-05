@@ -91,7 +91,40 @@ defmodule Hawk.Reader.Preloader do
   defp apply_preload_policy(root_schema, {key, nested}, authority, readers)
        when is_atom(key) and is_list(nested) do
     reader = fetch_reader!(root_schema, key, readers)
+    association = root_schema.__schema__(:association, key)
+    nested = apply_nested_preload_policies(association.related, nested, authority, reader)
+
     {key, {association_query(root_schema, key, reader, authority), nested}}
+  end
+
+  defp apply_nested_preload_policies(_root_schema, [], _authority, _reader), do: []
+
+  defp apply_nested_preload_policies(root_schema, nested, authority, reader) do
+    allowed_keys = reader_preload_keys!(reader)
+    readers = reader_preload_readers(reader)
+
+    validate_preloads!(nested, allowed_keys)
+
+    Enum.map(nested, fn preload ->
+      apply_preload_policy(root_schema, preload, authority, readers)
+    end)
+  end
+
+  defp reader_preload_keys!(reader) do
+    if Code.ensure_loaded?(reader) and function_exported?(reader, :preload_keys, 0) do
+      reader.preload_keys()
+    else
+      raise ArgumentError,
+            "reader #{inspect(reader)} must define preload_keys/0 for nested preloads"
+    end
+  end
+
+  defp reader_preload_readers(reader) do
+    if Code.ensure_loaded?(reader) and function_exported?(reader, :preload_readers, 0) do
+      reader.preload_readers()
+    else
+      %{}
+    end
   end
 
   defp fetch_reader!(root_schema, key, readers) do
@@ -105,7 +138,8 @@ defmodule Hawk.Reader.Preloader do
   end
 
   defp fetch_model_reader(root_schema, key) do
-    if function_exported?(root_schema, :__hawk_association_reader__, 1) do
+    if Code.ensure_loaded?(root_schema) and
+         function_exported?(root_schema, :__hawk_association_reader__, 1) do
       root_schema.__hawk_association_reader__(key)
     else
       :error

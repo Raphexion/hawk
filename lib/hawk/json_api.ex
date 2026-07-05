@@ -166,8 +166,42 @@ defmodule Hawk.JsonApi do
   defp parse_include(include) when is_binary(include) do
     include
     |> String.split(",", trim: true)
-    |> Enum.map(&String.to_atom/1)
+    |> Enum.map(&String.split(&1, ".", trim: true))
+    |> Enum.map(&include_path_to_preload/1)
+    |> Enum.reduce([], &merge_preload/2)
+    |> Enum.reverse()
   end
+
+  defp include_path_to_preload([segment]) do
+    String.to_atom(segment)
+  end
+
+  defp include_path_to_preload([segment | rest]) do
+    {String.to_atom(segment), [include_path_to_preload(rest)]}
+  end
+
+  defp merge_preload(preload, acc) when is_atom(preload) do
+    if Enum.any?(acc, &preload_key?(&1, preload)), do: acc, else: [preload | acc]
+  end
+
+  defp merge_preload({key, nested}, acc) do
+    case Enum.split_with(acc, &preload_key?(&1, key)) do
+      {[], rest} ->
+        [{key, nested} | rest]
+
+      {[existing], rest} ->
+        [{key, merge_nested_preloads(existing, nested)} | rest]
+    end
+  end
+
+  defp preload_key?({key, _nested}, key), do: true
+  defp preload_key?(key, key), do: true
+  defp preload_key?(_preload, _key), do: false
+
+  defp merge_nested_preloads({_key, existing}, nested),
+    do: Enum.reduce(nested, existing, &merge_preload/2)
+
+  defp merge_nested_preloads(_key, nested), do: nested
 
   defp sort_values(model) do
     model
