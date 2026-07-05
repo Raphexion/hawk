@@ -20,4 +20,32 @@ defmodule Videdal.Student do
       reader: Videdal.Parents.Reader
     )
   end
+
+  json_api do
+    type("students")
+    doc("A student enrolled at a school.")
+
+    attribute(:name,
+      doc: "Student display name used in course and grade views.",
+      example: "Ada"
+    )
+
+    attribute(:active,
+      doc: "Whether the student is currently active and visible to student-scoped reads.",
+      example: true
+    )
+
+    relationship(:school,
+      doc: "The school this student belongs to.",
+      example: %{type: "schools", id: "7"}
+    )
+
+    relationship(:grades,
+      doc: "Grades awarded to this student, policy-filtered by the requesting authority.",
+      example: [%{type: "grades", id: "1"}]
+    )
+
+    creatable([:name, :active, :school])
+    updatable([:name, :active, :school])
+  end
 end
