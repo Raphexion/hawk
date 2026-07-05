@@ -158,6 +158,16 @@ This exposes `spec/0` and `show/2`. The specification is composed from Hawk
 resource declarations: JSON:API schemas, request bodies, error documents, sort
 parameters, pagination parameters, and valid include paths.
 
+Frontend teams can generate TypeScript from that OpenAPI contract with their
+preferred tooling, for example:
+
+```bash
+npx openapi-typescript http://localhost:4000/openapi.json -o src/api/types.ts
+```
+
+Hawk intentionally stays centered on the backend contract instead of owning a
+frontend generator or client runtime.
+
 ### LiveView helper
 
 ```elixir
