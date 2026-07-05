@@ -68,8 +68,16 @@ jobs:
           mix local.rebar --force
           mix deps.get
 
-      - name: Compile
-        run: mix compile --warnings-as-errors
+      - name: Compile dependencies
+        run: |
+          mkdir -p tmp
+          if ! mix deps.compile 2> tmp/deps-compile.stderr; then
+            cat tmp/deps-compile.stderr >&2
+            exit 1
+          fi
+
+      - name: Compile application
+        run: mix compile --warnings-as-errors --no-deps-check
 
       - name: Test with coverage
         run: mix test --cover
