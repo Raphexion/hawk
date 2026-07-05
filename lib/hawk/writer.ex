@@ -21,21 +21,7 @@ defmodule Hawk.Writer do
   @spec defaults(MutationContext.t(), map() | keyword()) :: MutationContext.t()
   def defaults(%MutationContext{} = context, defaults) do
     MutationContext.guard(context, fn context ->
-      defaults =
-        defaults
-        |> Enum.map(fn {key, value} -> {key, value} end)
-        |> Map.new()
-
-      attrs =
-        Enum.reduce(defaults, context.attrs, fn {key, value}, attrs ->
-          if Map.has_key?(attrs, key) do
-            attrs
-          else
-            Map.put(attrs, key, resolve_default(value))
-          end
-        end)
-
-      %{context | attrs: attrs}
+      %{context | attrs: merge_defaults(context.attrs, Map.new(defaults))}
     end)
   end
 
@@ -112,6 +98,15 @@ defmodule Hawk.Writer do
 
   defp resolve_default(value) when is_function(value, 0), do: value.()
   defp resolve_default(value), do: value
+
+  defp merge_defaults(attrs, defaults) do
+    Enum.reduce(defaults, attrs, fn {key, value}, acc ->
+      put_default(acc, key, value)
+    end)
+  end
+
+  defp put_default(attrs, key, _value) when is_map_key(attrs, key), do: attrs
+  defp put_default(attrs, key, value), do: Map.put(attrs, key, resolve_default(value))
 
   defp normalize_change(changeset, field, normalizer) do
     case Changeset.fetch_change(changeset, field) do

@@ -77,22 +77,59 @@ defmodule Hawk.Reader.FilterCompiler do
   defp compile_root_field_value(schema, field, value) do
     validate_field!(schema, field)
 
-    case value do
-      {:eq, nil} -> dynamic([row], is_nil(field(row, ^field)))
-      {:neq, nil} -> dynamic([row], not is_nil(field(row, ^field)))
-      {:eq, value} -> dynamic([row], field(row, ^field) == ^value)
-      {:neq, value} -> dynamic([row], field(row, ^field) != ^value)
-      {:in, []} -> :none
-      {:in, values} when is_list(values) -> dynamic([row], field(row, ^field) in ^values)
-      {:not_in, []} -> :all
-      {:not_in, values} when is_list(values) -> dynamic([row], field(row, ^field) not in ^values)
-      {:lt, value} -> dynamic([row], field(row, ^field) < ^value)
-      {:lte, value} -> dynamic([row], field(row, ^field) <= ^value)
-      {:gt, value} -> dynamic([row], field(row, ^field) > ^value)
-      {:gte, value} -> dynamic([row], field(row, ^field) >= ^value)
-      {:like, value} when is_binary(value) -> dynamic([row], like(field(row, ^field), ^value))
-      {:ilike, value} when is_binary(value) -> dynamic([row], ilike(field(row, ^field), ^value))
-    end
+    compile_validated_root_field_value(field, value)
+  end
+
+  defp compile_validated_root_field_value(field, {:eq, nil}) do
+    dynamic([row], is_nil(field(row, ^field)))
+  end
+
+  defp compile_validated_root_field_value(field, {:neq, nil}) do
+    dynamic([row], not is_nil(field(row, ^field)))
+  end
+
+  defp compile_validated_root_field_value(field, {:eq, value}) do
+    dynamic([row], field(row, ^field) == ^value)
+  end
+
+  defp compile_validated_root_field_value(field, {:neq, value}) do
+    dynamic([row], field(row, ^field) != ^value)
+  end
+
+  defp compile_validated_root_field_value(_field, {:in, []}), do: :none
+
+  defp compile_validated_root_field_value(field, {:in, values}) when is_list(values) do
+    dynamic([row], field(row, ^field) in ^values)
+  end
+
+  defp compile_validated_root_field_value(_field, {:not_in, []}), do: :all
+
+  defp compile_validated_root_field_value(field, {:not_in, values}) when is_list(values) do
+    dynamic([row], field(row, ^field) not in ^values)
+  end
+
+  defp compile_validated_root_field_value(field, {:lt, value}) do
+    dynamic([row], field(row, ^field) < ^value)
+  end
+
+  defp compile_validated_root_field_value(field, {:lte, value}) do
+    dynamic([row], field(row, ^field) <= ^value)
+  end
+
+  defp compile_validated_root_field_value(field, {:gt, value}) do
+    dynamic([row], field(row, ^field) > ^value)
+  end
+
+  defp compile_validated_root_field_value(field, {:gte, value}) do
+    dynamic([row], field(row, ^field) >= ^value)
+  end
+
+  defp compile_validated_root_field_value(field, {:like, value}) when is_binary(value) do
+    dynamic([row], like(field(row, ^field), ^value))
+  end
+
+  defp compile_validated_root_field_value(field, {:ilike, value}) when is_binary(value) do
+    dynamic([row], ilike(field(row, ^field), ^value))
   end
 
   defp combine(:and, :none, _right), do: :none

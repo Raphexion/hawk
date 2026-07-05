@@ -38,15 +38,20 @@ defmodule Hawk.RepositoryBoundary do
   hook.
   """
   @spec update(MutationContext.t(), repo(), opts()) :: Result.t(struct())
-  def update(%MutationContext{} = context, repo, opts \\ []) do
+  def update(context, repo, opts \\ [])
+
+  def update(%MutationContext{changeset: %{changes: changes}} = context, _repo, _opts)
+      when map_size(changes) == 0 do
     with :ok <- preflight(context) do
-      if context.changeset.changes == %{} do
-        {:ok, context.model}
-      else
-        persist_preflighted(context, repo, :update, opts, fn ->
-          repo.update(context.changeset, repo_opts(opts))
-        end)
-      end
+      {:ok, context.model}
+    end
+  end
+
+  def update(%MutationContext{} = context, repo, opts) do
+    with :ok <- preflight(context) do
+      persist_preflighted(context, repo, :update, opts, fn ->
+        repo.update(context.changeset, repo_opts(opts))
+      end)
     end
   end
 
