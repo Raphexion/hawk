@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test, lint, and contract checks
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: hawk_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      MIX_ENV: test
+      HAWK_DATABASE_URL: postgres://postgres@localhost:5432/hawk_test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Erlang and Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: "29.0"
+          elixir-version: "1.20.1"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Cache Mix deps and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+            priv/plts
+          key: ${{ runner.os }}-mix-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-
+
+      - name: Install Mix dependencies
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+          mix deps.get
+
+      - name: Compile
+        run: mix compile --warnings-as-errors
+
+      - name: Test with coverage
+        run: mix test --cover
+
+      - name: Credo
+        run: mix credo
+
+      - name: Dialyzer
+        run: mix dialyzer
+
+      - name: Generate OpenAPI spec
+        run: |
+          mkdir -p tmp/openapi
+          mix run -e '
+            resources = [
+              Videdal.CourseGradeSummary,
+              Videdal.Course,
+              Videdal.Enrollment,
+              Videdal.Grade,
+              Videdal.Parent,
+              Videdal.School,
+              Videdal.Student,
+              Videdal.Teacher
+            ]
+
+            spec = Hawk.OpenApi.spec(resources,
+              title: "Videdal API",
+              version: "1.0.0"
+            )
+
+            File.write!("tmp/openapi/openapi.json", Jason.encode!(spec))
+          '
+
+      - name: Validate OpenAPI spec
+        run: npm exec --yes --package=@redocly/cli -- redocly lint tmp/openapi/openapi.json
+
+      - name: Verify frontend TypeScript generation from OpenAPI
+        run: |
+          npm exec --yes --package=openapi-typescript -- openapi-typescript tmp/openapi/openapi.json -o tmp/openapi/types.d.ts
+          test -s tmp/openapi/types.d.ts
+
+      - name: Upload generated API artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: openapi-contract
+          path: |
+            tmp/openapi/openapi.json
+            tmp/openapi/types.d.ts
+          if-no-files-found: ignore

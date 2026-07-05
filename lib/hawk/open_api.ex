@@ -12,6 +12,8 @@ defmodule Hawk.OpenApi do
         title: Keyword.get(opts, :title, "Hawk API"),
         version: Keyword.get(opts, :version, "1.0.0")
       },
+      servers: Keyword.get(opts, :servers, [%{url: "/"}]),
+      security: Keyword.get(opts, :security, []),
       paths: paths(resources),
       components: %{
         schemas: schemas(resources)
@@ -40,7 +42,10 @@ defmodule Hawk.OpenApi do
       },
       member_path => %{
         get: show_operation(resource),
-        patch: write_operation(resource, :updatable, "Update #{resource_name(resource)}", 200),
+        patch:
+          write_operation(resource, :updatable, "Update #{resource_name(resource)}", 200,
+            parameters: [id_parameter()]
+          ),
         delete: delete_operation(resource)
       }
     }
@@ -62,9 +67,10 @@ defmodule Hawk.OpenApi do
     }
   end
 
-  defp write_operation(resource, capability, summary, success_status) do
+  defp write_operation(resource, capability, summary, success_status, opts \\ []) do
     %{
       summary: summary,
+      parameters: Keyword.get(opts, :parameters, []),
       requestBody: request_body(resource, capability),
       responses: responses(resource, success_status, data_schema(resource))
     }
@@ -121,15 +127,20 @@ defmodule Hawk.OpenApi do
 
   defp responses(_resource, success_status, success_schema) do
     %{
-      Integer.to_string(success_status) => json_api_content(success_schema),
-      "403" => json_api_content(error_document_schema()),
-      "404" => json_api_content(error_document_schema()),
-      "422" => json_api_content(error_document_schema())
+      Integer.to_string(success_status) =>
+        json_api_content(success_description(success_status), success_schema),
+      "400" => json_api_content("Invalid JSON:API query parameters", error_document_schema()),
+      "403" => json_api_content("Forbidden by Hawk policy", error_document_schema()),
+      "404" => json_api_content("Resource not found", error_document_schema()),
+      "422" => json_api_content("Validation failed", error_document_schema())
     }
   end
 
-  defp json_api_content(schema) do
-    %{content: %{"application/vnd.api+json" => %{schema: schema}}}
+  defp success_description(200), do: "JSON:API response"
+  defp success_description(201), do: "JSON:API resource created"
+
+  defp json_api_content(description, schema) do
+    %{description: description, content: %{"application/vnd.api+json" => %{schema: schema}}}
   end
 
   defp data_schema(resource), do: %{type: "object", properties: %{data: schema_ref(resource)}}
