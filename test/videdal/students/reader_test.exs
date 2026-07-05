@@ -8,7 +8,7 @@ defmodule Videdal.Students.ReaderTest do
 
   test "declares the resource filter keys" do
     assert MapSet.subset?(
-             MapSet.new([:id, :school_id, :student_id, :active, :school_name]),
+             MapSet.new([:id, :school_id, :student_id, :active, :school_name, :parent_id]),
              Reader.filter_keys()
            )
   end

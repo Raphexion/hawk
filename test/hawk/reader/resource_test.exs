@@ -52,7 +52,7 @@ defmodule Hawk.Reader.ResourceTest do
     assert when_sort == MapSet.new([:school_name])
     assert Reader.preload_keys() == MapSet.new([:school])
 
-    assert Reader.preload_policies() == %{}
+    assert Reader.preload_readers() == %{}
 
     assert Reader.read_filter(Authority.system()) == %{school_id: 7}
   end

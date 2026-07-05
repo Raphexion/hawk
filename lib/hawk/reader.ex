@@ -26,7 +26,7 @@ defmodule Hawk.Reader do
           optional(:join_plan) => [JoinPlan.rule()],
           optional(:forced_filter) => Filter.t(),
           optional(:preload_keys) => Enumerable.t(),
-          optional(:preload_policies) => %{optional(atom()) => (term() -> Filter.t())}
+          optional(:preload_readers) => %{optional(atom()) => module()}
         }
 
   @doc """
@@ -44,7 +44,7 @@ defmodule Hawk.Reader do
       opts.preloads,
       Map.get(config, :preload_keys, []),
       opts.authority,
-      Map.get(config, :preload_policies, %{})
+      Map.get(config, :preload_readers, %{})
     )
   end
 
@@ -81,19 +81,35 @@ defmodule Hawk.Reader do
     caller_filter = Map.fetch!(opts, :filter)
     page = Map.fetch!(opts, :page)
 
-    filter =
-      caller_filter
-      |> Filter.and(config.read_filter.(authority))
-      |> Filter.and(Map.get(config, :forced_filter, :all))
+    config.schema
+    |> from(as: :root)
+    |> apply_authorized_filter(config, authority, caller_filter, page.column)
+    |> apply_sort(page)
+    |> apply_limit(page)
+  end
+
+  @doc """
+  Applies a reader's policy/filter/join declarations to an existing query.
+
+  This is used for policy-aware preloads where the associated resource reader
+  owns the joins and custom filter handlers needed to enforce visibility.
+  """
+  @spec apply_authorized_filter(Ecto.Query.t(), config(), term(), Filter.t(), atom()) ::
+          Ecto.Query.t()
+  def apply_authorized_filter(query, config, authority, caller_filter \\ :all, sort_key \\ :id) do
+    filter = authorized_filter(config, authority, caller_filter)
 
     Filter.validate_keys!(filter, config.filter_keys)
 
-    config.schema
-    |> from(as: :root)
-    |> JoinPlan.apply(Map.get(config, :join_plan, []), filter, page.column)
+    query
+    |> JoinPlan.apply(Map.get(config, :join_plan, []), filter, sort_key)
     |> FilterCompiler.compile(config.schema, filter, Map.get(config, :filter_handlers, %{}))
-    |> apply_sort(page)
-    |> apply_limit(page)
+  end
+
+  defp authorized_filter(config, authority, caller_filter) do
+    caller_filter
+    |> Filter.and(config.read_filter.(authority))
+    |> Filter.and(Map.get(config, :forced_filter, :all))
   end
 
   defp normalize_options(opts) when is_list(opts) do

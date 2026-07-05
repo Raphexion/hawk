@@ -11,8 +11,17 @@ defmodule Videdal.Student do
   model "students" do
     field(:name, :string)
     field(:active, :boolean, default: true)
-    belongs_to(:school, Videdal.School, policy: Videdal.Schools.Policy)
-    has_many(:grades, Videdal.Grade, policy: Videdal.Grades.Policy)
-    has_many(:parent_students, Videdal.ParentStudent, policy: Videdal.Parents.Policy)
+
+    belongs_to(:school, Videdal.School,
+      policy: Videdal.Schools.Policy,
+      reader: Videdal.Schools.Reader
+    )
+
+    has_many(:grades, Videdal.Grade, policy: Videdal.Grades.Policy, reader: Videdal.Grades.Reader)
+
+    has_many(:parent_students, Videdal.ParentStudent,
+      policy: Videdal.Parents.Policy,
+      reader: Videdal.Parents.Reader
+    )
   end
 end

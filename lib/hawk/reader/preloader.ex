@@ -9,8 +9,6 @@ defmodule Hawk.Reader.Preloader do
   own which associations are exposed as reader preloads.
   """
 
-  alias Hawk.Reader.FilterCompiler
-
   @type preload :: atom() | {atom(), [preload()]}
 
   @doc """
@@ -85,51 +83,45 @@ defmodule Hawk.Reader.Preloader do
     end)
   end
 
-  defp apply_preload_policy(root_schema, key, authority, policies) when is_atom(key) do
-    policy = fetch_policy!(root_schema, key, policies)
-    {key, association_query(root_schema, key, policy, authority)}
+  defp apply_preload_policy(root_schema, key, authority, readers) when is_atom(key) do
+    reader = fetch_reader!(root_schema, key, readers)
+    {key, association_query(root_schema, key, reader, authority)}
   end
 
-  defp apply_preload_policy(root_schema, {key, nested}, authority, policies)
+  defp apply_preload_policy(root_schema, {key, nested}, authority, readers)
        when is_atom(key) and is_list(nested) do
-    policy = fetch_policy!(root_schema, key, policies)
-    {key, {association_query(root_schema, key, policy, authority), nested}}
+    reader = fetch_reader!(root_schema, key, readers)
+    {key, {association_query(root_schema, key, reader, authority), nested}}
   end
 
-  defp fetch_policy!(root_schema, key, policies) do
-    with :error <- Map.fetch(policies, key),
-         :error <- fetch_model_policy(root_schema, key) do
+  defp fetch_reader!(root_schema, key, readers) do
+    with :error <- Map.fetch(readers, key),
+         :error <- fetch_model_reader(root_schema, key) do
       raise ArgumentError,
-            "reader preload #{inspect(key)} must declare a policy module on the reader or model association"
+            "reader preload #{inspect(key)} must declare a reader module on the reader or model association"
     else
-      {:ok, policy} -> policy
+      {:ok, reader} -> reader
     end
   end
 
-  defp fetch_model_policy(root_schema, key) do
-    if function_exported?(root_schema, :__hawk_association_policy__, 1) do
-      root_schema.__hawk_association_policy__(key)
+  defp fetch_model_reader(root_schema, key) do
+    if function_exported?(root_schema, :__hawk_association_reader__, 1) do
+      root_schema.__hawk_association_reader__(key)
     else
       :error
     end
   end
 
-  defp association_query(root_schema, key, policy, authority) when is_atom(policy) do
-    unless Code.ensure_loaded?(policy) and function_exported?(policy, :read_filter, 1) do
+  defp association_query(root_schema, key, reader, authority) when is_atom(reader) do
+    unless Code.ensure_loaded?(reader) and function_exported?(reader, :preload_query, 2) do
       raise ArgumentError,
-            "reader preload #{inspect(key)} policy #{inspect(policy)} must define read_filter/1"
+            "reader preload #{inspect(key)} reader #{inspect(reader)} must define preload_query/2"
     end
 
     association = root_schema.__schema__(:association, key)
-    schema = association.related
+    query = from(association.related, as: :root)
 
-    query = from(schema, as: :root)
-
-    if function_exported?(policy, :preload_query, 2) do
-      policy.preload_query(query, authority)
-    else
-      FilterCompiler.compile(query, schema, policy.read_filter(authority), %{})
-    end
+    reader.preload_query(query, authority)
   end
 
   defp top_level_keys(requested) do

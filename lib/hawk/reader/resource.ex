@@ -29,7 +29,7 @@ defmodule Hawk.Reader.Resource do
       Module.register_attribute(__MODULE__, :hawk_reader_filter_handlers, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_join_rules, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_preload_keys, accumulate: true)
-      Module.register_attribute(__MODULE__, :hawk_reader_preload_policies, accumulate: true)
+      Module.register_attribute(__MODULE__, :hawk_reader_preload_readers, accumulate: true)
 
       @before_compile Hawk.Reader.Resource
     end
@@ -62,12 +62,12 @@ defmodule Hawk.Reader.Resource do
   end
 
   defmacro preload(key, opts) when is_atom(key) and is_list(opts) do
-    policy = opts |> Keyword.get(:policy) |> Macro.expand(__CALLER__)
-    validate_preload_policy!(key, policy)
+    reader = opts |> Keyword.get(:reader) |> Macro.expand(__CALLER__)
+    validate_preload_reader!(key, reader)
 
     quote do
       @hawk_reader_preload_keys unquote(key)
-      @hawk_reader_preload_policies {unquote(key), unquote(policy)}
+      @hawk_reader_preload_readers {unquote(key), unquote(reader)}
     end
   end
 
@@ -103,7 +103,7 @@ defmodule Hawk.Reader.Resource do
       filter_handlers: reversed_attribute(module, :hawk_reader_filter_handlers),
       join_rules: reversed_attribute(module, :hawk_reader_join_rules),
       preload_keys: reversed_attribute(module, :hawk_reader_preload_keys),
-      preload_policies: reversed_attribute(module, :hawk_reader_preload_policies)
+      preload_readers: reversed_attribute(module, :hawk_reader_preload_readers)
     }
   end
 
@@ -124,7 +124,7 @@ defmodule Hawk.Reader.Resource do
   defp quote_metadata_functions(declarations) do
     handler_entries = quote_filter_handlers(declarations.filter_handlers)
     join_rule_entries = quote_join_rules(declarations.join_rules)
-    preload_policy_entries = quote_preload_policies(declarations.preload_policies)
+    preload_reader_entries = quote_preload_readers(declarations.preload_readers)
     filter_keys = declarations.filter_keys
     preload_keys = declarations.preload_keys
 
@@ -133,7 +133,7 @@ defmodule Hawk.Reader.Resource do
       def filter_handlers, do: Map.new([unquote_splicing(handler_entries)])
       def join_plan, do: [unquote_splicing(join_rule_entries)]
       def preload_keys, do: MapSet.new(unquote(preload_keys))
-      def preload_policies, do: Map.new([unquote_splicing(preload_policy_entries)])
+      def preload_readers, do: Map.new([unquote_splicing(preload_reader_entries)])
       def read_filter(authority), do: @hawk_reader_policy.read_filter(authority)
     end
   end
@@ -143,6 +143,10 @@ defmodule Hawk.Reader.Resource do
       def one(opts), do: Hawk.Reader.one(config(), opts)
       def one!(opts), do: Hawk.Reader.one!(config(), opts)
       def all(opts), do: Hawk.Reader.all(config(), opts)
+
+      def preload_query(query, authority) do
+        Hawk.Reader.apply_authorized_filter(query, config(), authority)
+      end
     end
   end
 
@@ -158,7 +162,7 @@ defmodule Hawk.Reader.Resource do
           read_filter: &read_filter/1,
           forced_filter: @hawk_reader_forced_filter,
           preload_keys: preload_keys(),
-          preload_policies: preload_policies()
+          preload_readers: preload_readers()
         }
       end
     end
@@ -185,10 +189,10 @@ defmodule Hawk.Reader.Resource do
     end)
   end
 
-  defp quote_preload_policies(preload_policies) do
-    Enum.map(preload_policies, fn {key, policy} ->
+  defp quote_preload_readers(preload_readers) do
+    Enum.map(preload_readers, fn {key, reader} ->
       quote do
-        {unquote(key), unquote(policy)}
+        {unquote(key), unquote(reader)}
       end
     end)
   end
@@ -201,13 +205,13 @@ defmodule Hawk.Reader.Resource do
     end)
   end
 
-  defp validate_preload_policy!(_key, nil), do: :ok
+  defp validate_preload_reader!(_key, nil), do: :ok
 
-  defp validate_preload_policy!(_key, policy) when is_atom(policy), do: :ok
+  defp validate_preload_reader!(_key, reader) when is_atom(reader), do: :ok
 
-  defp validate_preload_policy!(key, policy) do
+  defp validate_preload_reader!(key, reader) do
     raise ArgumentError,
-          "reader preload #{inspect(key)} policy must be a module, got: #{inspect(policy)}"
+          "reader preload #{inspect(key)} reader must be a module, got: #{inspect(reader)}"
   end
 
   defp validate_join_rules!(join_rules) do

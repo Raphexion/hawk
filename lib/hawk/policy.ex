@@ -2,8 +2,8 @@ defmodule Hawk.Policy do
   @moduledoc """
   Small policy DSL for common Hawk read/write authorization shapes.
 
-  The DSL generates the boring policy cases while still leaving room for a
-  resource policy module to define custom query helpers such as `preload_query/2`.
+  The DSL generates the boring policy cases while resource readers own the query
+  joins and custom filters needed to compile those policies.
   """
 
   defmacro __using__(_opts) do

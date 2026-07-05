@@ -1,8 +1,6 @@
 defmodule Videdal.Grades.Policy do
   use Hawk.Policy
 
-  import Ecto.Query
-
   @moduledoc """
   Authorization policy for the Videdal `Grades` resource.
 
@@ -21,40 +19,4 @@ defmodule Videdal.Grades.Policy do
   end
 
   write(roles: [:principal, :school_admin, :teacher])
-
-  def preload_query(query, authority) do
-    case read_filter(authority) do
-      :all ->
-        query
-
-      :none ->
-        where(query, false)
-
-      %{school_id: school_id, teacher_id: teacher_id} ->
-        query
-        |> join(:inner, [root: grade], course in assoc(grade, :course), as: :course)
-        |> where([root: grade, course: course], grade.school_id == ^school_id)
-        |> where([root: _grade, course: course], course.teacher_id == ^teacher_id)
-
-      %{school_id: school_id, student_id: student_id} ->
-        query
-        |> where([root: grade], grade.school_id == ^school_id)
-        |> where([root: grade], grade.student_id == ^student_id)
-
-      %{school_id: school_id, parent_id: parent_id} ->
-        query
-        |> join(:inner, [root: grade], student in assoc(grade, :student), as: :student)
-        |> join(:inner, [student: student], parent_student in assoc(student, :parent_students),
-          as: :parent_student
-        )
-        |> where([root: grade], grade.school_id == ^school_id)
-        |> where(
-          [root: _grade, parent_student: parent_student],
-          parent_student.parent_id == ^parent_id
-        )
-
-      %{school_id: school_id} ->
-        where(query, [root: grade], grade.school_id == ^school_id)
-    end
-  end
 end

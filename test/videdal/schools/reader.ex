@@ -16,6 +16,10 @@ defmodule Videdal.Schools.Reader do
   def one!(opts), do: HawkReader.one!(config(), opts)
   def all(opts), do: HawkReader.all(config(), opts)
 
+  def preload_query(query, authority) do
+    HawkReader.apply_authorized_filter(query, config(), authority)
+  end
+
   defp config do
     %{
       repo: Repo,

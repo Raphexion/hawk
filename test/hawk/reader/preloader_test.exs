@@ -1,4 +1,4 @@
-defmodule Hawk.Reader.PreloaderTest.ParentlessPolicy do
+defmodule Hawk.Reader.PreloaderTest.ParentlessReader do
   @moduledoc false
 end
 
@@ -35,7 +35,7 @@ defmodule Hawk.Reader.PreloaderTest do
     end
   end
 
-  test "non-list preloads fail loudly in policy-aware path" do
+  test "non-list preloads fail loudly in reader-aware path" do
     assert_raise ArgumentError, ~r/preloads must be a list/, fn ->
       Preloader.preload([], Videdal.Repo, :school, [:school], Hawk.Authority.system(), %{})
     end
@@ -47,18 +47,18 @@ defmodule Hawk.Reader.PreloaderTest do
     end
   end
 
-  test "empty results skip policy query construction" do
+  test "empty results skip reader query construction" do
     assert Preloader.preload(
              [],
              Videdal.Repo,
              [:school],
              [:school],
              Hawk.Authority.system(),
-             %{school: Hawk.Reader.PreloaderTest.ParentlessPolicy}
+             %{school: Hawk.Reader.PreloaderTest.ParentlessReader}
            ) == []
   end
 
-  test "nested policy preloads are delegated as query tuples" do
+  test "nested reader preloads are delegated as query tuples" do
     results = [%Student{id: 1}]
 
     assert Preloader.preload(
@@ -67,14 +67,14 @@ defmodule Hawk.Reader.PreloaderTest do
              [school: []],
              [:school],
              Hawk.Authority.system(),
-             %{school: Videdal.Schools.Policy}
+             %{school: Videdal.Schools.Reader}
            ) == results
 
     assert_received {:videdal_repo, :preload, ^results, [school: {%Ecto.Query{}, []}]}
   end
 
-  test "policy-aware path requires every preload to have a reader or model association policy" do
-    assert_raise ArgumentError, ~r/must declare a policy module/, fn ->
+  test "reader-aware path requires every preload to have a reader on the reader or model association" do
+    assert_raise ArgumentError, ~r/must declare a reader module/, fn ->
       Preloader.preload(
         [%Videdal.School{id: 1}],
         Videdal.Repo,
@@ -86,15 +86,15 @@ defmodule Hawk.Reader.PreloaderTest do
     end
   end
 
-  test "policy modules must define read_filter/1" do
-    assert_raise ArgumentError, ~r/must define read_filter\/1/, fn ->
+  test "reader modules must define preload_query/2" do
+    assert_raise ArgumentError, ~r/must define preload_query\/2/, fn ->
       Preloader.preload(
         [%Student{id: 1}],
         Videdal.Repo,
         [:school],
         [:school],
         Hawk.Authority.system(),
-        %{school: Hawk.Reader.PreloaderTest.ParentlessPolicy}
+        %{school: Hawk.Reader.PreloaderTest.ParentlessReader}
       )
     end
   end
