@@ -1,4 +1,6 @@
 defmodule Videdal.Students.Policy do
+  use Hawk.Policy
+
   import Ecto.Query
 
   @moduledoc """
@@ -9,29 +11,14 @@ defmodule Videdal.Students.Policy do
   """
 
   alias Hawk.Authority
-  alias Hawk.MutationContext
-  alias Videdal.PolicySupport
 
-  def read_filter(%Authority{} = authority) do
-    cond do
-      PolicySupport.unrestricted_read?(authority) ->
-        :all
-
-      authority.role == :school_admin ->
-        PolicySupport.scoped_filter(authority, [:school_id])
-
-      authority.role == :teacher ->
-        PolicySupport.scoped_filter(authority, [:school_id])
-
-      authority.role == :student ->
-        PolicySupport.scoped_filter(authority, [:school_id, :student_id], %{active: true})
-
-      authority.role == :parent ->
-        PolicySupport.scoped_filter(authority, [:school_id, :parent_id], %{active: true})
-
-      true ->
-        :none
-    end
+  read do
+    role(:system, :all)
+    role(:principal, :all)
+    role(:school_admin, scopes: [:school_id])
+    role(:teacher, scopes: [:school_id])
+    role(:student, scopes: [:school_id, :student_id], filter: %{active: true})
+    role(:parent, scopes: [:school_id, :parent_id], filter: %{active: true})
   end
 
   def preload_query(query, %Authority{role: :parent} = authority) do
@@ -57,11 +44,5 @@ defmodule Videdal.Students.Policy do
     Hawk.Reader.FilterCompiler.compile(query, Videdal.Student, read_filter(authority), %{})
   end
 
-  def create?(%MutationContext{} = context), do: write_allowed?(context.authority)
-  def update?(%MutationContext{} = context), do: write_allowed?(context.authority)
-  def delete?(%MutationContext{} = context), do: write_allowed?(context.authority)
-
-  defp write_allowed?(%Authority{} = authority) do
-    PolicySupport.write_allowed?(authority, [:principal, :school_admin])
-  end
+  write(roles: [:principal, :school_admin])
 end
