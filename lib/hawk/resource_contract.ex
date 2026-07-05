@@ -4,17 +4,24 @@ defmodule Hawk.ResourceContract do
   """
 
   def validate!(resource, model) when is_atom(resource) and is_atom(model) do
-    json_api = model.__hawk_json_api__()
+    json_api = validate_model!(model)
     reader = Module.concat(resource, Reader)
 
-    validate_json_api_attributes!(model, json_api)
-    validate_json_api_relationships!(model, json_api)
-    validate_write_fields!(json_api)
     validate_reader_preloads!(reader, json_api)
     validate_reader_sorts!(reader, model)
     validate_reader_filters!(reader, model)
 
     :ok
+  end
+
+  def validate_model!(model) when is_atom(model) do
+    json_api = model.__hawk_json_api__()
+
+    validate_json_api_attributes!(model, json_api)
+    validate_json_api_relationships!(model, json_api)
+    validate_write_fields!(json_api)
+
+    json_api
   end
 
   defp validate_json_api_attributes!(model, json_api) do
