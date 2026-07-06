@@ -223,6 +223,7 @@ defmodule Hawk.JsonApiControllerCase do
     assert_status(conn, 200, role_case, :index)
 
     assert_index_size(
+      config,
       conn,
       if(read_allowed?(config, role_case), do: length(config.samples), else: 0),
       role_case
@@ -318,14 +319,23 @@ defmodule Hawk.JsonApiControllerCase do
     )
   end
 
-  defp assert_index_size(%{resp_body: %{data: data}}, expected, role_case) when is_list(data) do
+  defp assert_index_size(%{repo: repo}, conn, expected, role_case) do
+    if ecto_repo?(repo) do
+      :ok
+    else
+      assert_index_size_for_static_repo(conn, expected, role_case)
+    end
+  end
+
+  defp assert_index_size_for_static_repo(%{resp_body: %{data: data}}, expected, role_case)
+       when is_list(data) do
     ExUnit.Assertions.assert(
       length(data) == expected,
       "expected #{role_case.name} index to return #{expected} resources, got #{length(data)}"
     )
   end
 
-  defp assert_index_size(_conn, _expected, _role_case), do: :ok
+  defp assert_index_size_for_static_repo(_conn, _expected, _role_case), do: :ok
 
   defp assert_status(conn, expected, role_case, action) do
     ExUnit.Assertions.assert(
@@ -411,7 +421,30 @@ defmodule Hawk.JsonApiControllerCase do
   defp predicate(:delete), do: :delete?
 
   defp put_results(%{repo: nil}, _results), do: :ok
-  defp put_results(%{repo: repo}, results), do: Process.put({repo, :all_results}, results)
+
+  defp put_results(%{repo: repo}, results) do
+    if ecto_repo?(repo) do
+      Enum.each(results, &insert_sample!(repo, &1))
+    else
+      Process.put({repo, :all_results}, results)
+    end
+  end
+
+  defp ecto_repo?(repo) do
+    Code.ensure_loaded?(repo) and function_exported?(repo, :__adapter__, 0)
+  end
+
+  defp insert_sample!(repo, sample) when is_struct(sample) do
+    case repo.insert(sample, on_conflict: :nothing) do
+      {:ok, _record} ->
+        :ok
+
+      {:error, changeset} ->
+        ExUnit.Assertions.flunk(
+          "failed to insert JSON:API controller sample: #{inspect(changeset)}"
+        )
+    end
+  end
 
   defp model_id(model), do: model |> Map.fetch!(:id) |> to_string()
 

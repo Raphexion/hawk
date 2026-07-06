@@ -159,13 +159,18 @@ defmodule Hawk.JsonApi.Controller do
   defp json(conn, status, body) do
     phoenix_controller = Module.concat([Phoenix, Controller])
 
-    if Code.ensure_loaded?(phoenix_controller) and
-         function_exported?(phoenix_controller, :json, 2) do
-      plug_conn = Module.concat([Plug, Conn])
+    plug_conn = Module.concat([Plug, Conn])
 
-      conn
-      |> then(&apply(plug_conn, :put_status, [&1, status]))
-      |> then(&apply(phoenix_controller, :json, [&1, body]))
+    if Code.ensure_loaded?(phoenix_controller) and
+         Code.ensure_loaded?(plug_conn) and
+         function_exported?(phoenix_controller, :json, 2) do
+      try do
+        conn
+        |> then(&apply(plug_conn, :put_status, [&1, status]))
+        |> then(&apply(phoenix_controller, :json, [&1, body]))
+      rescue
+        FunctionClauseError -> conn |> Map.put(:status, status) |> Map.put(:resp_body, body)
+      end
     else
       conn |> Map.put(:status, status) |> Map.put(:resp_body, body)
     end
