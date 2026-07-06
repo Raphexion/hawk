@@ -224,3 +224,84 @@ end
 The contract test checks that JSON:API attributes, relationships,
 creatable/updatable fields, reader preloads, sorts, and filters agree with the
 model and reader declarations.
+
+### JSON:API controller contract test
+
+```elixir
+defmodule MyAppWeb.CoursesControllerTest do
+  use Hawk.JsonApiControllerCase,
+    controller: MyAppWeb.CoursesController,
+    resource: MyApp.Courses,
+    model: MyApp.Course,
+    repo: MyApp.Repo
+
+  authorities do
+    %{
+      school_admin: Hawk.Authority.new(:school_admin, 1, scopes: %{school_id: 7}),
+      teacher: Hawk.Authority.new(:teacher, 12, scopes: %{school_id: 7, teacher_id: 12})
+    }
+  end
+
+  pre_sample authorities do
+    %{
+      school: %MyApp.School{id: 7},
+      teacher: %MyApp.Teacher{id: authorities.teacher.identity, school_id: 7}
+    }
+  end
+
+  sample _authorities, known, index do
+    %MyApp.Course{
+      id: index,
+      title: "Course #{index}",
+      school_id: known.school.id,
+      teacher_id: known.teacher.id
+    }
+  end
+
+  test "specific business rule still fits beside the generated matrix" do
+    item_1 = generate_sample(1)
+    item_2 = generate_sample(2)
+
+    assert item_1.school_id == item_2.school_id
+  end
+end
+```
+
+The generated matrix exercises each configured authority against `index`,
+paginated `index`, `show`, `create`, `update`, and `delete`. `:public` is always
+included even when not listed in `authorities`, and its expected result comes
+from the resource policy. Expected access is derived from the resource reader
+and policy, while mutation payloads are built from JSON:API examples unless
+`create_params` / `update_params` are supplied.
+
+Controller cases define authorities and samples with small DSL blocks:
+
+- `authorities do ... end` returns a map of named `Hawk.Authority` values. Hawk
+  still adds `:public` automatically when omitted.
+- `pre_sample(authorities) do ... end` optionally builds shared context once,
+  such as parent records. The default returns `%{}`.
+- `sample(authorities, known, index) do ... end` builds deterministic resource
+  samples from the authorities and known context. This callback is required; if
+  it is missing, Hawk raises a clear error explaining which function to add.
+
+The matrix uses the generated samples for collection and pagination coverage,
+and `sample_model()` — the first generated sample — for show/update/delete. The
+default generated collection size is 3; only pass `sample_count:` when a
+resource needs a larger collection.
+
+Specific business-rule tests can call `generate_sample(index)` or
+`generate_samples(count)` directly. These helpers reuse the same authorities,
+`pre_sample`, and `sample` definitions as the generated matrix. `pre_sample` is
+cached per test process, so it also works when it creates real PostgreSQL data
+through fixtures or factories and several generated samples need to share those
+records.
+
+Applications should import Hawk's formatter settings so the DSL stays tidy:
+
+```elixir
+# .formatter.exs
+[
+  import_deps: [:hawk],
+  inputs: ["{mix,.formatter}.exs", "{config,lib,test}/**/*.{ex,exs}"]
+]
+```
