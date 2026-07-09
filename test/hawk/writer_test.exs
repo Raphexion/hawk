@@ -84,6 +84,63 @@ defmodule Hawk.WriterTest do
       assert context.error == :invalid
       assert {"can't be blank", _opts} = context.changeset.errors[:school_id]
     end
+
+    test "accepts Ecto validate_required options" do
+      context =
+        %Student{}
+        |> context(%{name: "Ada"})
+        |> Writer.cast([:name, :school_id])
+        |> Writer.validate_required([:school_id], message: "School is required")
+
+      assert context.error == :invalid
+      assert {"School is required", _opts} = context.changeset.errors[:school_id]
+    end
+  end
+
+  describe "validate_changeset/2" do
+    test "runs native Ecto changeset validators and keeps valid contexts valid" do
+      context =
+        %Student{}
+        |> context(%{name: "Ada", school_id: @school_id})
+        |> Writer.cast([:name, :school_id])
+        |> Writer.validate_changeset(&Changeset.validate_required(&1, [:name, :school_id]))
+
+      assert context.error == :none
+    end
+
+    test "marks the context invalid when the changeset validator fails" do
+      context =
+        %Student{}
+        |> context(%{name: "Ada"})
+        |> Writer.cast([:name, :school_id])
+        |> Writer.validate_changeset(&Changeset.validate_required(&1, [:name, :school_id]))
+
+      assert context.error == :invalid
+      assert {"can't be blank", _opts} = context.changeset.errors[:school_id]
+    end
+
+    test "does not run later changeset validators after a previous context error" do
+      context =
+        %Student{}
+        |> context(%{name: "Ada"})
+        |> Writer.cast([:name, :school_id])
+        |> Writer.validate_required([:school_id])
+        |> Writer.validate_changeset(fn _changeset -> flunk("validator should not run") end)
+
+      assert context.error == :invalid
+      assert {"can't be blank", _opts} = context.changeset.errors[:school_id]
+    end
+
+    test "marks a previously invalid changeset as invalid without replacing the first error" do
+      context =
+        %Student{}
+        |> context(%{name: "Ada"})
+        |> Map.update!(:changeset, &Changeset.add_error(&1, :name, "first error"))
+        |> Writer.validate_changeset(fn _changeset -> flunk("validator should not run") end)
+
+      assert context.error == :invalid
+      assert {"first error", _opts} = context.changeset.errors[:name]
+    end
   end
 
   describe "normalize/2" do

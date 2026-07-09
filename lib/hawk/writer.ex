@@ -42,9 +42,44 @@ defmodule Hawk.Writer do
   """
   @spec validate_required(MutationContext.t(), [atom()]) :: MutationContext.t()
   def validate_required(%MutationContext{} = context, fields) when is_list(fields) do
+    validate_required(context, fields, [])
+  end
+
+  @doc """
+  Validates required fields on the context changeset with Ecto options.
+  """
+  @spec validate_required(MutationContext.t(), [atom()], keyword()) :: MutationContext.t()
+  def validate_required(%MutationContext{} = context, fields, opts)
+      when is_list(fields) and is_list(opts) do
     MutationContext.guard(context, fn context ->
       context.changeset
-      |> Changeset.validate_required(fields)
+      |> Changeset.validate_required(fields, opts)
+      |> put_changeset(context)
+    end)
+  end
+
+  @doc """
+  Runs an Ecto changeset validator against the context changeset.
+
+  Use this for validations that need native `Ecto.Changeset` APIs such as
+  `validate_number/3`, `validate_inclusion/4`, or `unique_constraint/3`.
+  Use `validate/2` for pure domain validators that return Hawk validator errors.
+  """
+  @spec validate_changeset(MutationContext.t(), (Changeset.t() -> Changeset.t())) ::
+          MutationContext.t()
+  def validate_changeset(
+        %MutationContext{error: :none, changeset: %Changeset{valid?: false}} = context,
+        validator
+      )
+      when is_function(validator, 1) do
+    MutationContext.put_error(context, :invalid)
+  end
+
+  def validate_changeset(%MutationContext{} = context, validator)
+      when is_function(validator, 1) do
+    MutationContext.guard(context, fn context ->
+      context.changeset
+      |> validator.()
       |> put_changeset(context)
     end)
   end
