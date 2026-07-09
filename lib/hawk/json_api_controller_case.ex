@@ -203,7 +203,7 @@ defmodule Hawk.JsonApiControllerCase do
 
     case config.create_params do
       nil -> mutation_params(config.model, :creatable)
-      params -> params
+      params -> resolve_params(params)
     end
   end
 
@@ -212,10 +212,13 @@ defmodule Hawk.JsonApiControllerCase do
 
     case {config.update_params, config.create_params} do
       {nil, nil} -> mutation_params(config.model, :updatable)
-      {nil, params} -> params
-      {params, _create_params} -> params
+      {nil, params} -> resolve_params(params)
+      {params, _create_params} -> resolve_params(params)
     end
   end
+
+  defp resolve_params(params) when is_function(params, 0), do: params.()
+  defp resolve_params(params), do: params
 
   def sample_context(test_module) when is_atom(test_module) do
     key = {__MODULE__, test_module, :sample_context}
@@ -299,7 +302,7 @@ defmodule Hawk.JsonApiControllerCase do
     conn =
       config.controller.create(
         conn_for(role_case.authority),
-        config.create_params || mutation_params(config.model, :creatable)
+        resolve_params(config.create_params) || mutation_params(config.model, :creatable)
       )
 
     expected_status = if(write?, do: [201, 422], else: [403, 422])
@@ -311,12 +314,15 @@ defmodule Hawk.JsonApiControllerCase do
     write? = write_allowed?(config, role_case, :update)
     put_results(config, if(read?, do: [config.sample], else: []))
 
+    params =
+      config.update_params || config.create_params ||
+        mutation_params(config.model, :updatable)
+
     conn =
       config.controller.update(
         conn_for(role_case.authority),
         Map.put(
-          config.update_params || config.create_params ||
-            mutation_params(config.model, :updatable),
+          resolve_params(params),
           "id",
           model_id(config.sample)
         )
