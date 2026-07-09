@@ -13,6 +13,9 @@ defmodule Hawk.Model do
       use Ecto.Schema
       import Hawk.Model, only: [model: 2, json_api: 1]
 
+      @primary_key {:id, :binary_id, autogenerate: true}
+      @foreign_key_type :binary_id
+
       Module.register_attribute(__MODULE__, :hawk_association_policies, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_association_readers, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_json_api, accumulate: false)
