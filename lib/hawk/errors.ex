@@ -58,7 +58,13 @@ defmodule Hawk.Errors do
 
   defp interpolate(message, opts) do
     Enum.reduce(opts, message, fn {key, value}, acc ->
-      String.replace(acc, "%{#{key}}", to_string(value))
+      String.replace(acc, "%{#{key}}", stringify_interpolation(value))
     end)
+  end
+
+  defp stringify_interpolation(value) do
+    to_string(value)
+  rescue
+    Protocol.UndefinedError -> inspect(value)
   end
 end

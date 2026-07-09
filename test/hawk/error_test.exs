@@ -3,7 +3,8 @@ defmodule Hawk.ErrorTest do
 
   alias Hawk.Authority
   alias Hawk.Errors
-  alias Videdal.{Grade, Grades}
+  alias Hawk.MutationContext
+  alias Videdal.{Grade, Grades, Student}
 
   @course_id Videdal.course_id()
   @grade_id Videdal.grade_id()
@@ -87,5 +88,18 @@ defmodule Hawk.ErrorTest do
       Grades.create(%{score: 12, school_id: @school_id, student_id: @student_id}, authority)
 
     assert Errors.to_live_view(result) == {:error, %{course_id: ["can't be blank"]}}
+  end
+
+  test "invalid results tolerate non-stringable validation metadata" do
+    type = {:parameterized, {Ecto.Enum, %{mappings: [web: "web"]}}}
+
+    context =
+      %Student{}
+      |> MutationContext.create(%{}, Authority.system())
+      |> MutationContext.add_error(:app_name, "is invalid for %{type}", type: type)
+
+    assert %{errors: [%{detail: detail}]} = Errors.to_json_api({:invalid, context})
+    assert detail =~ "is invalid for"
+    assert detail =~ "Ecto.Enum"
   end
 end
