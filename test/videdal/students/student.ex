@@ -6,7 +6,7 @@ defmodule Videdal.Student do
   authorization, and mutation orchestration live in sibling resource modules.
   """
 
-  use Videdal.Model
+  use Hawk.Model
 
   model "students" do
     field(:name, :string)

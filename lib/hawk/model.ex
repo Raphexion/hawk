@@ -11,10 +11,8 @@ defmodule Hawk.Model do
   defmacro __using__(_opts) do
     quote do
       use Ecto.Schema
-      import Hawk.Model, only: [model: 2, json_api: 1]
 
-      @primary_key {:id, :binary_id, autogenerate: true}
-      @foreign_key_type :binary_id
+      import Hawk.Model, only: [model: 2, json_api: 1]
 
       Module.register_attribute(__MODULE__, :hawk_association_policies, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_association_readers, accumulate: true)
@@ -29,6 +27,9 @@ defmodule Hawk.Model do
     quote do
       unquote_splicing(quote_attrs(:hawk_association_policies, metadata.policies))
       unquote_splicing(quote_attrs(:hawk_association_readers, metadata.readers))
+
+      @primary_key {:id, :binary_id, autogenerate: true}
+      @foreign_key_type :binary_id
 
       Ecto.Schema.schema unquote(source) do
         unquote(rewritten_block)

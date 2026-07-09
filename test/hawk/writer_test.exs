@@ -7,23 +7,25 @@ defmodule Hawk.WriterTest do
   alias Hawk.Writer
   alias Videdal.Student
 
+  @school_id Videdal.school_id()
+
   describe "defaults/2" do
     test "puts defaults only when attrs are missing" do
       context =
         %Student{}
         |> context(%{name: "Ada", active: false})
-        |> Writer.defaults(active: true, school_id: 7)
+        |> Writer.defaults(active: true, school_id: @school_id)
 
-      assert context.attrs == %{name: "Ada", active: false, school_id: 7}
+      assert context.attrs == %{name: "Ada", active: false, school_id: @school_id}
     end
 
     test "evaluates zero-arity function defaults only when used" do
       context =
         %Student{}
         |> context(%{name: "Ada"})
-        |> Writer.defaults(school_id: fn -> 7 end)
+        |> Writer.defaults(school_id: fn -> @school_id end)
 
-      assert context.attrs.school_id == 7
+      assert context.attrs.school_id == @school_id
     end
 
     test "is guarded" do
@@ -40,13 +42,13 @@ defmodule Hawk.WriterTest do
     test "casts permitted attrs into the changeset" do
       context =
         %Student{}
-        |> context(%{name: "Ada", active: "false", school_id: 7, ignored: "value"})
+        |> context(%{name: "Ada", active: "false", school_id: @school_id, ignored: "value"})
         |> Writer.cast([:name, :active, :school_id])
 
       assert context.error == :none
       assert Changeset.get_change(context.changeset, :name) == "Ada"
       assert Changeset.get_change(context.changeset, :active) == false
-      assert Changeset.get_change(context.changeset, :school_id) == 7
+      assert Changeset.get_change(context.changeset, :school_id) == @school_id
       refute Changeset.get_change(context.changeset, :ignored)
     end
 
@@ -65,7 +67,7 @@ defmodule Hawk.WriterTest do
     test "keeps the context valid when required fields are present" do
       context =
         %Student{}
-        |> context(%{name: "Ada", school_id: 7})
+        |> context(%{name: "Ada", school_id: @school_id})
         |> Writer.cast([:name, :school_id])
         |> Writer.validate_required([:name, :school_id])
 

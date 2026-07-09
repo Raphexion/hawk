@@ -3,12 +3,11 @@ defmodule Videdal.CourseGradeSummary do
   Read-only course grade summary model backed by a database view in real apps.
   """
 
-  use Videdal.Model
+  use Hawk.Model
 
-  @primary_key {:id, :integer, autogenerate: false}
   model "course_grade_summaries" do
-    field(:school_id, :integer)
-    field(:course_id, :integer)
+    field(:school_id, :binary_id)
+    field(:course_id, :binary_id)
     field(:grade_count, :integer)
     field(:average_score, :float)
   end

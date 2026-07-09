@@ -5,28 +5,32 @@ defmodule Videdal.Teachers.WriterTest do
   alias Videdal.Teacher
   alias Videdal.Teachers
 
-  test "create runs through the resource writer pipeline" do
-    authority = Authority.new(:school_admin, 1, scopes: %{school_id: 7})
+  @school_admin_id Videdal.school_admin_id()
+  @school_id Videdal.school_id()
+  @teacher_id Videdal.teacher_id()
 
-    assert {:ok, %Teacher{name: "Grace", school_id: 7}} =
-             Teachers.create(%{name: "Grace", school_id: 7}, authority)
+  test "create runs through the resource writer pipeline" do
+    authority = Authority.new(:school_admin, @school_admin_id, scopes: %{school_id: @school_id})
+
+    assert {:ok, %Teacher{name: "Grace", school_id: @school_id}} =
+             Teachers.create(%{name: "Grace", school_id: @school_id}, authority)
   end
 
   test "create rejects readonly authorities" do
     authority =
       :school_admin
-      |> Authority.new(1, scopes: %{school_id: 7})
+      |> Authority.new(@school_admin_id, scopes: %{school_id: @school_id})
       |> Authority.readonly()
 
     assert {:not_authorized, _context} =
-             Teachers.create(%{name: "Grace", school_id: 7}, authority)
+             Teachers.create(%{name: "Grace", school_id: @school_id}, authority)
   end
 
   test "update changes permitted fields through the repository boundary" do
-    teacher = %Teacher{id: 12, name: "Grace", school_id: 7}
-    authority = Authority.new(:school_admin, 1, scopes: %{school_id: 7})
+    teacher = %Teacher{id: @teacher_id, name: "Grace", school_id: @school_id}
+    authority = Authority.new(:school_admin, @school_admin_id, scopes: %{school_id: @school_id})
 
-    assert {:ok, %Teacher{id: 12, name: "Grace Hopper", school_id: 7}} =
+    assert {:ok, %Teacher{id: @teacher_id, name: "Grace Hopper", school_id: @school_id}} =
              Teachers.update(teacher, %{name: "Grace Hopper", ignored: true}, authority)
 
     assert_received {:videdal_repo, :transaction}
@@ -35,11 +39,11 @@ defmodule Videdal.Teachers.WriterTest do
   end
 
   test "delete rejects readonly authorities before persistence" do
-    teacher = %Teacher{id: 12, school_id: 7}
+    teacher = %Teacher{id: @teacher_id, school_id: @school_id}
 
     authority =
       :school_admin
-      |> Authority.new(1, scopes: %{school_id: 7})
+      |> Authority.new(@school_admin_id, scopes: %{school_id: @school_id})
       |> Authority.readonly()
 
     assert {:not_authorized, _context} = Teachers.delete(teacher, authority)

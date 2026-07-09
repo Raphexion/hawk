@@ -3,7 +3,7 @@ defmodule Videdal.Enrollment do
   Enrollment schema connecting students to courses in the Videdal example.
   """
 
-  use Videdal.Model
+  use Hawk.Model
 
   model "enrollments" do
     field(:enrolled_on, :date)

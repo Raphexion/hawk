@@ -3,7 +3,7 @@ defmodule Videdal.ParentStudent do
   Join schema connecting parents to students in the Videdal example.
   """
 
-  use Videdal.Model
+  use Hawk.Model
 
   model "parent_students" do
     belongs_to(:parent, Videdal.Parent)

@@ -5,9 +5,24 @@ defmodule Hawk.ErrorTest do
   alias Hawk.Errors
   alias Videdal.{Grade, Grades}
 
+  @course_id Videdal.course_id()
+  @grade_id Videdal.grade_id()
+  @parent_id Videdal.parent_id()
+  @school_id Videdal.school_id()
+  @student_id Videdal.student_id()
+  @teacher_id Videdal.teacher_id()
+
   test "unauthorized writer results carry a useful operation-aware error" do
-    grade = %Grade{id: 1, score: 10, school_id: 7, student_id: 8, course_id: 3}
-    authority = Authority.new(:parent, 4, scopes: %{school_id: 7, parent_id: 4})
+    grade = %Grade{
+      id: @grade_id,
+      score: 10,
+      school_id: @school_id,
+      student_id: @student_id,
+      course_id: @course_id
+    }
+
+    authority =
+      Authority.new(:parent, @parent_id, scopes: %{school_id: @school_id, parent_id: @parent_id})
 
     assert {:not_authorized, context} = Grades.update(grade, %{score: 12}, authority)
 
@@ -21,8 +36,16 @@ defmodule Hawk.ErrorTest do
   end
 
   test "unauthorized results convert to JSON:API errors" do
-    grade = %Grade{id: 1, score: 10, school_id: 7, student_id: 8, course_id: 3}
-    authority = Authority.new(:parent, 4, scopes: %{school_id: 7, parent_id: 4})
+    grade = %Grade{
+      id: @grade_id,
+      score: 10,
+      school_id: @school_id,
+      student_id: @student_id,
+      course_id: @course_id
+    }
+
+    authority =
+      Authority.new(:parent, @parent_id, scopes: %{school_id: @school_id, parent_id: @parent_id})
 
     result = Grades.update(grade, %{score: 12}, authority)
 
@@ -39,9 +62,13 @@ defmodule Hawk.ErrorTest do
   end
 
   test "invalid results convert to JSON:API source pointers" do
-    authority = Authority.new(:teacher, 12, scopes: %{school_id: 7, teacher_id: 12})
+    authority =
+      Authority.new(:teacher, @teacher_id,
+        scopes: %{school_id: @school_id, teacher_id: @teacher_id}
+      )
 
-    result = Grades.create(%{score: 12, school_id: 7, student_id: 8}, authority)
+    result =
+      Grades.create(%{score: 12, school_id: @school_id, student_id: @student_id}, authority)
 
     assert %{errors: [error]} = Errors.to_json_api(result)
     assert error.status == "422"
@@ -51,9 +78,13 @@ defmodule Hawk.ErrorTest do
   end
 
   test "invalid results convert to LiveView-friendly errors" do
-    authority = Authority.new(:teacher, 12, scopes: %{school_id: 7, teacher_id: 12})
+    authority =
+      Authority.new(:teacher, @teacher_id,
+        scopes: %{school_id: @school_id, teacher_id: @teacher_id}
+      )
 
-    result = Grades.create(%{score: 12, school_id: 7, student_id: 8}, authority)
+    result =
+      Grades.create(%{score: 12, school_id: @school_id, student_id: @student_id}, authority)
 
     assert Errors.to_live_view(result) == {:error, %{course_id: ["can't be blank"]}}
   end

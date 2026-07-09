@@ -5,28 +5,32 @@ defmodule Videdal.Students.WriterTest do
   alias Videdal.Student
   alias Videdal.Students
 
-  test "create runs through the resource writer pipeline" do
-    authority = Authority.new(:school_admin, 1, scopes: %{school_id: 7})
+  @school_admin_id Videdal.school_admin_id()
+  @school_id Videdal.school_id()
+  @student_id Videdal.student_id()
 
-    assert {:ok, %Student{name: "Ada", school_id: 7, active: true}} =
-             Students.create(%{name: "Ada", school_id: 7}, authority)
+  test "create runs through the resource writer pipeline" do
+    authority = Authority.new(:school_admin, @school_admin_id, scopes: %{school_id: @school_id})
+
+    assert {:ok, %Student{name: "Ada", school_id: @school_id, active: true}} =
+             Students.create(%{name: "Ada", school_id: @school_id}, authority)
   end
 
   test "create rejects readonly authorities" do
     authority =
       :school_admin
-      |> Authority.new(1, scopes: %{school_id: 7})
+      |> Authority.new(@school_admin_id, scopes: %{school_id: @school_id})
       |> Authority.readonly()
 
     assert {:not_authorized, _context} =
-             Students.create(%{name: "Ada", school_id: 7}, authority)
+             Students.create(%{name: "Ada", school_id: @school_id}, authority)
   end
 
   test "update changes permitted fields and ignores unknown attrs" do
-    student = %Student{id: 8, name: "Ada", school_id: 7, active: true}
-    authority = Authority.new(:school_admin, 1, scopes: %{school_id: 7})
+    student = %Student{id: @student_id, name: "Ada", school_id: @school_id, active: true}
+    authority = Authority.new(:school_admin, @school_admin_id, scopes: %{school_id: @school_id})
 
-    assert {:ok, %Student{id: 8, name: "Ada Lovelace", active: false}} =
+    assert {:ok, %Student{id: @student_id, name: "Ada Lovelace", active: false}} =
              Students.update(
                student,
                %{name: "Ada Lovelace", active: false, ignored: true},
@@ -39,11 +43,11 @@ defmodule Videdal.Students.WriterTest do
   end
 
   test "delete rejects readonly authorities before persistence" do
-    student = %Student{id: 8, school_id: 7}
+    student = %Student{id: @student_id, school_id: @school_id}
 
     authority =
       :school_admin
-      |> Authority.new(1, scopes: %{school_id: 7})
+      |> Authority.new(@school_admin_id, scopes: %{school_id: @school_id})
       |> Authority.readonly()
 
     assert {:not_authorized, _context} = Students.delete(student, authority)

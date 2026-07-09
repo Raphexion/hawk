@@ -11,8 +11,17 @@ defmodule Videdal.Controllers.CoursesControllerTest do
   alias Videdal.Course
   alias Videdal.Controllers.CoursesController
 
+  @course_id Videdal.course_id()
+  @school_admin_id Videdal.school_admin_id()
+  @school_id Videdal.school_id()
+  @student_id Videdal.student_id()
+  @teacher_id Videdal.teacher_id()
+
   test "index returns a JSON:API collection document" do
-    courses = [%Course{id: 3, title: "Math", school_id: 7, teacher_id: 12}]
+    courses = [
+      %Course{id: @course_id, title: "Math", school_id: @school_id, teacher_id: @teacher_id}
+    ]
+
     Process.put({Videdal.Repo, :all_results}, courses)
 
     conn = CoursesController.index(conn(), %{"sort" => "title", "page" => %{"size" => "10"}})
@@ -23,11 +32,11 @@ defmodule Videdal.Controllers.CoursesControllerTest do
              data: [
                %{
                  type: "courses",
-                 id: "3",
+                 id: @course_id,
                  attributes: %{title: "Math"},
                  relationships: %{
-                   school: %{data: %{type: "schools", id: "7"}},
-                   teacher: %{data: %{type: "teachers", id: "12"}},
+                   school: %{data: %{type: "schools", id: @school_id}},
+                   teacher: %{data: %{type: "teachers", id: @teacher_id}},
                    grades: %{data: []}
                  }
                }
@@ -41,14 +50,20 @@ defmodule Videdal.Controllers.CoursesControllerTest do
   end
 
   test "show returns one JSON:API resource document" do
-    course = %Course{id: 3, title: "Math", school_id: 7, teacher_id: 12}
+    course = %Course{
+      id: @course_id,
+      title: "Math",
+      school_id: @school_id,
+      teacher_id: @teacher_id
+    }
+
     Process.put({Videdal.Repo, :all_results}, [course])
 
-    conn = CoursesController.show(conn(), %{"id" => "3"})
+    conn = CoursesController.show(conn(), %{"id" => @course_id})
 
     assert conn.status == 200
     assert conn.resp_body.data.type == "courses"
-    assert conn.resp_body.data.id == "3"
+    assert conn.resp_body.data.id == @course_id
     assert conn.resp_body.data.attributes == %{title: "Math"}
   end
 
@@ -78,8 +93,8 @@ defmodule Videdal.Controllers.CoursesControllerTest do
           "type" => "courses",
           "attributes" => %{"title" => "Math"},
           "relationships" => %{
-            "school" => %{"data" => %{"type" => "schools", "id" => "7"}},
-            "teacher" => %{"data" => %{"type" => "teachers", "id" => "12"}}
+            "school" => %{"data" => %{"type" => "schools", "id" => @school_id}},
+            "teacher" => %{"data" => %{"type" => "teachers", "id" => @teacher_id}}
           }
         }
       })
@@ -87,26 +102,33 @@ defmodule Videdal.Controllers.CoursesControllerTest do
     assert conn.status == 201
     assert conn.resp_body.data.attributes == %{title: "Math"}
     assert_received {:videdal_repo, :insert, changeset}
-    assert changeset.changes == %{title: "Math", school_id: 7, teacher_id: 12}
+    assert changeset.changes == %{title: "Math", school_id: @school_id, teacher_id: @teacher_id}
   end
 
   test "update returns JSON:API validation errors" do
-    course = %Course{id: 3, title: "Math", school_id: 7, teacher_id: 12}
+    course = %Course{
+      id: @course_id,
+      title: "Math",
+      school_id: @school_id,
+      teacher_id: @teacher_id
+    }
+
     Process.put({Videdal.Repo, :all_results}, [course])
 
     conn =
-      CoursesController.update(conn(%{role: :student, scopes: %{school_id: 7, student_id: 8}}), %{
-        "id" => "3",
-        "data" => %{}
-      })
+      CoursesController.update(
+        conn(%{role: :student, scopes: %{school_id: @school_id, student_id: @student_id}}),
+        %{"id" => @course_id, "data" => %{}}
+      )
 
     assert conn.status == 403
     assert [%{status: "403", code: "not_authorized"}] = conn.resp_body.errors
   end
 
-  defp conn(authority_opts \\ %{role: :school_admin, scopes: %{school_id: 7}}) do
+  defp conn(authority_opts \\ %{role: :school_admin, scopes: %{school_id: @school_id}}) do
     %{assigns: %{authority: authority(authority_opts)}, status: nil, resp_body: nil}
   end
 
-  defp authority(%{role: role, scopes: scopes}), do: Authority.new(role, 1, scopes: scopes)
+  defp authority(%{role: role, scopes: scopes}),
+    do: Authority.new(role, @school_admin_id, scopes: scopes)
 end

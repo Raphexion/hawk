@@ -36,6 +36,8 @@ defmodule Videdal.Integration.CourseGradesPreloadTest do
         Reader.all(authority: authority, preloads: [:grades])
       end)
 
+    courses = Enum.sort_by(courses, & &1.title)
+
     assert Enum.map(courses, & &1.title) == ["Math", "Physics"]
 
     assert [

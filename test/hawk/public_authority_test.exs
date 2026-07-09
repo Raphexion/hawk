@@ -17,6 +17,9 @@ defmodule Hawk.PublicAuthorityTest do
   alias Hawk.Authority
   alias Videdal.Courses.Policy
 
+  @school_id Videdal.school_id()
+  @teacher_id Videdal.teacher_id()
+
   test "public authority is readonly and not system privileged" do
     authority = Authority.public()
 
@@ -104,8 +107,8 @@ defmodule Hawk.PublicAuthorityTest do
           "type" => "courses",
           "attributes" => %{"title" => "Math"},
           "relationships" => %{
-            "school" => %{"data" => %{"type" => "schools", "id" => "7"}},
-            "teacher" => %{"data" => %{"type" => "teachers", "id" => "12"}}
+            "school" => %{"data" => %{"type" => "schools", "id" => @school_id}},
+            "teacher" => %{"data" => %{"type" => "teachers", "id" => @teacher_id}}
           }
         }
       })

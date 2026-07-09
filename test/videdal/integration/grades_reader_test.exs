@@ -71,6 +71,8 @@ defmodule Videdal.Integration.GradesReaderTest do
         Reader.all(authority: authority, preloads: [:student, :course])
       end)
 
+    grades = Enum.sort_by(grades, & &1.score, :desc)
+
     assert Enum.map(grades, & &1.score) == [12, 10]
     assert Enum.map(grades, & &1.student.name) == ["Ada", "Grace"]
     assert Enum.map(grades, & &1.course.title) == ["Math", "Math"]
@@ -83,7 +85,11 @@ defmodule Videdal.Integration.GradesReaderTest do
         scopes: %{school_id: data.school.id, student_id: data.ada.id}
       )
 
-    assert [%Grade{score: 12}, %Grade{score: 7}] = Reader.all(authority: authority)
+    grades =
+      Reader.all(authority: authority)
+      |> Enum.sort_by(& &1.score, :desc)
+
+    assert [%Grade{score: 12}, %Grade{score: 7}] = grades
     assert Reader.all(authority: authority, filter: %{student_id: data.grace.id}) == []
   end
 
@@ -97,6 +103,8 @@ defmodule Videdal.Integration.GradesReaderTest do
       count_queries(fn ->
         Reader.all(authority: authority, preloads: [:student, :course])
       end)
+
+    grades = Enum.sort_by(grades, & &1.course.title)
 
     assert [
              %Grade{score: 12, student: %Student{name: "Ada"}, course: %Course{title: "Math"}},

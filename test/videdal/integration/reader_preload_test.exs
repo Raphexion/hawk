@@ -44,6 +44,8 @@ defmodule Videdal.Integration.ReaderPreloadTest do
         Reader.all(authority: Authority.system(), preloads: [:school])
       end)
 
+    students = Enum.sort_by(students, & &1.name)
+
     assert Enum.map(students, & &1.name) == ["Ada", "Grace"]
     assert Enum.all?(students, &Ecto.assoc_loaded?(&1.school))
     assert Enum.map(students, & &1.school.name) == ["Videdal Skole", "Videdal Skole"]
@@ -63,6 +65,8 @@ defmodule Videdal.Integration.ReaderPreloadTest do
       count_queries(fn ->
         Reader.all(authority: authority, preloads: [:school])
       end)
+
+    students = Enum.sort_by(students, & &1.name)
 
     assert Enum.map(students, & &1.name) == ["Ada", "Grace"]
     assert [%Student{school: %School{name: "Visible Skole"}}, %Student{school: nil}] = students

@@ -7,6 +7,11 @@ end
 defmodule Hawk.JsonApiControllerErrorBoundaryTest do
   use ExUnit.Case, async: true
 
+  @school_admin_id Videdal.school_admin_id()
+  @school_id Videdal.school_id()
+  @student_id Videdal.student_id()
+  @teacher_id Videdal.teacher_id()
+
   test "invalid sort returns a JSON:API 400 error" do
     conn =
       Videdal.Controllers.ErrorBoundaryCoursesController.index(conn(), %{
@@ -40,14 +45,14 @@ defmodule Hawk.JsonApiControllerErrorBoundaryTest do
 
     unauthorized =
       Videdal.Controllers.ErrorBoundaryCoursesController.create(
-        conn(%{role: :student, scopes: %{school_id: 7, student_id: 8}}),
+        conn(%{role: :student, scopes: %{school_id: @school_id, student_id: @student_id}}),
         %{
           "data" => %{
             "type" => "courses",
             "attributes" => %{"title" => "Math"},
             "relationships" => %{
-              "school" => %{"data" => %{"type" => "schools", "id" => "7"}},
-              "teacher" => %{"data" => %{"type" => "teachers", "id" => "12"}}
+              "school" => %{"data" => %{"type" => "schools", "id" => @school_id}},
+              "teacher" => %{"data" => %{"type" => "teachers", "id" => @teacher_id}}
             }
           }
         }
@@ -63,9 +68,10 @@ defmodule Hawk.JsonApiControllerErrorBoundaryTest do
     assert invalid.status == 422
   end
 
-  defp conn(authority_opts \\ %{role: :school_admin, scopes: %{school_id: 7}}) do
+  defp conn(authority_opts \\ %{role: :school_admin, scopes: %{school_id: @school_id}}) do
     %{assigns: %{authority: authority(authority_opts)}, status: nil, resp_body: nil}
   end
 
-  defp authority(%{role: role, scopes: scopes}), do: Hawk.Authority.new(role, 1, scopes: scopes)
+  defp authority(%{role: role, scopes: scopes}),
+    do: Hawk.Authority.new(role, @school_admin_id, scopes: scopes)
 end

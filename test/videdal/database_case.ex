@@ -44,7 +44,7 @@ defmodule Videdal.DatabaseCase do
       repo,
       """
       CREATE TABLE schools (
-        id bigserial PRIMARY KEY,
+        id uuid PRIMARY KEY,
         name text NOT NULL
       )
       """,
@@ -55,10 +55,10 @@ defmodule Videdal.DatabaseCase do
       repo,
       """
       CREATE TABLE students (
-        id bigserial PRIMARY KEY,
+        id uuid PRIMARY KEY,
         name text NOT NULL,
         active boolean NOT NULL DEFAULT true,
-        school_id bigint NOT NULL REFERENCES schools(id)
+        school_id uuid NOT NULL REFERENCES schools(id)
       )
       """,
       []
@@ -68,9 +68,9 @@ defmodule Videdal.DatabaseCase do
       repo,
       """
       CREATE TABLE teachers (
-        id bigserial PRIMARY KEY,
+        id uuid PRIMARY KEY,
         name text NOT NULL,
-        school_id bigint NOT NULL REFERENCES schools(id)
+        school_id uuid NOT NULL REFERENCES schools(id)
       )
       """,
       []
@@ -80,9 +80,9 @@ defmodule Videdal.DatabaseCase do
       repo,
       """
       CREATE TABLE parents (
-        id bigserial PRIMARY KEY,
+        id uuid PRIMARY KEY,
         name text NOT NULL,
-        school_id bigint NOT NULL REFERENCES schools(id)
+        school_id uuid NOT NULL REFERENCES schools(id)
       )
       """,
       []
@@ -92,10 +92,10 @@ defmodule Videdal.DatabaseCase do
       repo,
       """
       CREATE TABLE parent_students (
-        id bigserial PRIMARY KEY,
-        school_id bigint NOT NULL REFERENCES schools(id),
-        parent_id bigint NOT NULL REFERENCES parents(id),
-        student_id bigint NOT NULL REFERENCES students(id)
+        id uuid PRIMARY KEY,
+        school_id uuid NOT NULL REFERENCES schools(id),
+        parent_id uuid NOT NULL REFERENCES parents(id),
+        student_id uuid NOT NULL REFERENCES students(id)
       )
       """,
       []
@@ -105,10 +105,10 @@ defmodule Videdal.DatabaseCase do
       repo,
       """
       CREATE TABLE courses (
-        id bigserial PRIMARY KEY,
+        id uuid PRIMARY KEY,
         title text NOT NULL,
-        school_id bigint NOT NULL REFERENCES schools(id),
-        teacher_id bigint NOT NULL REFERENCES teachers(id)
+        school_id uuid NOT NULL REFERENCES schools(id),
+        teacher_id uuid NOT NULL REFERENCES teachers(id)
       )
       """,
       []
@@ -118,11 +118,11 @@ defmodule Videdal.DatabaseCase do
       repo,
       """
       CREATE TABLE enrollments (
-        id bigserial PRIMARY KEY,
+        id uuid PRIMARY KEY,
         enrolled_on date,
-        school_id bigint NOT NULL REFERENCES schools(id),
-        student_id bigint NOT NULL REFERENCES students(id),
-        course_id bigint NOT NULL REFERENCES courses(id)
+        school_id uuid NOT NULL REFERENCES schools(id),
+        student_id uuid NOT NULL REFERENCES students(id),
+        course_id uuid NOT NULL REFERENCES courses(id)
       )
       """,
       []
@@ -132,11 +132,11 @@ defmodule Videdal.DatabaseCase do
       repo,
       """
       CREATE TABLE grades (
-        id bigserial PRIMARY KEY,
+        id uuid PRIMARY KEY,
         score integer NOT NULL,
-        school_id bigint NOT NULL REFERENCES schools(id),
-        student_id bigint NOT NULL REFERENCES students(id),
-        course_id bigint NOT NULL REFERENCES courses(id)
+        school_id uuid NOT NULL REFERENCES schools(id),
+        student_id uuid NOT NULL REFERENCES students(id),
+        course_id uuid NOT NULL REFERENCES courses(id)
       )
       """,
       []
