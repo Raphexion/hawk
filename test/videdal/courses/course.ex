@@ -3,7 +3,7 @@ defmodule Videdal.Course do
   Course schema used by the Videdal example resources.
   """
 
-  use Hawk.Model
+  use Videdal.Model
 
   model "courses" do
     field(:title, :string)

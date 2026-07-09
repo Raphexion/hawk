@@ -3,7 +3,7 @@ defmodule Videdal.Parent do
   Parent schema used by the Videdal example resources.
   """
 
-  use Hawk.Model
+  use Videdal.Model
 
   model "parents" do
     field(:name, :string)

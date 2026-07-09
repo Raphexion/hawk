@@ -3,7 +3,7 @@ defmodule Videdal.School do
   School schema used by the Videdal example resources.
   """
 
-  use Hawk.Model
+  use Videdal.Model
 
   model "schools" do
     field(:name, :string)

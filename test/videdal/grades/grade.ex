@@ -3,7 +3,7 @@ defmodule Videdal.Grade do
   Grade schema used by the Videdal example resources.
   """
 
-  use Hawk.Model
+  use Videdal.Model
 
   model "grades" do
     field(:score, :integer)
