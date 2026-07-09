@@ -14,18 +14,22 @@ defmodule Hawk.JsonApiControllerCase do
           model: MyApp.Course,
           repo: MyApp.Repo
 
-        authorities do
+        pre_authorities do
+          %{teacher: MyApp.Factory.user()}
+        end
+
+        authorities pre_authorities do
           %{
             principal: Hawk.Authority.new(:principal, 1),
-            student: Hawk.Authority.new(:student, 2, scopes: %{school_id: 7})
+            student: Hawk.Authority.new(:student, 2, scopes: %{school_id: pre_authorities.school_id})
           }
         end
 
-        pre_sample authorities do
-          %{school: %MyApp.School{id: 7}, teacher: authorities.student}
+        pre_sample pre_authorities, authorities do
+          %{school: %MyApp.School{id: pre_authorities.school_id}, teacher: authorities.student}
         end
 
-        sample authorities, known, index do
+        sample pre_authorities, authorities, known, index do
           %MyApp.Course{id: index, title: "Course \#{index}", school_id: known.school.id, teacher_id: authorities.student.identity}
         end
 
@@ -40,21 +44,33 @@ defmodule Hawk.JsonApiControllerCase do
   alias Hawk.Authority
   alias Hawk.MutationContext
 
-  defmacro authorities(do: block) do
+  defmacro authorities(pre_authorities, do: block) do
     quote do
-      def __hawk_authorities__, do: unquote(block)
+      def __hawk_authorities__(unquote(pre_authorities)), do: unquote(block)
     end
   end
 
-  defmacro pre_sample(authorities, do: block) do
+  defmacro pre_authorities(do: block) do
     quote do
-      def pre_sample(unquote(authorities)), do: unquote(block)
+      def __hawk_pre_authorities__, do: unquote(block)
     end
   end
 
-  defmacro sample(authorities, known, index, do: block) do
+  defmacro pre_sample(pre_authorities, authorities, do: block) do
     quote do
-      def sample(unquote(authorities), unquote(known), unquote(index)), do: unquote(block)
+      def pre_sample(unquote(pre_authorities), unquote(authorities)), do: unquote(block)
+    end
+  end
+
+  defmacro sample(pre_authorities, authorities, known, index, do: block) do
+    quote do
+      def sample(
+            unquote(pre_authorities),
+            unquote(authorities),
+            unquote(known),
+            unquote(index)
+          ),
+          do: unquote(block)
     end
   end
 
@@ -74,9 +90,10 @@ defmodule Hawk.JsonApiControllerCase do
       import Hawk.JsonApiControllerCase,
         only: [
           assert_json_api_controller_matrix: 1,
-          authorities: 1,
-          pre_sample: 2,
-          sample: 4
+          authorities: 2,
+          pre_authorities: 1,
+          pre_sample: 3,
+          sample: 5
         ]
 
       @hawk_json_api_controller_case %{
@@ -111,12 +128,15 @@ defmodule Hawk.JsonApiControllerCase do
 
       def controller, do: @hawk_json_api_controller_case.controller
 
-      def __hawk_authorities__, do: %{}
-      def pre_sample(_authorities), do: %{}
+      def __hawk_authorities__(_pre_authorities), do: %{}
+      def __hawk_pre_authorities__, do: %{}
+      def pre_sample(_pre_authorities, _authorities), do: %{}
 
-      def sample(_authorities, _known, _index) do
+      def pre_authorities, do: Hawk.JsonApiControllerCase.pre_authorities_context(__MODULE__)
+
+      def sample(_pre_authorities, _authorities, _known, _index) do
         raise ArgumentError,
-              "define sample(authorities, known, index) in #{inspect(__MODULE__)} when using Hawk.JsonApiControllerCase; return one deterministic #{inspect(@hawk_json_api_controller_case.model)} sample for the given index"
+              "define sample(pre_authorities, authorities, known, index) in #{inspect(__MODULE__)} when using Hawk.JsonApiControllerCase; return one deterministic #{inspect(@hawk_json_api_controller_case.model)} sample for the given index"
       end
 
       def authorities, do: Hawk.JsonApiControllerCase.authority_map(__MODULE__)
@@ -133,7 +153,10 @@ defmodule Hawk.JsonApiControllerCase do
       def sample_models(count \\ @hawk_json_api_controller_case.sample_count),
         do: generate_samples(count)
 
-      defoverridable __hawk_authorities__: 0, pre_sample: 1, sample: 3
+      defoverridable __hawk_authorities__: 1,
+                     __hawk_pre_authorities__: 0,
+                     pre_sample: 2,
+                     sample: 4
 
       def create_params, do: Hawk.JsonApiControllerCase.create_params_for(__MODULE__)
       def update_params, do: Hawk.JsonApiControllerCase.update_params_for(__MODULE__)
@@ -199,7 +222,8 @@ defmodule Hawk.JsonApiControllerCase do
 
     case Process.get(key) do
       nil ->
-        known = test_module.pre_sample(authority_map(test_module))
+        pre_auth = pre_authorities_context(test_module)
+        known = test_module.pre_sample(pre_auth, authority_map(test_module))
         Process.put(key, known)
         known
 
@@ -210,7 +234,8 @@ defmodule Hawk.JsonApiControllerCase do
 
   def generate_sample(test_module, index)
       when is_atom(test_module) and is_integer(index) and index > 0 do
-    test_module.sample(authority_map(test_module), sample_context(test_module), index)
+    pre_auth = pre_authorities_context(test_module)
+    test_module.sample(pre_auth, authority_map(test_module), sample_context(test_module), index)
   end
 
   def generate_samples(test_module, count) when is_integer(count) and count > 0 do
@@ -366,15 +391,25 @@ defmodule Hawk.JsonApiControllerCase do
   end
 
   def authority_cases(test_module) when is_atom(test_module) do
-    test_module.__hawk_authorities__()
+    pre_auth = pre_authorities_context(test_module)
+
+    test_module.__hawk_authorities__(pre_auth)
     |> normalize_authority_cases()
     |> include_public_authority()
   end
 
-  def authority_cases(config) when is_map(config) and is_map_key(config, :authorities) do
-    config.authorities
-    |> normalize_authority_cases()
-    |> include_public_authority()
+  def pre_authorities_context(test_module) when is_atom(test_module) do
+    key = {__MODULE__, test_module, :pre_authorities_context}
+
+    case Process.get(key) do
+      nil ->
+        known = test_module.__hawk_pre_authorities__()
+        Process.put(key, known)
+        known
+
+      known ->
+        known
+    end
   end
 
   defp normalize_authority_cases(authorities) when is_map(authorities) do

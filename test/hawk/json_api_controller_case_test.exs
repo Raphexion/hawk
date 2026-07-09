@@ -11,7 +11,17 @@ defmodule Hawk.JsonApiControllerCaseTest do
     model: Videdal.Course,
     repo: Videdal.Repo
 
-  authorities do
+  pre_authorities do
+    count = Process.get(:json_api_controller_case_pre_authorities_count, 0) + 1
+    Process.put(:json_api_controller_case_pre_authorities_count, count)
+
+    %{school_id: 7, teacher_id: 12}
+  end
+
+  authorities pre_authorities do
+    assert Process.get(:json_api_controller_case_pre_authorities_count) == 1
+    assert pre_authorities.school_id == 7
+
     %{
       principal: Hawk.Authority.new(:principal, 1),
       school_admin: Hawk.Authority.new(:school_admin, 2, scopes: %{school_id: 7}),
@@ -20,14 +30,14 @@ defmodule Hawk.JsonApiControllerCaseTest do
     }
   end
 
-  pre_sample authorities do
+  pre_sample pre_authorities, authorities do
     count = Process.get(:json_api_controller_case_pre_sample_count, 0) + 1
     Process.put(:json_api_controller_case_pre_sample_count, count)
 
-    %{school_id: 7, teacher_id: authorities.teacher.identity}
+    %{school_id: pre_authorities.school_id, teacher_id: authorities.teacher.identity}
   end
 
-  sample _authorities, known, index do
+  sample _pre_authorities, _authorities, known, index do
     %Videdal.Course{
       id: index,
       title: "Course #{index}",
