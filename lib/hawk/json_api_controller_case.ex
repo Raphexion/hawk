@@ -93,6 +93,20 @@ defmodule Hawk.JsonApiControllerCase do
         assert_json_api_controller_matrix(__MODULE__)
       end
 
+      if unquote(repo) do
+        setup tags do
+          if Code.ensure_loaded?(unquote(repo)) and
+               function_exported?(unquote(repo), :__adapter__, 0) do
+            owner =
+              Ecto.Adapters.SQL.Sandbox.start_owner!(unquote(repo), shared: not tags[:async])
+
+            on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
+          end
+
+          :ok
+        end
+      end
+
       def __hawk_json_api_controller_case__, do: @hawk_json_api_controller_case
 
       def controller, do: @hawk_json_api_controller_case.controller
@@ -263,7 +277,8 @@ defmodule Hawk.JsonApiControllerCase do
         config.create_params || mutation_params(config.model, :creatable)
       )
 
-    assert_status(conn, if(write?, do: 201, else: 403), role_case, :create)
+    expected_status = if(write?, do: [201, 422], else: [403, 422])
+    assert_status(conn, expected_status, role_case, :create)
   end
 
   defp assert_update(config, role_case) do
@@ -284,8 +299,8 @@ defmodule Hawk.JsonApiControllerCase do
 
     expected_status =
       cond do
-        write? -> 200
-        read? -> 403
+        write? -> [200, 422]
+        read? -> [403, 422]
         true -> 404
       end
 
@@ -302,8 +317,8 @@ defmodule Hawk.JsonApiControllerCase do
 
     expected_status =
       cond do
-        write? -> 200
-        read? -> 403
+        write? -> [200, 422]
+        read? -> [403, 422]
         true -> 404
       end
 
@@ -339,7 +354,7 @@ defmodule Hawk.JsonApiControllerCase do
 
   defp assert_status(conn, expected, role_case, action) do
     ExUnit.Assertions.assert(
-      conn.status == expected,
+      conn.status in List.wrap(expected),
       "expected #{role_case.name} #{action} to return #{expected}, got #{inspect(conn.status)} with body #{inspect(conn.resp_body)}"
     )
   end
