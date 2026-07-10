@@ -40,7 +40,8 @@ defmodule Videdal.Controllers.CoursesControllerTest do
                    grades: %{data: []}
                  }
                }
-             ]
+             ],
+             meta: %{page: %{number: 1, size: 10, count: 1}}
            }
 
     assert_received {:videdal_repo, :all, query}

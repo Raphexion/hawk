@@ -29,7 +29,7 @@ defmodule Hawk.JsonApi do
 
   def request_options(params) when is_map(params) do
     []
-    |> put_request_option(:page, parse_page(Map.get(params, "page", %{})), %{})
+    |> put_request_option(:page, parse_page(params), %{})
     |> put_request_option(:preloads, parse_include(Map.get(params, "include")), [])
     |> put_sort(Map.get(params, "sort"))
   end
@@ -38,7 +38,9 @@ defmodule Hawk.JsonApi do
     %{
       parameters: [
         %{name: "sort", schema: %{enum: sort_values(model)}},
-        %{name: "page[size]", schema: %{type: "integer", minimum: 0}}
+        %{name: "page[size]", schema: %{type: "integer", minimum: 0}},
+        %{name: "page[number]", schema: %{type: "integer", minimum: 1}},
+        %{name: "page_size", schema: %{type: "integer", minimum: 0}}
       ]
     }
   end
@@ -144,6 +146,22 @@ defmodule Hawk.JsonApi do
   defp put_request_option(opts, _key, value, value), do: opts
   defp put_request_option(opts, key, value, _empty), do: Keyword.put(opts, key, value)
 
+  defp put_pagination_meta(document, models, opts) do
+    case Keyword.get(opts, :page) do
+      nil ->
+        document
+
+      page ->
+        Map.put(document, :meta, %{
+          page: %{
+            size: Map.get(page, :size),
+            number: Map.get(page, :number, 1),
+            count: length(models)
+          }
+        })
+    end
+  end
+
   defp put_sort(opts, nil), do: opts
   defp put_sort(opts, ""), do: opts
 
@@ -163,13 +181,19 @@ defmodule Hawk.JsonApi do
     )
   end
 
-  defp parse_page(page) do
-    case Map.get(page, "size") do
-      nil -> %{}
-      size when is_integer(size) -> %{size: size}
-      size when is_binary(size) -> %{size: String.to_integer(size)}
-    end
+  defp parse_page(params) do
+    page = Map.get(params, "page", %{})
+
+    %{}
+    |> put_page_value(:size, Map.get(page, "size") || Map.get(params, "page_size"))
+    |> put_page_value(:number, Map.get(page, "number") || Map.get(params, "page_number"))
   end
+
+  defp put_page_value(page, _key, nil), do: page
+  defp put_page_value(page, key, value) when is_integer(value), do: Map.put(page, key, value)
+
+  defp put_page_value(page, key, value) when is_binary(value),
+    do: Map.put(page, key, String.to_integer(value))
 
   defp parse_include(nil), do: []
   defp parse_include(""), do: []

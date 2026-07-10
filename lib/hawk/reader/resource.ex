@@ -15,6 +15,8 @@ defmodule Hawk.Reader.Resource do
     schema = Keyword.fetch!(opts, :schema)
     policy = Keyword.get(opts, :policy) || convention_policy(__CALLER__.module)
     forced_filter = Keyword.get(opts, :forced_filter, :all)
+    max_page_size = Keyword.get(opts, :max_page_size, 100)
+    default_page_size = Keyword.get(opts, :default_page_size, max_page_size)
 
     quote do
       import Ecto.Query, except: [preload: 2]
@@ -26,6 +28,8 @@ defmodule Hawk.Reader.Resource do
       @hawk_reader_schema unquote(schema)
       @hawk_reader_policy unquote(policy)
       @hawk_reader_forced_filter unquote(Macro.escape(forced_filter))
+      @hawk_reader_max_page_size unquote(max_page_size)
+      @hawk_reader_default_page_size unquote(default_page_size)
 
       Module.register_attribute(__MODULE__, :hawk_reader_filter_keys, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_filter_handlers, accumulate: true)
@@ -183,7 +187,9 @@ defmodule Hawk.Reader.Resource do
           forced_filter: @hawk_reader_forced_filter,
           preload_keys: preload_keys(),
           preload_readers: preload_readers(),
-          sort_keys: sort_keys()
+          sort_keys: sort_keys(),
+          default_page_size: @hawk_reader_default_page_size,
+          max_page_size: @hawk_reader_max_page_size
         }
       end
     end

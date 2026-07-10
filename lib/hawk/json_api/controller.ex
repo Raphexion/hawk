@@ -67,12 +67,21 @@ defmodule Hawk.JsonApi.Controller do
   def index(conn, resource, _model, params, public? \\ false) do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
-      opts = params |> Hawk.JsonApi.request_options() |> Keyword.put(:authority, authority)
+
+      opts =
+        params
+        |> Hawk.JsonApi.request_options()
+        |> Keyword.put(:authority, authority)
+        |> Keyword.put(:context, request_context(conn))
 
       json(
         conn,
         200,
-        Hawk.JsonApi.document(resource.all(opts), preloads: Keyword.get(opts, :preloads, []))
+        Hawk.JsonApi.document(resource.all(opts),
+          preloads: Keyword.get(opts, :preloads, []),
+          context: Keyword.get(opts, :context, %{}),
+          page: Keyword.get(opts, :page)
+        )
       )
     end)
   end

@@ -27,7 +27,9 @@ defmodule Hawk.Reader do
           optional(:forced_filter) => Filter.t(),
           optional(:preload_keys) => Enumerable.t(),
           optional(:preload_readers) => %{optional(atom()) => module()},
-          optional(:sort_keys) => Enumerable.t()
+          optional(:sort_keys) => Enumerable.t(),
+          optional(:default_page_size) => pos_integer() | nil,
+          optional(:max_page_size) => pos_integer() | nil
         }
 
   @doc """
@@ -88,6 +90,8 @@ defmodule Hawk.Reader do
     authority = Map.fetch!(opts, :authority)
     caller_filter = Map.fetch!(opts, :filter)
     page = Map.fetch!(opts, :page)
+    page = apply_default_page_size(page, Map.get(config, :default_page_size, 100))
+    page = enforce_max_page_size!(page, Map.get(config, :max_page_size, 100))
 
     validate_sort_key!(config, page.column)
 
@@ -95,6 +99,7 @@ defmodule Hawk.Reader do
     |> from(as: :root)
     |> apply_authorized_filter(config, authority, caller_filter, page.column)
     |> apply_sort(page)
+    |> apply_offset(page)
     |> apply_limit(page)
   end
 
@@ -143,6 +148,7 @@ defmodule Hawk.Reader do
 
     %{
       authority: Map.fetch!(opts, :authority),
+      context: Map.get(opts, :context, %{}),
       filter: Map.get(opts, :filter, :all),
       page: normalize_page(Map.get(opts, :page, %{})),
       preloads: Map.get(opts, :preloads, [])
@@ -160,8 +166,29 @@ defmodule Hawk.Reader do
       column: Map.get(page, :column, :id),
       dir: dir,
       size: Map.get(page, :size),
+      number: Map.get(page, :number),
       cursor: Map.get(page, :cursor)
     }
+  end
+
+  defp apply_default_page_size(%{size: nil} = page, default_page_size),
+    do: apply_default_page_size(Map.delete(page, :size), default_page_size)
+
+  defp apply_default_page_size(page, nil), do: page
+  defp apply_default_page_size(%{size: _size} = page, _default_page_size), do: page
+
+  defp apply_default_page_size(page, default_page_size) when is_integer(default_page_size),
+    do: Map.put(page, :size, default_page_size)
+
+  defp enforce_max_page_size!(%{size: nil} = page, _max_page_size), do: page
+  defp enforce_max_page_size!(page, nil), do: page
+
+  defp enforce_max_page_size!(%{size: size} = page, max_page_size)
+       when is_integer(size) and is_integer(max_page_size) and size <= max_page_size,
+       do: page
+
+  defp enforce_max_page_size!(%{size: size}, max_page_size) do
+    raise ArgumentError, "page size #{inspect(size)} exceeds maximum #{inspect(max_page_size)}"
   end
 
   defp validate_sort_key!(config, column) do
@@ -181,6 +208,18 @@ defmodule Hawk.Reader do
 
   defp apply_sort(query, %{column: column, dir: dir}) do
     order_by(query, [root: row], [{^dir, field(row, ^column)}])
+  end
+
+  defp apply_offset(query, %{number: nil}), do: query
+  defp apply_offset(query, %{number: 1}), do: query
+
+  defp apply_offset(query, %{number: number, size: size})
+       when is_integer(number) and number > 1 and is_integer(size) and size >= 0 do
+    offset(query, ^((number - 1) * size))
+  end
+
+  defp apply_offset(_query, %{number: number}) do
+    raise ArgumentError, "page number must be a positive integer, got: #{inspect(number)}"
   end
 
   defp apply_limit(query, %{size: nil}), do: query

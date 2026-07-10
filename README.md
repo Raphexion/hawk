@@ -81,7 +81,9 @@ through the resource policy.
 defmodule MyApp.Courses.Reader do
   use Hawk.Reader.Resource,
     repo: MyApp.Repo,
-    schema: MyApp.Course
+    schema: MyApp.Course,
+    default_page_size: 100,
+    max_page_size: 100
 
   filter(:id)
   filter(:school_id)
@@ -98,6 +100,12 @@ end
 Nested includes such as `include=grades.student` are turned into nested Ecto
 preloads where every layer uses that resource's own reader and policy. Opening
 `courses` does not accidentally open `grades` or `students`.
+
+Readers apply `default_page_size` when the caller does not request a page size
+and reject requests above `max_page_size`. Both default to `100` and can be
+overridden per resource. Collection JSON:API responses include `meta.page` with
+`size`, `number`, and returned `count`. Hawk accepts `page[size]` / `page[number]`
+and the shorthand `page_size` / `page_number` query parameters.
 
 ### Writer
 

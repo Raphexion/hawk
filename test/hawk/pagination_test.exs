@@ -1,3 +1,18 @@
+defmodule Hawk.PaginationTest.CustomPolicy do
+  def read_filter(_authority), do: :all
+end
+
+defmodule Hawk.PaginationTest.CustomReader do
+  use Hawk.Reader.Resource,
+    repo: Videdal.Repo,
+    schema: Videdal.Course,
+    policy: Hawk.PaginationTest.CustomPolicy,
+    default_page_size: 3,
+    max_page_size: 5
+
+  sort(:id)
+end
+
 defmodule Hawk.PaginationTest do
   use ExUnit.Case, async: true
 
@@ -9,18 +24,41 @@ defmodule Hawk.PaginationTest do
     assert Reader.sort_keys() == MapSet.new([:id, :title])
   end
 
-  test "reader applies declared sorting and page size" do
+  test "reader applies declared sorting, page number, and page size" do
     Process.put({Videdal.Repo, :all_results}, [])
 
     assert Courses.all(
              authority: Authority.system(),
-             page: %{column: :title, dir: :desc, size: 25}
+             page: %{column: :title, dir: :desc, number: 2, size: 25}
            ) == []
 
     assert_received {:videdal_repo, :all, query}
     inspected = inspect(query)
     assert inspected =~ "order_by: [desc: c0.title]"
+    assert inspected =~ "offset: ^25"
     assert inspected =~ "limit: ^25"
+  end
+
+  test "reader applies the default page size when none is requested" do
+    Process.put({Videdal.Repo, :all_results}, [])
+
+    assert Courses.all(authority: Authority.system()) == []
+
+    assert_received {:videdal_repo, :all, query}
+    assert inspect(query) =~ "limit: ^100"
+  end
+
+  test "reader can override default and max page size per resource" do
+    Process.put({Videdal.Repo, :all_results}, [])
+
+    assert Hawk.PaginationTest.CustomReader.all(authority: Authority.system()) == []
+
+    assert_received {:videdal_repo, :all, query}
+    assert inspect(query) =~ "limit: ^3"
+
+    assert_raise ArgumentError, ~r/page size 6 exceeds maximum 5/, fn ->
+      Hawk.PaginationTest.CustomReader.all(authority: Authority.system(), page: %{size: 6})
+    end
   end
 
   test "reader rejects undeclared sort columns" do
@@ -29,12 +67,32 @@ defmodule Hawk.PaginationTest do
     end
   end
 
+  test "reader rejects page sizes above the configured maximum" do
+    assert_raise ArgumentError, ~r/page size 101 exceeds maximum 100/, fn ->
+      Courses.all(authority: Authority.system(), page: %{size: 101})
+    end
+  end
+
   test "JSON:API request options parse page and sort parameters" do
     assert Hawk.JsonApi.request_options(%{
              "sort" => "-title",
-             "page" => %{"size" => "25"},
+             "page" => %{"number" => "2", "size" => "25"},
              "include" => "teacher,grades"
-           }) == [page: %{column: :title, dir: :desc, size: 25}, preloads: [:teacher, :grades]]
+           }) == [
+             page: %{column: :title, dir: :desc, number: 2, size: 25},
+             preloads: [:teacher, :grades]
+           ]
+  end
+
+  test "JSON:API request options parse page_size alias" do
+    assert Hawk.JsonApi.request_options(%{"page_size" => "2"}) == [page: %{size: 2}]
+  end
+
+  test "JSON:API documents include pagination metadata for collection pages" do
+    document =
+      Hawk.JsonApi.document([%Videdal.Course{id: 1, title: "Math"}], page: %{number: 2, size: 1})
+
+    assert document.meta == %{page: %{number: 2, size: 1, count: 1}}
   end
 
   test "OpenAPI operation includes sort and pagination parameters" do
@@ -42,5 +100,7 @@ defmodule Hawk.PaginationTest do
 
     assert %{name: "sort", schema: %{enum: ["id", "-id", "title", "-title"]}} in operation.parameters
     assert %{name: "page[size]", schema: %{type: "integer", minimum: 0}} in operation.parameters
+    assert %{name: "page[number]", schema: %{type: "integer", minimum: 1}} in operation.parameters
+    assert %{name: "page_size", schema: %{type: "integer", minimum: 0}} in operation.parameters
   end
 end
