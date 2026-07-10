@@ -4,6 +4,8 @@ defmodule Hawk.JsonApiTest do
   test "models expose explicit JSON:API metadata with rich field docs" do
     assert Videdal.Grade.__hawk_json_api__() == %{
              type: "grades",
+             tag: "Academics",
+             group: "Grades",
              doc: "A grade awarded to a student for a course.",
              attributes: %{
                score: %{

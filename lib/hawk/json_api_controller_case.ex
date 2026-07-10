@@ -74,6 +74,13 @@ defmodule Hawk.JsonApiControllerCase do
     end
   end
 
+  def maybe_start_sandbox(repo, tags, on_exit_fun) do
+    if Code.ensure_loaded?(repo) and function_exported?(repo, :__adapter__, 0) do
+      owner = Ecto.Adapters.SQL.Sandbox.start_owner!(repo, shared: not tags[:async])
+      on_exit_fun.(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
+    end
+  end
+
   defmacro __using__(opts) do
     controller = Keyword.fetch!(opts, :controller)
     resource = Keyword.fetch!(opts, :resource)
@@ -112,14 +119,7 @@ defmodule Hawk.JsonApiControllerCase do
 
       if unquote(repo) do
         setup tags do
-          if Code.ensure_loaded?(unquote(repo)) and
-               function_exported?(unquote(repo), :__adapter__, 0) do
-            owner =
-              Ecto.Adapters.SQL.Sandbox.start_owner!(unquote(repo), shared: not tags[:async])
-
-            on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
-          end
-
+          Hawk.JsonApiControllerCase.maybe_start_sandbox(unquote(repo), tags, &on_exit/1)
           :ok
         end
       end

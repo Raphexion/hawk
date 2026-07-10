@@ -15,6 +15,8 @@ defmodule Videdal.Course do
 
   json_api do
     type("courses")
+    tag("Academics")
+    group("Courses")
     doc("A course taught by a teacher at a school.")
 
     attribute(:title,

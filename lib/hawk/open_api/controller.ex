@@ -14,7 +14,7 @@ defmodule Hawk.OpenApi.Controller do
 
   defmacro __using__(opts) do
     resources = Keyword.fetch!(opts, :resources)
-    spec_opts = Keyword.take(opts, [:title, :version])
+    spec_opts = Keyword.take(opts, [:title, :version, :path_prefix])
 
     quote do
       def spec do

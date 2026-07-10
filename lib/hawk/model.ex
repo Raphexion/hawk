@@ -154,6 +154,14 @@ defmodule Hawk.Model do
     Map.put(acc, :doc, literal!(doc, caller))
   end
 
+  defp parse_json_api_expression({:tag, _meta, [tag]}, acc, caller) do
+    Map.put(acc, :tag, literal!(tag, caller))
+  end
+
+  defp parse_json_api_expression({:group, _meta, [group]}, acc, caller) do
+    Map.put(acc, :group, literal!(group, caller))
+  end
+
   defp parse_json_api_expression({:attribute, _meta, [name, opts]}, acc, caller)
        when is_list(opts) do
     put_in(acc, [:attributes, name], field_doc(opts, caller))
@@ -224,11 +232,15 @@ defmodule Hawk.Model do
   defp convention_resource(module) do
     parts = Module.split(module)
     resource = parts |> List.last() |> pluralize_resource_name()
+    namespace = Enum.drop(parts, -1)
 
-    parts
-    |> Enum.drop(-1)
-    |> Kernel.++([resource])
-    |> Module.concat()
+    if List.last(namespace) == resource do
+      Module.concat(namespace)
+    else
+      namespace
+      |> Kernel.++([resource])
+      |> Module.concat()
+    end
   end
 
   defp pluralize_resource_name(name) do

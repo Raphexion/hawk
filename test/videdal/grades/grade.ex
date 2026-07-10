@@ -15,6 +15,8 @@ defmodule Videdal.Grade do
 
   json_api do
     type("grades")
+    tag("Academics")
+    group("Grades")
     doc("A grade awarded to a student for a course.")
 
     attribute(:score,

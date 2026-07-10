@@ -168,13 +168,32 @@ defmodule MyAppWeb.OpenApiController do
   use Hawk.OpenApi.Controller,
     title: "My API",
     version: "1.0.0",
+    path_prefix: "/api/v1",
     resources: [MyApp.Course, MyApp.Grade]
 end
 ```
 
 This exposes `spec/0` and `show/2`. The specification is composed from Hawk
 resource declarations: JSON:API schemas, request bodies, error documents, sort
-parameters, pagination parameters, and valid include paths.
+parameters, pagination parameters, valid include paths, the optional `path_prefix`,
+and optional resource organization metadata.
+
+Add `tag/1` and `group/1` inside `json_api` blocks to make Swagger UI easier to
+navigate:
+
+```elixir
+json_api do
+  type("courses")
+  tag("Academics")
+  group("Courses")
+  doc("A course taught by a teacher at a school.")
+end
+```
+
+`tag/1` becomes the OpenAPI operation tag and top-level tag entry. `group/1` is
+emitted as `x-resource-group`; Hawk also emits `x-resource-type` so downstream
+clients and docs can keep related JSON:API resources together without guessing
+from path names.
 
 Frontend teams can generate TypeScript from that OpenAPI contract with their
 preferred tooling, for example:

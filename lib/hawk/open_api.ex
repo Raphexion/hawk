@@ -14,7 +14,8 @@ defmodule Hawk.OpenApi do
       },
       servers: Keyword.get(opts, :servers, [%{url: "/"}]),
       security: Keyword.get(opts, :security, []),
-      paths: paths(resources),
+      tags: tags(resources),
+      paths: paths(resources, Keyword.get(opts, :path_prefix, "")),
       components: %{
         schemas: schemas(resources)
       }
@@ -25,14 +26,23 @@ defmodule Hawk.OpenApi do
     %{model: model, resource: model.__hawk_resource__(), json_api: model.__hawk_json_api__()}
   end
 
-  defp paths(resources) do
+  defp tags(resources) do
+    resources
+    |> Enum.map(& &1.json_api[:tag])
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+    |> Enum.sort()
+    |> Enum.map(&%{name: &1})
+  end
+
+  defp paths(resources, path_prefix) do
     Enum.reduce(resources, %{}, fn resource, paths ->
-      Map.merge(paths, resource_paths(resource))
+      Map.merge(paths, resource_paths(resource, path_prefix))
     end)
   end
 
-  defp resource_paths(resource) do
-    path = "/#{resource.json_api.type}"
+  defp resource_paths(resource, path_prefix) do
+    path = Path.join(["/", path_prefix, resource.json_api.type])
     member_path = path <> "/{id}"
 
     %{
@@ -52,36 +62,51 @@ defmodule Hawk.OpenApi do
   end
 
   defp index_operation(resource) do
-    %{
+    resource
+    |> operation_metadata()
+    |> Map.merge(%{
       summary: "List #{resource.json_api.type}",
       parameters: index_parameters(resource),
       responses: responses(resource, 200, array_schema(resource))
-    }
+    })
   end
 
   defp show_operation(resource) do
-    %{
+    resource
+    |> operation_metadata()
+    |> Map.merge(%{
       summary: "Show #{resource_name(resource)}",
       parameters: [id_parameter()],
       responses: responses(resource, 200, data_schema(resource))
-    }
+    })
   end
 
   defp write_operation(resource, capability, summary, success_status, opts \\ []) do
-    %{
+    resource
+    |> operation_metadata()
+    |> Map.merge(%{
       summary: summary,
       parameters: Keyword.get(opts, :parameters, []),
       requestBody: request_body(resource, capability),
       responses: responses(resource, success_status, data_schema(resource))
-    }
+    })
   end
 
   defp delete_operation(resource) do
-    %{
+    resource
+    |> operation_metadata()
+    |> Map.merge(%{
       summary: "Delete #{resource_name(resource)}",
       parameters: [id_parameter()],
       responses: responses(resource, 200, data_schema(resource))
-    }
+    })
+  end
+
+  defp operation_metadata(resource) do
+    %{}
+    |> put_metadata(resource.json_api, :tag, :tags, &List.wrap/1)
+    |> put_metadata(resource.json_api, :group, :"x-resource-group")
+    |> Map.put(:"x-resource-type", resource.json_api.type)
   end
 
   defp index_parameters(resource) do
@@ -97,6 +122,7 @@ defmodule Hawk.OpenApi do
       name: "include",
       in: "query",
       schema: %{
+        type: "string",
         enum: include_values(resource)
       }
     }
@@ -106,7 +132,7 @@ defmodule Hawk.OpenApi do
     %{
       name: "sort",
       in: "query",
-      schema: %{enum: sort_values(resource)}
+      schema: %{type: "string", enum: sort_values(resource)}
     }
   end
 
@@ -181,6 +207,8 @@ defmodule Hawk.OpenApi do
     %{
       type: "object",
       description: Map.get(resource.json_api, :doc),
+      "x-resource-group": Map.get(resource.json_api, :group),
+      "x-resource-type": resource.json_api.type,
       properties: %{
         type: %{type: "string", enum: [resource.json_api.type]},
         id: %{type: "string"},
@@ -339,6 +367,14 @@ defmodule Hawk.OpenApi do
       reader.sort_keys() |> Enum.sort()
     else
       [:id]
+    end
+  end
+
+  defp put_metadata(target, source, source_key, target_key, transform \\ & &1) do
+    case Map.fetch(source, source_key) do
+      {:ok, nil} -> target
+      {:ok, value} -> Map.put(target, target_key, transform.(value))
+      :error -> target
     end
   end
 

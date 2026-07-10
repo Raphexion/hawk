@@ -111,7 +111,7 @@ defmodule Hawk.Reader do
   This is used for policy-aware preloads where the associated resource reader
   owns the joins and custom filter handlers needed to enforce visibility.
   """
-  @spec apply_authorized_filter(Ecto.Query.t(), config(), term(), Filter.t(), atom()) ::
+  @spec apply_authorized_filter(Ecto.Query.t(), config(), term(), Filter.t(), atom() | [atom()]) ::
           Ecto.Query.t()
   def apply_authorized_filter(query, config, authority, caller_filter \\ :all, sort_key \\ :id) do
     filter = authorized_filter(config, authority, caller_filter)

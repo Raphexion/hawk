@@ -182,22 +182,28 @@ defmodule Hawk.JsonApi.Controller do
 
   defp header(conn, name) do
     cond do
-      Code.ensure_loaded?(plug_conn_module()) and
-        function_exported?(plug_conn_module(), :get_req_header, 2) and
-        is_map(conn) and Map.get(conn, :__struct__) == plug_conn_module() ->
-        plug_conn_module()
-        |> apply(:get_req_header, [conn, name])
-        |> List.first()
-
-      is_map(conn) and is_list(Map.get(conn, :req_headers)) ->
-        conn.req_headers
-        |> Enum.find_value(fn {key, value} ->
-          if String.downcase(to_string(key)) == name, do: value
-        end)
-
-      true ->
-        nil
+      plug_conn?(conn) -> plug_conn_header(conn, name)
+      is_map(conn) and is_list(Map.get(conn, :req_headers)) -> map_header(conn, name)
+      true -> nil
     end
+  end
+
+  defp plug_conn?(conn) do
+    Code.ensure_loaded?(plug_conn_module()) and
+      function_exported?(plug_conn_module(), :get_req_header, 2) and
+      is_map(conn) and Map.get(conn, :__struct__) == plug_conn_module()
+  end
+
+  defp plug_conn_header(conn, name) do
+    plug_conn_module()
+    |> apply(:get_req_header, [conn, name])
+    |> List.first()
+  end
+
+  defp map_header(conn, name) do
+    Enum.find_value(conn.req_headers, fn {key, value} ->
+      if String.downcase(to_string(key)) == name, do: value
+    end)
   end
 
   defp plug_conn_module, do: Module.concat(["Plug", "Conn"])
@@ -225,6 +231,7 @@ defmodule Hawk.JsonApi.Controller do
       try do
         conn
         |> then(&apply(plug_conn, :put_status, [&1, status]))
+        |> put_json_api_content_type(plug_conn)
         |> then(&apply(phoenix_controller, :json, [&1, body]))
       rescue
         FunctionClauseError -> conn |> Map.put(:status, status) |> Map.put(:resp_body, body)
@@ -233,6 +240,12 @@ defmodule Hawk.JsonApi.Controller do
       conn |> Map.put(:status, status) |> Map.put(:resp_body, body)
     end
   end
+
+  defp put_json_api_content_type(%{__struct__: conn_module} = conn, conn_module) do
+    apply(conn_module, :put_resp_content_type, [conn, "application/vnd.api+json"])
+  end
+
+  defp put_json_api_content_type(conn, _plug_conn), do: conn
 
   defp not_found(resource) do
     name =
