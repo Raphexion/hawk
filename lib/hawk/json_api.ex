@@ -10,10 +10,13 @@ defmodule Hawk.JsonApi do
 
   def document(models, opts) when is_list(models) do
     %{data: Enum.map(models, &resource_object(&1, opts))}
+    |> put_included(models, opts)
+    |> put_pagination_meta(models, opts)
   end
 
   def document(model, opts) when is_struct(model) do
     %{data: resource_object(model, opts)}
+    |> put_included([model], opts)
   end
 
   def attributes(params, model, capability) when capability in [:creatable, :updatable] do
@@ -61,14 +64,29 @@ defmodule Hawk.JsonApi do
     %{
       type: json_api.type,
       id: to_string(Map.get(model, :id)),
-      attributes: resource_attributes(model, json_api),
+      attributes: resource_attributes(model, json_api, opts),
       relationships: resource_relationships(model, json_api, Keyword.get(opts, :preloads, []))
     }
   end
 
-  defp resource_attributes(model, json_api) do
-    Map.new(json_api.attributes, fn {name, _metadata} -> {name, Map.get(model, name)} end)
+  defp resource_attributes(model, json_api, opts) do
+    Map.new(json_api.attributes, fn {name, metadata} ->
+      {name, resource_attribute(model, name, metadata, opts)}
+    end)
   end
+
+  defp resource_attribute(model, _name, %{resolver: resolver}, opts)
+       when is_function(resolver, 2),
+       do: resolver.(model, opts)
+
+  defp resource_attribute(model, _name, %{resolver: resolver}, _opts)
+       when is_function(resolver, 1),
+       do: resolver.(model)
+
+  defp resource_attribute(model, _name, %{source: source}, _opts) when is_atom(source),
+    do: Map.get(model, source)
+
+  defp resource_attribute(model, name, _metadata, _opts), do: Map.get(model, name)
 
   defp resource_relationships(model, json_api, preloads) do
     Map.new(json_api.relationships, fn {name, _metadata} ->
@@ -109,6 +127,50 @@ defmodule Hawk.JsonApi do
       {^name, _nested} -> true
       _other -> false
     end)
+  end
+
+  defp put_included(document, models, opts) do
+    included = included_resources(models, Keyword.get(opts, :preloads, []), opts)
+
+    if included == [] do
+      document
+    else
+      Map.put(document, :included, included)
+    end
+  end
+
+  defp included_resources(models, preloads, opts) do
+    models
+    |> Enum.flat_map(&included_resources_for_model(&1, preloads, opts))
+    |> Enum.uniq_by(&{&1.type, &1.id})
+  end
+
+  defp included_resources_for_model(model, preloads, opts) do
+    Enum.flat_map(preloads, fn
+      name when is_atom(name) ->
+        direct_included_resources(model, name, [], opts)
+
+      {name, nested} when is_atom(name) ->
+        direct_included_resources(model, name, nested, opts)
+    end)
+  end
+
+  defp direct_included_resources(model, name, nested, opts) do
+    model
+    |> related_models(name)
+    |> Enum.flat_map(fn related ->
+      [resource_object(related, Keyword.put(opts, :preloads, nested))] ++
+        included_resources_for_model(related, nested, opts)
+    end)
+  end
+
+  defp related_models(model, name) do
+    case Map.get(model, name) do
+      %Ecto.Association.NotLoaded{} -> []
+      nil -> []
+      models when is_list(models) -> models
+      model -> [model]
+    end
   end
 
   defp atomize_allowed(attrs, allowed) do

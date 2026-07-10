@@ -14,7 +14,7 @@ defmodule Hawk.Reader do
   alias Hawk.Reader.JoinPlan
   alias Hawk.Reader.Preloader
 
-  @allowed_options MapSet.new([:authority, :filter, :page, :preloads])
+  @allowed_options MapSet.new([:authority, :context, :filter, :page, :preloads])
   @sort_dirs [:asc, :desc, :asc_nulls_first, :asc_nulls_last, :desc_nulls_first, :desc_nulls_last]
 
   @type config :: %{
@@ -28,6 +28,7 @@ defmodule Hawk.Reader do
           optional(:preload_keys) => Enumerable.t(),
           optional(:preload_readers) => %{optional(atom()) => module()},
           optional(:sort_keys) => Enumerable.t(),
+          optional(:default_sort) => keyword(atom()),
           optional(:default_page_size) => pos_integer() | nil,
           optional(:max_page_size) => pos_integer() | nil
         }
@@ -93,12 +94,13 @@ defmodule Hawk.Reader do
     page = apply_default_page_size(page, Map.get(config, :default_page_size, 100))
     page = enforce_max_page_size!(page, Map.get(config, :max_page_size, 100))
 
-    validate_sort_key!(config, page.column)
+    sort = sort_order(config, page)
+    validate_sort_keys!(config, sort)
 
     config.schema
     |> from(as: :root)
-    |> apply_authorized_filter(config, authority, caller_filter, page.column)
-    |> apply_sort(page)
+    |> apply_authorized_filter(config, authority, caller_filter, sort_columns(sort))
+    |> apply_sort(sort)
     |> apply_offset(page)
     |> apply_limit(page)
   end
@@ -163,7 +165,7 @@ defmodule Hawk.Reader do
     end
 
     %{
-      column: Map.get(page, :column, :id),
+      column: Map.get(page, :column),
       dir: dir,
       size: Map.get(page, :size),
       number: Map.get(page, :number),
@@ -191,7 +193,7 @@ defmodule Hawk.Reader do
     raise ArgumentError, "page size #{inspect(size)} exceeds maximum #{inspect(max_page_size)}"
   end
 
-  defp validate_sort_key!(config, column) do
+  defp validate_sort_keys!(config, sort) do
     sort_keys =
       config
       |> Map.get(:sort_keys, [:id])
@@ -201,13 +203,31 @@ defmodule Hawk.Reader do
         keys -> keys
       end
 
-    unless column in sort_keys do
-      raise ArgumentError, "unsupported sort column #{inspect(column)}"
+    sort
+    |> Keyword.values()
+    |> Enum.each(fn column ->
+      unless column in sort_keys do
+        raise ArgumentError, "unsupported sort column #{inspect(column)}"
+      end
+    end)
+  end
+
+  defp sort_order(_config, %{column: column, dir: dir})
+       when is_atom(column) and not is_nil(column), do: [{dir, column}]
+
+  defp sort_order(config, %{column: nil}) do
+    case Map.get(config, :default_sort, asc: :id) do
+      [] -> [asc: :id]
+      sort -> sort
     end
   end
 
-  defp apply_sort(query, %{column: column, dir: dir}) do
-    order_by(query, [root: row], [{^dir, field(row, ^column)}])
+  defp sort_columns(sort), do: Keyword.values(sort)
+
+  defp apply_sort(query, sort) do
+    Enum.reduce(sort, query, fn {dir, column}, query ->
+      order_by(query, [root: row], [{^dir, field(row, ^column)}])
+    end)
   end
 
   defp apply_offset(query, %{number: nil}), do: query

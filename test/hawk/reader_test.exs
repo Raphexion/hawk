@@ -24,6 +24,23 @@ defmodule Hawk.ReaderTest do
     assert inspected =~ "s0.active == ^true"
   end
 
+  test "build_query uses resource default sort when no caller sort is provided" do
+    config = %{
+      repo: Repo,
+      schema: Student,
+      filter_keys: Students.Reader.filter_keys(),
+      sort_keys: MapSet.new([:name, :id]),
+      default_sort: [asc: :name, asc: :id],
+      read_filter: fn _authority -> :all end
+    }
+
+    query = Reader.build_query(config, authority: Authority.system())
+
+    inspected = inspect(query)
+    assert inspected =~ "order_by: [asc: s0.name]"
+    assert inspected =~ "order_by: [asc: s0.id]"
+  end
+
   test "requires authority" do
     config = %{
       repo: Repo,

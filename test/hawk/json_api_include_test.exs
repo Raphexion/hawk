@@ -32,6 +32,30 @@ defmodule Hawk.JsonApiIncludeTest do
            }
   end
 
+  test "documents include full resource objects for requested preloads" do
+    course = %Course{
+      id: 3,
+      title: "Math",
+      school_id: 7,
+      teacher_id: 12,
+      grades: [%Grade{id: 1, score: 12, course_id: 3}]
+    }
+
+    document = Hawk.JsonApi.document(course, preloads: [:grades])
+
+    assert document.included == [
+             %{
+               type: "grades",
+               id: "1",
+               attributes: %{score: 12},
+               relationships: %{
+                 student: %{data: nil},
+                 course: %{data: %{type: "courses", id: "3"}}
+               }
+             }
+           ]
+  end
+
   test "controllers return JSON:API bad request errors for invalid includes" do
     conn =
       Videdal.Controllers.InvalidIncludeCoursesController.index(

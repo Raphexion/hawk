@@ -28,10 +28,23 @@ defmodule Hawk.ResourceContract do
     schema_fields = model.__schema__(:fields) |> MapSet.new()
 
     json_api.attributes
-    |> Map.keys()
-    |> Enum.reject(&MapSet.member?(schema_fields, &1))
+    |> Enum.reject(fn {name, metadata} ->
+      MapSet.member?(schema_fields, name) or computed_attribute?(metadata, schema_fields)
+    end)
+    |> Enum.map(fn {name, _metadata} -> name end)
     |> raise_if_any!("JSON:API attributes must be schema fields")
   end
+
+  defp computed_attribute?(%{resolver: resolver}, _schema_fields) when is_function(resolver, 1),
+    do: true
+
+  defp computed_attribute?(%{resolver: resolver}, _schema_fields) when is_function(resolver, 2),
+    do: true
+
+  defp computed_attribute?(%{source: source}, schema_fields) when is_atom(source),
+    do: MapSet.member?(schema_fields, source)
+
+  defp computed_attribute?(_metadata, _schema_fields), do: false
 
   defp validate_json_api_relationships!(model, json_api) do
     associations = model.__schema__(:associations) |> MapSet.new()

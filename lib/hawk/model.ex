@@ -186,7 +186,7 @@ defmodule Hawk.Model do
 
   defp field_doc(opts, caller) do
     opts
-    |> Keyword.take([:doc, :example])
+    |> Keyword.take([:doc, :example, :source, :resolver])
     |> Map.new(fn {key, value} -> {key, literal!(value, caller)} end)
   end
 

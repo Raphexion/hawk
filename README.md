@@ -39,6 +39,16 @@ defmodule MyApp.Course do
       example: "Math"
     )
 
+    attribute(:localized_title,
+      source: :title,
+      doc: "Attributes may read from a different schema field."
+    )
+
+    attribute(:display_title,
+      resolver: &MyApp.CourseTitles.display_title/2,
+      doc: "Resolvers receive the model and JSON:API options, including request context."
+    )
+
     relationship(:teacher,
       doc: "The teacher responsible for the course.",
       example: %{type: "teachers", id: "12"}

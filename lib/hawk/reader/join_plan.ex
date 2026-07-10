@@ -16,7 +16,7 @@ defmodule Hawk.Reader.JoinPlan do
           required(:apply) => (Ecto.Query.t() -> Ecto.Query.t())
         }
 
-  @spec apply(Ecto.Query.t(), [rule()], Filter.t(), atom()) :: Ecto.Query.t()
+  @spec apply(Ecto.Query.t(), [rule()], Filter.t(), atom() | [atom()]) :: Ecto.Query.t()
   def apply(query, rules, filter, sort_key) do
     active_keys = Filter.keys(filter)
 
@@ -41,7 +41,9 @@ defmodule Hawk.Reader.JoinPlan do
   end
 
   defp triggered?(rule, active_keys, sort_key) do
+    sort_keys = sort_key |> List.wrap() |> MapSet.new()
+
     not MapSet.disjoint?(rule.when_filter, active_keys) or
-      MapSet.member?(rule.when_sort, sort_key)
+      not MapSet.disjoint?(rule.when_sort, sort_keys)
   end
 end

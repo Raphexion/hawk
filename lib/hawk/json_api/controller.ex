@@ -89,10 +89,14 @@ defmodule Hawk.JsonApi.Controller do
   def show(conn, resource, _model, %{"id" => id}, public? \\ false) do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
+      context = request_context(conn)
 
-      case resource.one(authority: authority, filter: %{id: normalize_id(id)}) do
-        {:ok, model} -> json(conn, 200, Hawk.JsonApi.document(model))
-        :not_found -> json(conn, 404, not_found(resource))
+      case resource.one(authority: authority, context: context, filter: %{id: normalize_id(id)}) do
+        {:ok, model} ->
+          json(conn, 200, Hawk.JsonApi.document(model, context: request_context(conn)))
+
+        :not_found ->
+          json(conn, 404, not_found(resource))
       end
     end)
   end
@@ -111,8 +115,9 @@ defmodule Hawk.JsonApi.Controller do
   def update(conn, resource, model, %{"id" => id} = params, public? \\ false) do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
+      context = request_context(conn)
 
-      case resource.one(authority: authority, filter: %{id: normalize_id(id)}) do
+      case resource.one(authority: authority, context: context, filter: %{id: normalize_id(id)}) do
         {:ok, existing} ->
           params
           |> Hawk.JsonApi.attributes(model, :updatable)
@@ -128,15 +133,18 @@ defmodule Hawk.JsonApi.Controller do
   def delete(conn, resource, _model, %{"id" => id}, public? \\ false) do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
+      context = request_context(conn)
 
-      case resource.one(authority: authority, filter: %{id: normalize_id(id)}) do
+      case resource.one(authority: authority, context: context, filter: %{id: normalize_id(id)}) do
         {:ok, existing} -> existing |> resource.delete(authority) |> respond(conn, 200)
         :not_found -> json(conn, 404, not_found(resource))
       end
     end)
   end
 
-  defp respond({:ok, model}, conn, status), do: json(conn, status, Hawk.JsonApi.document(model))
+  defp respond({:ok, model}, conn, status),
+    do: json(conn, status, Hawk.JsonApi.document(model, context: request_context(conn)))
+
   defp respond(:ok, conn, status), do: json(conn, status, %{data: nil})
 
   defp respond({:not_authorized, _context} = result, conn, _status),
@@ -164,6 +172,47 @@ defmodule Hawk.JsonApi.Controller do
 
   defp authority!(%{assigns: %{authority: authority}}, _public?), do: authority
   defp authority!(_conn, true), do: Hawk.Authority.public()
+
+  defp request_context(conn), do: %{locale: request_locale(conn)}
+
+  defp request_locale(conn) do
+    header(conn, "x-landfolk-locale") || header(conn, "x-locale") ||
+      accept_language_locale(header(conn, "accept-language")) || "en"
+  end
+
+  defp header(conn, name) do
+    cond do
+      Code.ensure_loaded?(plug_conn_module()) and
+        function_exported?(plug_conn_module(), :get_req_header, 2) and
+        is_map(conn) and Map.get(conn, :__struct__) == plug_conn_module() ->
+        plug_conn_module()
+        |> apply(:get_req_header, [conn, name])
+        |> List.first()
+
+      is_map(conn) and is_list(Map.get(conn, :req_headers)) ->
+        conn.req_headers
+        |> Enum.find_value(fn {key, value} ->
+          if String.downcase(to_string(key)) == name, do: value
+        end)
+
+      true ->
+        nil
+    end
+  end
+
+  defp plug_conn_module, do: Module.concat(["Plug", "Conn"])
+
+  defp accept_language_locale(nil), do: nil
+
+  defp accept_language_locale(header) do
+    header
+    |> String.split(",")
+    |> List.first()
+    |> case do
+      nil -> nil
+      locale -> locale |> String.split(";") |> List.first() |> String.split("-") |> List.first()
+    end
+  end
 
   defp json(conn, status, body) do
     phoenix_controller = Module.concat([Phoenix, Controller])

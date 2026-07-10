@@ -15,6 +15,7 @@ defmodule Hawk.Reader.Resource do
     schema = Keyword.fetch!(opts, :schema)
     policy = Keyword.get(opts, :policy) || convention_policy(__CALLER__.module)
     forced_filter = Keyword.get(opts, :forced_filter, :all)
+    default_sort = Keyword.get(opts, :default_sort, asc: :id)
     max_page_size = Keyword.get(opts, :max_page_size, 100)
     default_page_size = Keyword.get(opts, :default_page_size, max_page_size)
 
@@ -27,7 +28,8 @@ defmodule Hawk.Reader.Resource do
       @hawk_reader_repo unquote(repo)
       @hawk_reader_schema unquote(schema)
       @hawk_reader_policy unquote(policy)
-      @hawk_reader_forced_filter unquote(Macro.escape(forced_filter))
+      @hawk_reader_forced_filter unquote(forced_filter)
+      @hawk_reader_default_sort unquote(default_sort)
       @hawk_reader_max_page_size unquote(max_page_size)
       @hawk_reader_default_page_size unquote(default_page_size)
 
@@ -185,6 +187,7 @@ defmodule Hawk.Reader.Resource do
           join_plan: join_plan(),
           read_filter: &read_filter/1,
           forced_filter: @hawk_reader_forced_filter,
+          default_sort: @hawk_reader_default_sort,
           preload_keys: preload_keys(),
           preload_readers: preload_readers(),
           sort_keys: sort_keys(),
