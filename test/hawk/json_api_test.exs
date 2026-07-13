@@ -66,4 +66,20 @@ defmodule Hawk.JsonApiTest do
              "example" => %{type: "students", id: "8"}
            }
   end
+
+  test "request options parse JSON:API filter params" do
+    assert Hawk.JsonApi.request_options(%{
+             "filter" => %{
+               "school_id" => "school-1",
+               "active" => %{"eq" => "true"},
+               "name" => %{"ilike" => "%math%"}
+             }
+           }) == [filter: %{school_id: "school-1", active: {:eq, true}, name: {:ilike, "%math%"}}]
+  end
+
+  test "request options reject unsupported filter operators" do
+    assert_raise ArgumentError, ~r/unsupported filter operator "starts_with"/, fn ->
+      Hawk.JsonApi.request_options(%{"filter" => %{"name" => %{"starts_with" => "math"}}})
+    end
+  end
 end

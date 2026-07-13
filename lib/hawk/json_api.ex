@@ -34,6 +34,7 @@ defmodule Hawk.JsonApi do
     []
     |> put_request_option(:page, parse_page(params), %{})
     |> put_request_option(:preloads, parse_include(Map.get(params, "include")), [])
+    |> put_request_option(:filter, parse_filter(Map.get(params, "filter")), :all)
     |> put_sort(Map.get(params, "sort"))
   end
 
@@ -256,6 +257,43 @@ defmodule Hawk.JsonApi do
 
   defp put_page_value(page, key, value) when is_binary(value),
     do: Map.put(page, key, String.to_integer(value))
+
+  defp parse_filter(nil), do: :all
+  defp parse_filter(filter) when filter == %{}, do: :all
+
+  defp parse_filter(filter) when is_map(filter) do
+    Map.new(filter, fn {key, value} -> {parse_filter_key!(key), parse_filter_value!(value)} end)
+  end
+
+  defp parse_filter_key!(key) when is_atom(key), do: key
+
+  defp parse_filter_key!(key) when is_binary(key) do
+    String.to_existing_atom(key)
+  rescue
+    ArgumentError ->
+      reraise ArgumentError, [message: "unknown filter key #{inspect(key)}"], __STACKTRACE__
+  end
+
+  defp parse_filter_value!(%{} = value) when map_size(value) == 1 do
+    [{operator, operand}] = Map.to_list(value)
+    {parse_filter_operator!(operator), parse_filter_scalar(operand)}
+  end
+
+  defp parse_filter_value!(value), do: parse_filter_scalar(value)
+
+  defp parse_filter_operator!(operator) when is_atom(operator), do: operator
+
+  defp parse_filter_operator!(operator)
+       when operator in ["eq", "neq", "in", "not_in", "lt", "lte", "gt", "gte", "like", "ilike"] do
+    String.to_existing_atom(operator)
+  end
+
+  defp parse_filter_operator!(operator),
+    do: raise(ArgumentError, "unsupported filter operator #{inspect(operator)}")
+
+  defp parse_filter_scalar("true"), do: true
+  defp parse_filter_scalar("false"), do: false
+  defp parse_filter_scalar(value), do: value
 
   defp parse_include(nil), do: []
   defp parse_include(""), do: []

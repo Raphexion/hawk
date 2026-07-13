@@ -74,7 +74,7 @@ defmodule Hawk.JsonApiAttributeTest do
   test "controllers pass request locale into JSON:API attribute resolvers" do
     conn = %{
       assigns: %{authority: Hawk.Authority.system()},
-      req_headers: [{"x-landfolk-locale", "da"}],
+      req_headers: [{"x-locale", "da"}],
       resp_body: nil,
       status: nil
     }

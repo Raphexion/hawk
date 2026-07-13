@@ -161,6 +161,13 @@ Controller errors use JSON:API documents:
 - missing record: `404`
 - validation failure: `422`
 
+Some requests support declared reader filters through JSON:API-style query params.
+Bare values become equality filters, and supported operators use one nested key:
+
+```text
+/api/v1/courses?filter[school_id]=school-1&filter[active][eq]=true&filter[name][ilike]=%25math%25
+```
+
 ### OpenAPI controller
 
 ```elixir

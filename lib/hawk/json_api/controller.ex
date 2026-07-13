@@ -176,8 +176,7 @@ defmodule Hawk.JsonApi.Controller do
   defp request_context(conn), do: %{locale: request_locale(conn)}
 
   defp request_locale(conn) do
-    header(conn, "x-landfolk-locale") || header(conn, "x-locale") ||
-      accept_language_locale(header(conn, "accept-language")) || "en"
+    header(conn, "x-locale") || accept_language_locale(header(conn, "accept-language")) || "en"
   end
 
   defp header(conn, name) do
