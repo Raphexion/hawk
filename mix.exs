@@ -10,7 +10,8 @@ defmodule Hawk.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       dialyzer: dialyzer(),
-      aliases: aliases()
+      aliases: aliases(),
+      test_coverage: [summary: [threshold: 85]]
     ]
   end
 
