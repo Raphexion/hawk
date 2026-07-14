@@ -59,6 +59,7 @@ defmodule Hawk.OpenApi do
         delete: delete_operation(resource)
       }
     }
+    |> Map.merge(action_paths(resource, member_path))
   end
 
   defp index_operation(resource) do
@@ -98,6 +99,27 @@ defmodule Hawk.OpenApi do
     |> Map.merge(%{
       summary: "Delete #{resource_name(resource)}",
       parameters: [id_parameter()],
+      responses: responses(resource, 200, data_schema(resource))
+    })
+  end
+
+  defp action_paths(resource, member_path) do
+    resource.resource
+    |> Hawk.Actions.actions()
+    |> Enum.map(fn {name, metadata} ->
+      {member_path <> "/-actions/" <> name, %{post: action_operation(resource, name, metadata)}}
+    end)
+    |> Map.new()
+  end
+
+  defp action_operation(resource, name, metadata) do
+    resource
+    |> operation_metadata()
+    |> Map.merge(%{
+      summary: "Run #{name} for #{resource_name(resource)}",
+      description: metadata[:doc],
+      parameters: [id_parameter()],
+      requestBody: action_request_body(metadata),
       responses: responses(resource, 200, data_schema(resource))
     })
   end
@@ -151,6 +173,17 @@ defmodule Hawk.OpenApi do
     }
   end
 
+  defp action_request_body(metadata) do
+    %{
+      required: true,
+      content: %{
+        "application/vnd.api+json" => %{
+          schema: action_document_schema(metadata)
+        }
+      }
+    }
+  end
+
   defp responses(_resource, success_status, success_schema) do
     %{
       Integer.to_string(success_status) =>
@@ -192,6 +225,26 @@ defmodule Hawk.OpenApi do
         }
       }
     }
+  end
+
+  defp action_document_schema(metadata) do
+    %{
+      type: "object",
+      properties: %{
+        meta: %{
+          type: "object",
+          properties: action_meta_properties(metadata)
+        }
+      }
+    }
+  end
+
+  defp action_meta_properties(metadata) do
+    metadata
+    |> Map.get(:params, %{})
+    |> Map.new(fn {name, field_metadata} ->
+      {name, field_schema(Map.get(field_metadata, :type), field_metadata)}
+    end)
   end
 
   defp schemas(resources) do

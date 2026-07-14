@@ -17,6 +17,7 @@ defmodule Hawk.PaginationTest do
   use ExUnit.Case, async: true
 
   alias Hawk.Authority
+  alias Hawk.PaginationTest.CustomReader
   alias Videdal.Courses
   alias Videdal.Courses.Reader
 
@@ -51,13 +52,13 @@ defmodule Hawk.PaginationTest do
   test "reader can override default and max page size per resource" do
     Process.put({Videdal.Repo, :all_results}, [])
 
-    assert Hawk.PaginationTest.CustomReader.all(authority: Authority.system()) == []
+    assert CustomReader.all(authority: Authority.system()) == []
 
     assert_received {:videdal_repo, :all, query}
     assert inspect(query) =~ "limit: ^3"
 
     assert_raise ArgumentError, ~r/page size 6 exceeds maximum 5/, fn ->
-      Hawk.PaginationTest.CustomReader.all(authority: Authority.system(), page: %{size: 6})
+      CustomReader.all(authority: Authority.system(), page: %{size: 6})
     end
   end
 

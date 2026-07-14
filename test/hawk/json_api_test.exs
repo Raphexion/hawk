@@ -82,4 +82,25 @@ defmodule Hawk.JsonApiTest do
       Hawk.JsonApi.request_options(%{"filter" => %{"name" => %{"starts_with" => "math"}}})
     end
   end
+
+  test "JSON:API attribute extraction supports nil relationships and ignores undeclared ones" do
+    attrs =
+      Hawk.JsonApi.attributes(
+        %{
+          "data" => %{
+            "type" => "courses",
+            "attributes" => %{"title" => "Math"},
+            "relationships" => %{
+              "school" => %{"data" => nil},
+              "teacher" => %{"data" => %{"type" => "teachers", "id" => "12"}},
+              "grades" => %{"data" => [%{"type" => "grades", "id" => "1"}]}
+            }
+          }
+        },
+        Videdal.Course,
+        :creatable
+      )
+
+    assert attrs == %{title: "Math", school_id: nil, teacher_id: 12}
+  end
 end

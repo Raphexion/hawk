@@ -7,6 +7,8 @@ end
 defmodule Hawk.JsonApiControllerErrorBoundaryTest do
   use ExUnit.Case, async: true
 
+  alias Videdal.Controllers.ErrorBoundaryCoursesController
+
   @school_admin_id Videdal.school_admin_id()
   @school_id Videdal.school_id()
   @student_id Videdal.student_id()
@@ -14,7 +16,7 @@ defmodule Hawk.JsonApiControllerErrorBoundaryTest do
 
   test "invalid sort returns a JSON:API 400 error" do
     conn =
-      Videdal.Controllers.ErrorBoundaryCoursesController.index(conn(), %{
+      ErrorBoundaryCoursesController.index(conn(), %{
         "sort" => "teacher_id"
       })
 
@@ -27,7 +29,7 @@ defmodule Hawk.JsonApiControllerErrorBoundaryTest do
 
   test "invalid pagination returns a JSON:API 400 error" do
     conn =
-      Videdal.Controllers.ErrorBoundaryCoursesController.index(conn(), %{
+      ErrorBoundaryCoursesController.index(conn(), %{
         "page" => %{"size" => "many"}
       })
 
@@ -40,11 +42,11 @@ defmodule Hawk.JsonApiControllerErrorBoundaryTest do
   test "validation, authorization, and missing records keep their explicit statuses" do
     Process.put({Videdal.Repo, :all_results}, [])
 
-    missing = Videdal.Controllers.ErrorBoundaryCoursesController.show(conn(), %{"id" => "404"})
+    missing = ErrorBoundaryCoursesController.show(conn(), %{"id" => "404"})
     assert missing.status == 404
 
     unauthorized =
-      Videdal.Controllers.ErrorBoundaryCoursesController.create(
+      ErrorBoundaryCoursesController.create(
         conn(%{role: :student, scopes: %{school_id: @school_id, student_id: @student_id}}),
         %{
           "data" => %{
@@ -61,7 +63,7 @@ defmodule Hawk.JsonApiControllerErrorBoundaryTest do
     assert unauthorized.status == 403
 
     invalid =
-      Videdal.Controllers.ErrorBoundaryCoursesController.create(conn(), %{
+      ErrorBoundaryCoursesController.create(conn(), %{
         "data" => %{"type" => "courses", "attributes" => %{"title" => "Math"}}
       })
 

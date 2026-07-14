@@ -77,6 +77,12 @@ defmodule Hawk.JsonApiControllerCaseTest do
     conn = controller().show(conn_for(:principal), %{"id" => "1"})
 
     assert conn.status == 200
-    assert conn.resp_body.data.attributes == %{title: "Course 1"}
+
+    assert conn.resp_body.data.attributes == %{
+             title: "Course 1",
+             registration_state: "draft",
+             seat_count: 0,
+             waitlist_count: 0
+           }
   end
 end

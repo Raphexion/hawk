@@ -1,6 +1,9 @@
 defmodule Hawk.ModelTest do
   use ExUnit.Case, async: true
 
+  alias Hawk.ModelTest.DefaultUuidChild
+  alias Hawk.ModelTest.DefaultUuidParent
+
   defmodule DefaultUuidParent do
     use Hawk.Model
 
@@ -14,7 +17,7 @@ defmodule Hawk.ModelTest do
 
     model "default_uuid_children" do
       field(:name, :string)
-      belongs_to(:parent, Hawk.ModelTest.DefaultUuidParent)
+      belongs_to(:parent, DefaultUuidParent)
     end
   end
 
@@ -41,7 +44,7 @@ defmodule Hawk.ModelTest do
   end
 
   test "models default to UUID primary keys and foreign keys" do
-    assert Hawk.ModelTest.DefaultUuidParent.__schema__(:type, :id) == :binary_id
-    assert Hawk.ModelTest.DefaultUuidChild.__schema__(:type, :parent_id) == :binary_id
+    assert DefaultUuidParent.__schema__(:type, :id) == :binary_id
+    assert DefaultUuidChild.__schema__(:type, :parent_id) == :binary_id
   end
 end

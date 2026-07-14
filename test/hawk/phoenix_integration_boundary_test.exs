@@ -43,6 +43,9 @@ defmodule Hawk.PhoenixIntegrationBoundaryTest do
   use ExUnit.Case, async: true
 
   alias Hawk.Authority
+  alias Hawk.PhoenixIntegrationBoundaryTest.CourseLive
+  alias Hawk.PhoenixIntegrationBoundaryTest.CoursesController
+  alias Hawk.PhoenixIntegrationBoundaryTest.OpenApiController
   alias Videdal.Course
 
   test "JSON:API controllers use Phoenix json when Phoenix is present" do
@@ -50,7 +53,7 @@ defmodule Hawk.PhoenixIntegrationBoundaryTest do
     Process.put({Videdal.Repo, :all_results}, courses)
 
     conn =
-      Hawk.PhoenixIntegrationBoundaryTest.CoursesController.index(conn(), %{
+      CoursesController.index(conn(), %{
         "include" => "teacher"
       })
 
@@ -62,7 +65,7 @@ defmodule Hawk.PhoenixIntegrationBoundaryTest do
   end
 
   test "OpenAPI controllers use Phoenix json when Phoenix is present" do
-    conn = Hawk.PhoenixIntegrationBoundaryTest.OpenApiController.show(conn(), %{})
+    conn = OpenApiController.show(conn(), %{})
 
     assert conn.status == 200
     assert conn.phoenix_json.openapi == "3.1.0"
@@ -73,7 +76,7 @@ defmodule Hawk.PhoenixIntegrationBoundaryTest do
     Process.put({Videdal.Repo, :all_results}, courses)
 
     socket =
-      Hawk.PhoenixIntegrationBoundaryTest.CourseLive.assign_index(socket(), Authority.system())
+      CourseLive.assign_index(socket(), Authority.system())
 
     assert socket.assigns.courses == courses
     assert socket.phoenix_assigned == [:courses, :hawk_page, :hawk_resource]

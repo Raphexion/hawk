@@ -23,8 +23,8 @@ defmodule Videdal.Integration.ReaderPreloadTest do
   use Videdal.DatabaseCase, async: false
 
   alias Hawk.Authority
-  alias Videdal.{SandboxRepo, School, Student}
   alias Videdal.Integration.ReaderPreloadTest.Reader
+  alias Videdal.{SandboxRepo, School, Student}
 
   @moduletag :database
 

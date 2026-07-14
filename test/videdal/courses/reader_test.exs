@@ -9,7 +9,7 @@ defmodule Videdal.Courses.ReaderTest do
     assert Reader.filter_keys() ==
              MapSet.new([:id, :school_id, :teacher_id, :school_name, :teacher_name])
 
-    assert Reader.preload_keys() == MapSet.new([:school, :teacher, :grades])
+    assert Reader.preload_keys() == MapSet.new([:school, :teacher, :grades, :enrollments])
     assert Reader.preload_readers() == %{}
   end
 

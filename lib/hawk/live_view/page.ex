@@ -6,6 +6,8 @@ defmodule Hawk.LiveView.Page do
   for example a course page that also manages students and grades.
   """
 
+  alias Hawk.LiveView.Page
+
   defmacro __using__(opts) do
     resources =
       opts
@@ -16,11 +18,11 @@ defmodule Hawk.LiveView.Page do
 
     quote do
       def assign_page(socket, authority, specs) do
-        Hawk.LiveView.Page.assign_page(socket, unquote(Macro.escape(resources)), authority, specs)
+        Page.assign_page(socket, unquote(Macro.escape(resources)), authority, specs)
       end
 
       def handle_event("hawk:delete", params, socket) do
-        Hawk.LiveView.Page.handle_delete(socket, unquote(Macro.escape(resources)), params)
+        Page.handle_delete(socket, unquote(Macro.escape(resources)), params)
       end
     end
   end
@@ -118,7 +120,7 @@ defmodule Hawk.LiveView.Page do
 
     if Code.ensure_loaded?(phoenix_component) and
          function_exported?(phoenix_component, :assign, 3) do
-      apply(phoenix_component, :assign, [socket, key, value])
+      phoenix_component.assign(socket, key, value)
     else
       assigns = Map.get(socket, :assigns, %{})
       Map.put(socket, :assigns, Map.put(assigns, key, value))

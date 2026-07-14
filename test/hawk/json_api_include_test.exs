@@ -7,7 +7,9 @@ end
 defmodule Hawk.JsonApiIncludeTest do
   use ExUnit.Case, async: true
 
-  alias Videdal.{Course, Grade}
+  alias Videdal.Controllers.InvalidIncludeCoursesController
+  alias Videdal.Course
+  alias Videdal.Grade
 
   test "dotted include paths preserve order and merge nested paths" do
     assert Hawk.JsonApi.request_options(%{"include" => "teacher,grades.student,grades.course"}) ==
@@ -58,7 +60,7 @@ defmodule Hawk.JsonApiIncludeTest do
 
   test "controllers return JSON:API bad request errors for invalid includes" do
     conn =
-      Videdal.Controllers.InvalidIncludeCoursesController.index(
+      InvalidIncludeCoursesController.index(
         conn(%{role: :school_admin, scopes: %{school_id: 7}}),
         %{"include" => "grades.secret"}
       )

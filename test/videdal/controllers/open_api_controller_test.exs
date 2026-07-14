@@ -21,7 +21,10 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
 
     assert Map.has_key?(conn.resp_body.paths, "/api/v1/courses")
     assert Map.has_key?(conn.resp_body.paths, "/api/v1/courses/{id}")
+    assert Map.has_key?(conn.resp_body.paths, "/api/v1/courses/{id}/-actions/open-registration")
+    assert Map.has_key?(conn.resp_body.paths, "/api/v1/courses/{id}/-actions/close-registration")
     assert Map.has_key?(conn.resp_body.paths, "/api/v1/grades")
+    refute Map.has_key?(conn.resp_body.paths, "/api/v1/grades/{id}/-actions/open-registration")
     assert Map.has_key?(conn.resp_body.components.schemas, :CourseResource)
     assert Map.has_key?(conn.resp_body.components.schemas, :GradeResource)
   end
@@ -41,6 +44,10 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
              schema: %{
                type: "string",
                enum: [
+                 "enrollments",
+                 "enrollments.course",
+                 "enrollments.school",
+                 "enrollments.student",
                  "grades",
                  "grades.course",
                  "grades.student",
@@ -102,6 +109,68 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
                example: "Math"
              }
            }
+  end
+
+  test "action operations use JSON:API meta request schemas" do
+    spec = OpenApiController.spec()
+
+    open_registration = spec.paths["/api/v1/courses/{id}/-actions/open-registration"].post
+    close_registration = spec.paths["/api/v1/courses/{id}/-actions/close-registration"].post
+
+    assert open_registration.summary == "Run open-registration for course"
+
+    assert open_registration.description ==
+             "Open course registration and configure seats and waitlist capacity."
+
+    assert open_registration.tags == ["Academics"]
+
+    assert open_registration.parameters == [
+             %{name: "id", in: "path", required: true, schema: %{type: "string"}}
+           ]
+
+    assert open_registration.responses["200"].content["application/vnd.api+json"].schema == %{
+             type: "object",
+             properties: %{
+               data: %{"$ref": "#/components/schemas/CourseResource"}
+             }
+           }
+
+    assert open_registration.requestBody.content["application/vnd.api+json"].schema == %{
+             type: "object",
+             properties: %{
+               meta: %{
+                 type: "object",
+                 properties: %{
+                   seat_count: %{
+                     type: "integer",
+                     description: "Seats offered immediately when registration opens.",
+                     example: 2
+                   },
+                   waitlist_count: %{
+                     type: "integer",
+                     description: "How many waitlist places should be tracked for this course.",
+                     example: 1
+                   }
+                 }
+               }
+             }
+           }
+
+    assert close_registration.summary == "Run close-registration for course"
+
+    assert close_registration.requestBody.content["application/vnd.api+json"].schema == %{
+             type: "object",
+             properties: %{
+               meta: %{
+                 type: "object",
+                 properties: %{}
+               }
+             }
+           }
+
+    assert Map.keys(open_registration.responses) == ["200", "400", "403", "404", "422"]
+    assert open_registration.responses["403"].description == "Forbidden by Hawk policy"
+    assert open_registration.responses["422"].description == "Validation failed"
   end
 
   defp conn do

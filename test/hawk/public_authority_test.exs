@@ -15,6 +15,9 @@ defmodule Hawk.PublicAuthorityTest do
   use ExUnit.Case, async: true
 
   alias Hawk.Authority
+  alias Videdal.Controllers.AuthenticatedCoursesController
+  alias Videdal.Controllers.PublicCoursesController
+  alias Videdal.Course
   alias Videdal.Courses.Policy
 
   @school_id Videdal.school_id()
@@ -35,21 +38,20 @@ defmodule Hawk.PublicAuthorityTest do
   end
 
   test "public controller actions can read without an assigned authority" do
-    courses = [%Videdal.Course{id: 3, title: "Math", school_id: 7, teacher_id: 12}]
+    courses = [%Course{id: 3, title: "Math", school_id: 7, teacher_id: 12}]
     Process.put({Videdal.Repo, :all_results}, courses)
 
-    conn = Videdal.Controllers.PublicCoursesController.index(conn(), %{})
+    conn = PublicCoursesController.index(conn(), %{})
 
     assert conn.status == 200
     assert conn.resp_body.data == [Hawk.JsonApi.document(hd(courses)).data]
   end
 
   test "deeper includes do not bypass nested policies for public endpoints" do
-    courses = [%Videdal.Course{id: 3, title: "Math", school_id: 7, teacher_id: 12}]
+    courses = [%Course{id: 3, title: "Math", school_id: 7, teacher_id: 12}]
     Process.put({Videdal.Repo, :all_results}, courses)
 
-    conn =
-      Videdal.Controllers.PublicCoursesController.index(conn(), %{"include" => "grades.student"})
+    conn = PublicCoursesController.index(conn(), %{"include" => "grades.student"})
 
     assert conn.status == 200
 
@@ -61,11 +63,11 @@ defmodule Hawk.PublicAuthorityTest do
   end
 
   test "deeper includes apply each nested resource policy for authenticated endpoints too" do
-    courses = [%Videdal.Course{id: 3, title: "Math", school_id: 7, teacher_id: 12}]
+    courses = [%Course{id: 3, title: "Math", school_id: 7, teacher_id: 12}]
     Process.put({Videdal.Repo, :all_results}, courses)
 
     conn =
-      Videdal.Controllers.AuthenticatedCoursesController.index(
+      AuthenticatedCoursesController.index(
         conn(%{role: :teacher, scopes: %{school_id: 7, teacher_id: 12}}),
         %{"include" => "grades.student"}
       )
@@ -80,11 +82,11 @@ defmodule Hawk.PublicAuthorityTest do
   end
 
   test "deeper includes are constrained when authenticated authority cannot read nested resources" do
-    courses = [%Videdal.Course{id: 3, title: "Math", school_id: 7, teacher_id: 12}]
+    courses = [%Course{id: 3, title: "Math", school_id: 7, teacher_id: 12}]
     Process.put({Videdal.Repo, :all_results}, courses)
 
     conn =
-      Videdal.Controllers.AuthenticatedCoursesController.index(
+      AuthenticatedCoursesController.index(
         conn(%{role: :parent, scopes: %{school_id: 7}}),
         %{"include" => "grades.student"}
       )
@@ -102,7 +104,7 @@ defmodule Hawk.PublicAuthorityTest do
 
   test "public controller actions still reject writes through readonly authority" do
     conn =
-      Videdal.Controllers.PublicCoursesController.create(conn(), %{
+      PublicCoursesController.create(conn(), %{
         "data" => %{
           "type" => "courses",
           "attributes" => %{"title" => "Math"},

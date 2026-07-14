@@ -15,6 +15,7 @@ A Hawk resource has four small modules plus optional web helpers:
 - `Policy` declares who can read/write.
 - `Reader` owns filtering, sorting, pagination, and policy-aware preloads.
 - `Writer` owns validation and mutations.
+- `Actions` is optional and declares imperative JSON:API custom actions under `/-actions/`.
 - JSON:API, OpenAPI, and LiveView helpers are generated from those declarations.
 
 ### Model
@@ -135,6 +136,50 @@ defmodule MyApp.Courses.Writer do
 end
 ```
 
+### Actions
+
+Optional imperative actions live beside `Reader` and `Writer` in `Actions.ex`.
+They are exposed under `/-actions/` and keep command-style endpoints separate
+from CRUD routes while staying JSON:API-compliant by accepting parameters in
+`meta`.
+
+```elixir
+defmodule MyApp.Courses.Actions do
+  use Hawk.Actions
+
+  alias MyApp.Courses.Writer
+
+  action "open-registration",
+    doc: "Open course registration.",
+    params: [
+      seat_count: [type: :integer, doc: "Seats available immediately.", example: 30],
+      waitlist_count: [type: :integer, doc: "Waitlist capacity.", example: 10]
+    ]
+
+  def open_registration(course, params, authority) do
+    Writer.open_registration(course, params, authority)
+  end
+end
+```
+
+Route action requests to the generated controller `action/2` function, for
+example:
+
+```elixir
+post "/courses/:id/-actions/:action", CourseController, :action
+```
+
+Request shape:
+
+```json
+{
+  "meta": {
+    "seat_count": 30,
+    "waitlist_count": 10
+  }
+}
+```
+
 ### JSON:API controller
 
 ```elixir
@@ -153,6 +198,7 @@ Generated actions:
 - `create/2`
 - `update/2`
 - `delete/2`
+- `action/2` for `POST .../:id/-actions/:action`
 
 Controller errors use JSON:API documents:
 
@@ -182,8 +228,14 @@ end
 
 This exposes `spec/0` and `show/2`. The specification is composed from Hawk
 resource declarations: JSON:API schemas, request bodies, error documents, sort
-parameters, pagination parameters, valid include paths, the optional `path_prefix`,
-and optional resource organization metadata.
+parameters, pagination parameters, valid include paths, declared `/-actions/`
+operations, the optional `path_prefix`, and optional resource organization
+metadata.
+
+Custom actions automatically appear in the OpenAPI/Swagger spec as `POST`
+operations under paths such as `/api/v1/courses/{id}/-actions/open-registration`.
+Their request bodies are documented as JSON:API documents with a `meta` object,
+and successful responses use the normal resource schema.
 
 Add `tag/1` and `group/1` inside `json_api` blocks to make Swagger UI easier to
 navigate:

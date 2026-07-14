@@ -41,6 +41,7 @@ defmodule Hawk.JsonApiControllerCase do
       end
   """
 
+  alias Ecto.Adapters.SQL.Sandbox
   alias Hawk.Authority
   alias Hawk.MutationContext
 
@@ -76,8 +77,8 @@ defmodule Hawk.JsonApiControllerCase do
 
   def maybe_start_sandbox(repo, tags, on_exit_fun) do
     if Code.ensure_loaded?(repo) and function_exported?(repo, :__adapter__, 0) do
-      owner = Ecto.Adapters.SQL.Sandbox.start_owner!(repo, shared: not tags[:async])
-      on_exit_fun.(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
+      owner = Sandbox.start_owner!(repo, shared: not tags[:async])
+      on_exit_fun.(fn -> Sandbox.stop_owner(owner) end)
     end
   end
 

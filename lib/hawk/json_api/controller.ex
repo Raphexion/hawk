@@ -6,6 +6,9 @@ defmodule Hawk.JsonApi.Controller do
   simple `%{assigns: ...}` maps in tests.
   """
 
+  alias Hawk.JsonApi
+  alias Hawk.JsonApi.Controller, as: JsonApiController
+
   defmacro __using__(opts) do
     resource = Keyword.fetch!(opts, :resource)
     model = Keyword.fetch!(opts, :model)
@@ -13,7 +16,7 @@ defmodule Hawk.JsonApi.Controller do
 
     quote do
       def index(conn, params) do
-        Hawk.JsonApi.Controller.index(
+        JsonApiController.index(
           conn,
           unquote(resource),
           unquote(model),
@@ -23,7 +26,7 @@ defmodule Hawk.JsonApi.Controller do
       end
 
       def show(conn, params) do
-        Hawk.JsonApi.Controller.show(
+        JsonApiController.show(
           conn,
           unquote(resource),
           unquote(model),
@@ -33,7 +36,7 @@ defmodule Hawk.JsonApi.Controller do
       end
 
       def create(conn, params) do
-        Hawk.JsonApi.Controller.create(
+        JsonApiController.create(
           conn,
           unquote(resource),
           unquote(model),
@@ -43,7 +46,7 @@ defmodule Hawk.JsonApi.Controller do
       end
 
       def update(conn, params) do
-        Hawk.JsonApi.Controller.update(
+        JsonApiController.update(
           conn,
           unquote(resource),
           unquote(model),
@@ -53,7 +56,17 @@ defmodule Hawk.JsonApi.Controller do
       end
 
       def delete(conn, params) do
-        Hawk.JsonApi.Controller.delete(
+        JsonApiController.delete(
+          conn,
+          unquote(resource),
+          unquote(model),
+          params,
+          unquote(public?)
+        )
+      end
+
+      def action(conn, params) do
+        JsonApiController.action(
           conn,
           unquote(resource),
           unquote(model),
@@ -70,14 +83,14 @@ defmodule Hawk.JsonApi.Controller do
 
       opts =
         params
-        |> Hawk.JsonApi.request_options()
+        |> JsonApi.request_options()
         |> Keyword.put(:authority, authority)
         |> Keyword.put(:context, request_context(conn))
 
       json(
         conn,
         200,
-        Hawk.JsonApi.document(resource.all(opts),
+        JsonApi.document(resource.all(opts),
           preloads: Keyword.get(opts, :preloads, []),
           context: Keyword.get(opts, :context, %{}),
           page: Keyword.get(opts, :page)
@@ -93,7 +106,7 @@ defmodule Hawk.JsonApi.Controller do
 
       case resource.one(authority: authority, context: context, filter: %{id: normalize_id(id)}) do
         {:ok, model} ->
-          json(conn, 200, Hawk.JsonApi.document(model, context: request_context(conn)))
+          json(conn, 200, JsonApi.document(model, context: request_context(conn)))
 
         :not_found ->
           json(conn, 404, not_found(resource))
@@ -106,7 +119,7 @@ defmodule Hawk.JsonApi.Controller do
       authority = authority!(conn, public?)
 
       params
-      |> Hawk.JsonApi.attributes(model, :creatable)
+      |> JsonApi.attributes(model, :creatable)
       |> resource.create(authority)
       |> respond(conn, 201)
     end)
@@ -120,7 +133,7 @@ defmodule Hawk.JsonApi.Controller do
       case resource.one(authority: authority, context: context, filter: %{id: normalize_id(id)}) do
         {:ok, existing} ->
           params
-          |> Hawk.JsonApi.attributes(model, :updatable)
+          |> JsonApi.attributes(model, :updatable)
           |> then(&resource.update(existing, &1, authority))
           |> respond(conn, 200)
 
@@ -142,8 +155,42 @@ defmodule Hawk.JsonApi.Controller do
     end)
   end
 
+  def action(
+        conn,
+        resource,
+        _model,
+        %{"id" => id, "action" => action_name} = params,
+        public? \\ false
+      ) do
+    with_error_boundary(conn, fn ->
+      authority = authority!(conn, public?)
+      context = request_context(conn)
+
+      case resource.one(authority: authority, context: context, filter: %{id: normalize_id(id)}) do
+        {:ok, existing} ->
+          respond_action(conn, resource, action_name, existing, params, authority)
+
+        :not_found ->
+          json(conn, 404, not_found(resource))
+      end
+    end)
+  end
+
+  defp respond_action(conn, resource, action_name, existing, params, authority) do
+    case Hawk.Actions.dispatch(
+           resource,
+           action_name,
+           existing,
+           Map.get(params, "meta", %{}),
+           authority
+         ) do
+      :unknown_action -> json(conn, 404, action_not_found(resource, action_name))
+      result -> respond(result, conn, 200)
+    end
+  end
+
   defp respond({:ok, model}, conn, status),
-    do: json(conn, status, Hawk.JsonApi.document(model, context: request_context(conn)))
+    do: json(conn, status, JsonApi.document(model, context: request_context(conn)))
 
   defp respond(:ok, conn, status), do: json(conn, status, %{data: nil})
 
@@ -194,9 +241,8 @@ defmodule Hawk.JsonApi.Controller do
   end
 
   defp plug_conn_header(conn, name) do
-    plug_conn_module()
-    |> apply(:get_req_header, [conn, name])
-    |> List.first()
+    plug_conn = plug_conn_module()
+    plug_conn.get_req_header(conn, name) |> List.first()
   end
 
   defp map_header(conn, name) do
@@ -229,9 +275,9 @@ defmodule Hawk.JsonApi.Controller do
          function_exported?(phoenix_controller, :json, 2) do
       try do
         conn
-        |> then(&apply(plug_conn, :put_status, [&1, status]))
+        |> then(&plug_conn.put_status(&1, status))
         |> put_json_api_content_type(plug_conn)
-        |> then(&apply(phoenix_controller, :json, [&1, body]))
+        |> then(&phoenix_controller.json(&1, body))
       rescue
         FunctionClauseError -> conn |> Map.put(:status, status) |> Map.put(:resp_body, body)
       end
@@ -241,7 +287,7 @@ defmodule Hawk.JsonApi.Controller do
   end
 
   defp put_json_api_content_type(%{__struct__: conn_module} = conn, conn_module) do
-    apply(conn_module, :put_resp_content_type, [conn, "application/vnd.api+json"])
+    conn_module.put_resp_content_type(conn, "application/vnd.api+json")
   end
 
   defp put_json_api_content_type(conn, _plug_conn), do: conn
@@ -253,6 +299,22 @@ defmodule Hawk.JsonApi.Controller do
     %{
       errors: [
         %{status: "404", code: "not_found", title: "Not found", detail: "#{name} was not found"}
+      ]
+    }
+  end
+
+  defp action_not_found(resource, action_name) do
+    name =
+      resource |> Module.split() |> List.last() |> Macro.underscore() |> String.trim_trailing("s")
+
+    %{
+      errors: [
+        %{
+          status: "404",
+          code: "action_not_found",
+          title: "Not found",
+          detail: "#{action_name} is not a supported action for #{name}"
+        }
       ]
     }
   end

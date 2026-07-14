@@ -43,6 +43,8 @@ end
 defmodule Hawk.JsonApiAttributeTest do
   use ExUnit.Case, async: true
 
+  alias Hawk.JsonApiAttributeTest.LocalizedPostsController
+
   def localized_title(post, opts) do
     locale = get_in(opts, [:context, :locale]) || "en"
 
@@ -79,8 +81,47 @@ defmodule Hawk.JsonApiAttributeTest do
       status: nil
     }
 
-    response = Hawk.JsonApiAttributeTest.LocalizedPostsController.index(conn, %{})
+    response = LocalizedPostsController.index(conn, %{})
 
     assert [%{attributes: %{title: "Hus ved havet"}}] = response.resp_body.data
+  end
+
+  test "controllers fall back to english locale when no locale headers are present" do
+    conn = %{
+      assigns: %{authority: Hawk.Authority.system()},
+      req_headers: [],
+      resp_body: nil,
+      status: nil
+    }
+
+    response = LocalizedPostsController.index(conn, %{})
+
+    assert [%{attributes: %{title: "House by the sea"}}] = response.resp_body.data
+  end
+
+  test "controllers fall back to accept-language when x-locale is missing" do
+    conn = %{
+      assigns: %{authority: Hawk.Authority.system()},
+      req_headers: [{"accept-language", "da-DK,da;q=0.9,en;q=0.8"}],
+      resp_body: nil,
+      status: nil
+    }
+
+    response = LocalizedPostsController.index(conn, %{})
+
+    assert [%{attributes: %{title: "Hus ved havet"}}] = response.resp_body.data
+  end
+
+  test "x-locale wins over accept-language and header names are matched case-insensitively" do
+    conn = %{
+      assigns: %{authority: Hawk.Authority.system()},
+      req_headers: [{"X-Locale", "en"}, {"Accept-Language", "da-DK,da;q=0.9"}],
+      resp_body: nil,
+      status: nil
+    }
+
+    response = LocalizedPostsController.index(conn, %{})
+
+    assert [%{attributes: %{title: "House by the sea"}}] = response.resp_body.data
   end
 end

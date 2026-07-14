@@ -6,8 +6,7 @@ defmodule Videdal.Grades.Writer do
   alias Hawk.MutationContext
   alias Hawk.RepositoryBoundary
   alias Hawk.Writer
-  alias Videdal.Grades.Policy
-  alias Videdal.{Grade, Repo}
+  alias Videdal.{Grade, Grades.Policy, Repo}
 
   def create(attrs, authority) do
     MutationContext.create(%Grade{}, attrs, authority)

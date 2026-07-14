@@ -13,6 +13,19 @@ defmodule Hawk.ControllerBoundaryPathsTest.OkDeleteResource do
   def delete(_course, _authority), do: :ok
 end
 
+defmodule Hawk.ControllerBoundaryPathsTest.MissingHandlerResource do
+  def one(_opts), do: {:ok, %Videdal.Course{id: 3, title: "Math", school_id: 7, teacher_id: 12}}
+end
+
+defmodule Hawk.ControllerBoundaryPathsTest.MissingHandlerResource.Actions do
+  use Hawk.Actions
+
+  action("open-registration",
+    handler: :missing_handler,
+    params: [seat_count: [type: :integer]]
+  )
+end
+
 defmodule Hawk.ControllerBoundaryPathsTest.ErrorController do
   use Hawk.JsonApi.Controller,
     resource: Hawk.ControllerBoundaryPathsTest.ErrorResource,
@@ -25,11 +38,31 @@ defmodule Hawk.ControllerBoundaryPathsTest.OkDeleteController do
     model: Videdal.Course
 end
 
+defmodule Hawk.ControllerBoundaryPathsTest.PublicCoursesController do
+  use Hawk.JsonApi.Controller,
+    resource: Videdal.Courses,
+    model: Videdal.Course,
+    public: true
+end
+
+defmodule Hawk.ControllerBoundaryPathsTest.MissingHandlerController do
+  use Hawk.JsonApi.Controller,
+    resource: Hawk.ControllerBoundaryPathsTest.MissingHandlerResource,
+    model: Videdal.Course
+end
+
 defmodule Hawk.ControllerBoundaryPathsTest do
   use ExUnit.Case, async: true
 
+  alias Hawk.ControllerBoundaryPathsTest.CoursesController
+  alias Hawk.ControllerBoundaryPathsTest.ErrorController
+  alias Hawk.ControllerBoundaryPathsTest.MissingHandlerController
+  alias Hawk.ControllerBoundaryPathsTest.OkDeleteController
+  alias Hawk.ControllerBoundaryPathsTest.PublicCoursesController
+  alias Videdal.Course
+
   test "delete can return an empty JSON:API data document" do
-    conn = Hawk.ControllerBoundaryPathsTest.OkDeleteController.delete(conn(), %{"id" => "3"})
+    conn = OkDeleteController.delete(conn(), %{"id" => "3"})
 
     assert conn.status == 200
     assert conn.resp_body == %{data: nil}
@@ -38,7 +71,7 @@ defmodule Hawk.ControllerBoundaryPathsTest do
   test "delete returns not found through the controller boundary" do
     Process.put({Videdal.Repo, :all_results}, [])
 
-    conn = Hawk.ControllerBoundaryPathsTest.CoursesController.delete(conn(), %{"id" => "missing"})
+    conn = CoursesController.delete(conn(), %{"id" => "missing"})
 
     assert conn.status == 404
     assert [%{status: "404", code: "not_found"}] = conn.resp_body.errors
@@ -46,7 +79,7 @@ defmodule Hawk.ControllerBoundaryPathsTest do
 
   test "resource errors become JSON:API 500 errors" do
     conn =
-      Hawk.ControllerBoundaryPathsTest.ErrorController.create(conn(), %{
+      ErrorController.create(conn(), %{
         "data" => %{"type" => "courses", "attributes" => %{}}
       })
 
@@ -59,6 +92,47 @@ defmodule Hawk.ControllerBoundaryPathsTest do
                  code: "error",
                  title: "Error",
                  detail: "database unavailable"
+               }
+             ]
+           }
+  end
+
+  test "public controllers can route actions and still enforce write authorization" do
+    course = %Course{id: 3, title: "Math", school_id: 7, teacher_id: 12}
+    Process.put({Videdal.Repo, :all_results}, [course])
+
+    conn =
+      PublicCoursesController.action(
+        %{assigns: %{}, status: nil, resp_body: nil},
+        %{
+          "id" => "3",
+          "action" => "open-registration",
+          "meta" => %{"seat_count" => 1, "waitlist_count" => 0}
+        }
+      )
+
+    assert conn.status == 403
+    assert [%{status: "403", code: "not_authorized"}] = conn.resp_body.errors
+  end
+
+  test "actions with declared but missing handlers return action_not_found through the controller boundary" do
+    conn =
+      MissingHandlerController.action(conn(), %{
+        "id" => "3",
+        "action" => "open-registration",
+        "meta" => %{"seat_count" => 1}
+      })
+
+    assert conn.status == 404
+
+    assert conn.resp_body == %{
+             errors: [
+               %{
+                 status: "404",
+                 code: "action_not_found",
+                 title: "Not found",
+                 detail:
+                   "open-registration is not a supported action for missing_handler_resource"
                }
              ]
            }

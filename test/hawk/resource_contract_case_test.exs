@@ -32,7 +32,9 @@ defmodule Hawk.ResourceContractCaseTest.BadResource.Reader do
 end
 
 defmodule Hawk.ResourceContractCaseTest.BadResource do
-  def all(opts), do: Hawk.ResourceContractCaseTest.BadResource.Reader.all(opts)
+  alias Hawk.ResourceContractCaseTest.BadResource.Reader
+
+  def all(opts), do: Reader.all(opts)
 end
 
 defmodule Hawk.ResourceContractCaseTest do

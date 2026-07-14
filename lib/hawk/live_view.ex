@@ -7,6 +7,8 @@ defmodule Hawk.LiveView do
   in tests or non-Phoenix contexts a `%{assigns: ...}` map works too.
   """
 
+  alias Hawk.LiveView
+
   defmacro __using__(opts) do
     resource = Keyword.fetch!(opts, :resource)
     as = Keyword.fetch!(opts, :as)
@@ -14,7 +16,7 @@ defmodule Hawk.LiveView do
 
     quote do
       def assign_index(socket, authority, opts \\ []) do
-        Hawk.LiveView.assign_index(
+        LiveView.assign_index(
           socket,
           unquote(resource),
           unquote(as),
@@ -25,11 +27,11 @@ defmodule Hawk.LiveView do
       end
 
       def assign_show(socket, authority, id, opts \\ []) do
-        Hawk.LiveView.assign_show(socket, unquote(resource), unquote(as), authority, id, opts)
+        LiveView.assign_show(socket, unquote(resource), unquote(as), authority, id, opts)
       end
 
       def handle_event("hawk:delete", params, socket) do
-        Hawk.LiveView.handle_delete(
+        LiveView.handle_delete(
           socket,
           unquote(resource),
           unquote(as),
@@ -95,7 +97,7 @@ defmodule Hawk.LiveView do
 
     if Code.ensure_loaded?(phoenix_component) and
          function_exported?(phoenix_component, :assign, 3) do
-      apply(phoenix_component, :assign, [socket, key, value])
+      phoenix_component.assign(socket, key, value)
     else
       assigns = Map.get(socket, :assigns, %{})
       Map.put(socket, :assigns, Map.put(assigns, key, value))

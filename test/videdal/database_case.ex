@@ -8,6 +8,10 @@ defmodule Videdal.DatabaseCase do
 
   use ExUnit.CaseTemplate
 
+  alias Ecto.Adapters.SQL
+  alias Ecto.Adapters.SQL.Sandbox
+  alias Videdal.SandboxRepo
+
   using do
     quote do
       import Ecto.Query
@@ -16,31 +20,31 @@ defmodule Videdal.DatabaseCase do
   end
 
   setup _tags do
-    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Videdal.SandboxRepo)
+    :ok = Sandbox.checkout(SandboxRepo)
     :ok
   end
 
   def start_repo! do
-    case Videdal.SandboxRepo.start_link() do
+    case SandboxRepo.start_link() do
       {:ok, pid} -> pid
       {:error, {:already_started, pid}} -> pid
     end
   end
 
   def reset_schema! do
-    repo = Videdal.SandboxRepo
+    repo = SandboxRepo
 
-    Ecto.Adapters.SQL.query!(repo, "DROP VIEW IF EXISTS course_grade_summaries", [])
-    Ecto.Adapters.SQL.query!(repo, "DROP TABLE IF EXISTS grades", [])
-    Ecto.Adapters.SQL.query!(repo, "DROP TABLE IF EXISTS enrollments", [])
-    Ecto.Adapters.SQL.query!(repo, "DROP TABLE IF EXISTS parent_students", [])
-    Ecto.Adapters.SQL.query!(repo, "DROP TABLE IF EXISTS parents", [])
-    Ecto.Adapters.SQL.query!(repo, "DROP TABLE IF EXISTS courses", [])
-    Ecto.Adapters.SQL.query!(repo, "DROP TABLE IF EXISTS students", [])
-    Ecto.Adapters.SQL.query!(repo, "DROP TABLE IF EXISTS teachers", [])
-    Ecto.Adapters.SQL.query!(repo, "DROP TABLE IF EXISTS schools", [])
+    SQL.query!(repo, "DROP VIEW IF EXISTS course_grade_summaries", [])
+    SQL.query!(repo, "DROP TABLE IF EXISTS grades", [])
+    SQL.query!(repo, "DROP TABLE IF EXISTS enrollments", [])
+    SQL.query!(repo, "DROP TABLE IF EXISTS parent_students", [])
+    SQL.query!(repo, "DROP TABLE IF EXISTS parents", [])
+    SQL.query!(repo, "DROP TABLE IF EXISTS courses", [])
+    SQL.query!(repo, "DROP TABLE IF EXISTS students", [])
+    SQL.query!(repo, "DROP TABLE IF EXISTS teachers", [])
+    SQL.query!(repo, "DROP TABLE IF EXISTS schools", [])
 
-    Ecto.Adapters.SQL.query!(
+    SQL.query!(
       repo,
       """
       CREATE TABLE schools (
@@ -51,7 +55,7 @@ defmodule Videdal.DatabaseCase do
       []
     )
 
-    Ecto.Adapters.SQL.query!(
+    SQL.query!(
       repo,
       """
       CREATE TABLE students (
@@ -64,7 +68,7 @@ defmodule Videdal.DatabaseCase do
       []
     )
 
-    Ecto.Adapters.SQL.query!(
+    SQL.query!(
       repo,
       """
       CREATE TABLE teachers (
@@ -76,7 +80,7 @@ defmodule Videdal.DatabaseCase do
       []
     )
 
-    Ecto.Adapters.SQL.query!(
+    SQL.query!(
       repo,
       """
       CREATE TABLE parents (
@@ -88,7 +92,7 @@ defmodule Videdal.DatabaseCase do
       []
     )
 
-    Ecto.Adapters.SQL.query!(
+    SQL.query!(
       repo,
       """
       CREATE TABLE parent_students (
@@ -101,12 +105,15 @@ defmodule Videdal.DatabaseCase do
       []
     )
 
-    Ecto.Adapters.SQL.query!(
+    SQL.query!(
       repo,
       """
       CREATE TABLE courses (
         id uuid PRIMARY KEY,
         title text NOT NULL,
+        registration_state text NOT NULL DEFAULT 'draft',
+        seat_count integer NOT NULL DEFAULT 0,
+        waitlist_count integer NOT NULL DEFAULT 0,
         school_id uuid NOT NULL REFERENCES schools(id),
         teacher_id uuid NOT NULL REFERENCES teachers(id)
       )
@@ -114,12 +121,13 @@ defmodule Videdal.DatabaseCase do
       []
     )
 
-    Ecto.Adapters.SQL.query!(
+    SQL.query!(
       repo,
       """
       CREATE TABLE enrollments (
         id uuid PRIMARY KEY,
         enrolled_on date,
+        registration_status text NOT NULL DEFAULT 'pending',
         school_id uuid NOT NULL REFERENCES schools(id),
         student_id uuid NOT NULL REFERENCES students(id),
         course_id uuid NOT NULL REFERENCES courses(id)
@@ -128,7 +136,7 @@ defmodule Videdal.DatabaseCase do
       []
     )
 
-    Ecto.Adapters.SQL.query!(
+    SQL.query!(
       repo,
       """
       CREATE TABLE grades (
@@ -142,7 +150,7 @@ defmodule Videdal.DatabaseCase do
       []
     )
 
-    Ecto.Adapters.SQL.query!(
+    SQL.query!(
       repo,
       """
       CREATE VIEW course_grade_summaries AS

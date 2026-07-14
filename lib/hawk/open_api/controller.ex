@@ -12,17 +12,20 @@ defmodule Hawk.OpenApi.Controller do
       end
   """
 
+  alias Hawk.OpenApi
+  alias Hawk.OpenApi.Controller, as: OpenApiController
+
   defmacro __using__(opts) do
     resources = Keyword.fetch!(opts, :resources)
     spec_opts = Keyword.take(opts, [:title, :version, :path_prefix])
 
     quote do
       def spec do
-        Hawk.OpenApi.spec(unquote(resources), unquote(spec_opts))
+        OpenApi.spec(unquote(resources), unquote(spec_opts))
       end
 
       def show(conn, _params) do
-        Hawk.OpenApi.Controller.show(conn, spec())
+        OpenApiController.show(conn, spec())
       end
     end
   end
@@ -37,8 +40,8 @@ defmodule Hawk.OpenApi.Controller do
       plug_conn = Module.concat([Plug, Conn])
 
       conn
-      |> then(&apply(plug_conn, :put_status, [&1, status]))
-      |> then(&apply(phoenix_controller, :json, [&1, body]))
+      |> then(&plug_conn.put_status(&1, status))
+      |> then(&phoenix_controller.json(&1, body))
     else
       conn |> Map.put(:status, status) |> Map.put(:resp_body, body)
     end
