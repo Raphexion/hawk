@@ -214,7 +214,9 @@ defmodule Videdal.ResourceFacadeTest do
 
   test "school and student facades delegate reads and CRUD mutations through sibling modules" do
     school_authority = Authority.new(:principal, Videdal.principal_id())
-    student_authority = Authority.new(:school_admin, @school_admin_id, scopes: %{school_id: @school_id})
+
+    student_authority =
+      Authority.new(:school_admin, @school_admin_id, scopes: %{school_id: @school_id})
 
     school = %School{id: @school_id, name: @school_name}
     Process.put({Videdal.Repo, :all_results}, [school])
@@ -230,6 +232,7 @@ defmodule Videdal.ResourceFacadeTest do
 
     assert {:ok, updated_school} =
              Schools.update(school, %{name: "Malmö Academy"}, school_authority)
+
     assert updated_school.name == "Malmö Academy"
     assert_received {:videdal_repo, :update, _changeset}
 
@@ -240,13 +243,18 @@ defmodule Videdal.ResourceFacadeTest do
     student = %Student{id: @student_id, name: "Ada", active: true, school_id: @school_id}
     Process.put({Videdal.Repo, :all_results}, [student])
 
-    assert Students.one(authority: Authority.system(), filter: %{id: @student_id}) == {:ok, student}
+    assert Students.one(authority: Authority.system(), filter: %{id: @student_id}) ==
+             {:ok, student}
+
     assert Students.one!(authority: Authority.system(), filter: %{id: @student_id}) == student
     assert [^student] = Students.all(authority: Authority.system())
     assert_received {:videdal_repo, :all, _query}
 
     assert {:ok, created_student} =
-             Students.create(%{name: "Ada", active: true, school_id: @school_id}, student_authority)
+             Students.create(
+               %{name: "Ada", active: true, school_id: @school_id},
+               student_authority
+             )
 
     assert created_student.name == "Ada"
     assert_received {:videdal_repo, :insert, _changeset}
@@ -264,7 +272,10 @@ defmodule Videdal.ResourceFacadeTest do
   end
 
   test "grade facade delegates reads and CRUD mutations through sibling modules" do
-    authority = Authority.new(:teacher, @teacher_id, scopes: %{school_id: @school_id, teacher_id: @teacher_id})
+    authority =
+      Authority.new(:teacher, @teacher_id,
+        scopes: %{school_id: @school_id, teacher_id: @teacher_id}
+      )
 
     grade = %Grade{
       id: @grade_id,
@@ -283,7 +294,12 @@ defmodule Videdal.ResourceFacadeTest do
 
     assert {:ok, created_grade} =
              Grades.create(
-               %{score: 12, school_id: @school_id, student_id: @student_id, course_id: @course_id},
+               %{
+                 score: 12,
+                 school_id: @school_id,
+                 student_id: @student_id,
+                 course_id: @course_id
+               },
                authority
              )
 
@@ -349,12 +365,16 @@ defmodule Videdal.ResourceFacadeTest do
     teacher = %Teacher{id: @teacher_id, name: "Grace", school_id: @school_id}
     Process.put({Videdal.Repo, :all_results}, [teacher])
 
-    assert Teachers.one(authority: Authority.system(), filter: %{id: @teacher_id}) == {:ok, teacher}
+    assert Teachers.one(authority: Authority.system(), filter: %{id: @teacher_id}) ==
+             {:ok, teacher}
+
     assert Teachers.one!(authority: Authority.system(), filter: %{id: @teacher_id}) == teacher
     assert [^teacher] = Teachers.all(authority: Authority.system())
     assert_received {:videdal_repo, :all, _query}
 
-    assert {:ok, created_teacher} = Teachers.create(%{name: "Grace", school_id: @school_id}, authority)
+    assert {:ok, created_teacher} =
+             Teachers.create(%{name: "Grace", school_id: @school_id}, authority)
+
     assert created_teacher.name == "Grace"
     assert_received {:videdal_repo, :insert, _changeset}
 

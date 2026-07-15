@@ -72,16 +72,21 @@ defmodule Hawk.Actions do
   end
 
   defp atomize_params(params, metadata) when is_map(params) do
-    allowed = metadata.params |> Map.keys() |> MapSet.new()
+    allowed_by_name = Map.new(Map.keys(metadata.params), &{to_string(&1), &1})
 
-    Map.new(params, fn {key, value} -> {param_key(key), value} end)
-    |> Map.take(MapSet.to_list(allowed))
+    Enum.reduce(params, %{}, fn
+      {key, value}, acc when is_atom(key) ->
+        if Map.has_key?(metadata.params, key), do: Map.put(acc, key, value), else: acc
+
+      {key, value}, acc when is_binary(key) ->
+        case Map.fetch(allowed_by_name, key) do
+          {:ok, param_key} -> Map.put(acc, param_key, value)
+          :error -> acc
+        end
+    end)
   end
 
   defp atomize_params(_params, _metadata), do: %{}
-
-  defp param_key(key) when is_atom(key), do: key
-  defp param_key(key) when is_binary(key), do: String.to_atom(key)
 
   defp action_metadata(name, opts, caller) do
     name = literal!(name, caller)

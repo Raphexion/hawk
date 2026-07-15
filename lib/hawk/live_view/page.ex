@@ -38,7 +38,7 @@ defmodule Hawk.LiveView.Page do
   end
 
   def handle_delete(socket, resources, %{"resource" => resource_name, "id" => id}) do
-    key = String.to_atom(resource_name)
+    key = fetch_resource_key!(resources, resource_name)
     authority = Map.fetch!(socket.assigns, :hawk_page_authority)
     specs = Map.fetch!(socket.assigns, :hawk_page_specs)
 
@@ -88,6 +88,13 @@ defmodule Hawk.LiveView.Page do
 
   defp normalize_specs(specs) do
     Map.new(specs, fn {key, {mode, opts}} -> {key, {mode, opts}} end)
+  end
+
+  defp fetch_resource_key!(resources, resource_name) when is_binary(resource_name) do
+    case Enum.find(resources, fn {key, _opts} -> to_string(key) == resource_name end) do
+      {key, _opts} -> key
+      nil -> raise ArgumentError, "unknown LiveView page resource #{inspect(resource_name)}"
+    end
   end
 
   defp fetch_resource!(resources, key) do

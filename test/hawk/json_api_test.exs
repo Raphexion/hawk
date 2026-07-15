@@ -103,4 +103,51 @@ defmodule Hawk.JsonApiTest do
 
     assert attrs == %{title: "Math", school_id: nil, teacher_id: 12}
   end
+
+  test "hostile attribute and relationship names are ignored without creating atoms" do
+    hostile_attribute = hostile_name("attribute")
+    hostile_relationship = hostile_name("relationship")
+
+    attrs =
+      Hawk.JsonApi.attributes(
+        %{
+          "data" => %{
+            "type" => "courses",
+            "attributes" => %{"title" => "Math", hostile_attribute => "boom"},
+            "relationships" => %{
+              "school" => %{"data" => nil},
+              hostile_relationship => %{"data" => %{"type" => "schools", "id" => "7"}}
+            }
+          }
+        },
+        Videdal.Course,
+        :creatable
+      )
+
+    assert attrs == %{title: "Math", school_id: nil}
+    refute_existing_atom(hostile_attribute)
+    refute_existing_atom(hostile_relationship)
+  end
+
+  test "hostile include and sort params are rejected without creating atoms" do
+    hostile_include = hostile_name("include")
+    hostile_sort = hostile_name("sort")
+
+    assert_raise ArgumentError, ~r/unknown include/, fn ->
+      Hawk.JsonApi.request_options(%{"include" => hostile_include})
+    end
+
+    assert_raise ArgumentError, ~r/unknown sort column/, fn ->
+      Hawk.JsonApi.request_options(%{"sort" => hostile_sort})
+    end
+
+    refute_existing_atom(hostile_include)
+    refute_existing_atom(hostile_sort)
+  end
+
+  defp hostile_name(label), do: "hawk_hostile_#{label}_#{System.unique_integer([:positive])}"
+
+  defp refute_existing_atom(name) do
+    assert_raise ArgumentError, fn -> String.to_existing_atom(name) end
+  end
 end

@@ -87,6 +87,21 @@ defmodule Hawk.ActionsTest do
            ) == {:ok, "course-1", %{count: 4}, :system}
   end
 
+  test "dispatch ignores hostile undeclared params without creating atoms" do
+    hostile = "hawk_hostile_action_#{System.unique_integer([:positive])}"
+    course = %Videdal.Course{id: "course-1", title: "Math"}
+
+    assert Hawk.Actions.dispatch(
+             Hawk.ActionsTest.DemoResource,
+             "ping",
+             course,
+             %{"count" => 4, hostile => "boom"},
+             Authority.system()
+           ) == {:ok, "course-1", %{count: 4}, :system}
+
+    assert_raise ArgumentError, fn -> String.to_existing_atom(hostile) end
+  end
+
   test "duplicate action names currently keep the last declaration" do
     assert Hawk.Actions.actions(Hawk.ActionsTest.DuplicateResource) == %{
              "ping" => %{

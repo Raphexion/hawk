@@ -73,7 +73,7 @@ defmodule Hawk.JsonApiIncludeTest do
                  status: "400",
                  code: "bad_request",
                  title: "Bad request",
-                 detail: "unknown reader preload :secret"
+                 detail: "unknown include \"secret\""
                }
              ]
            }

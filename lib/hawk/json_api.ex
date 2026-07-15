@@ -175,21 +175,30 @@ defmodule Hawk.JsonApi do
   end
 
   defp atomize_allowed(attrs, allowed) do
-    Map.new(attrs, fn {key, value} -> {String.to_atom(key), value} end)
-    |> Map.take(allowed)
+    allowed_by_name = Map.new(allowed, &{to_string(&1), &1})
+
+    attrs
+    |> Enum.reduce(%{}, fn {key, value}, acc ->
+      case Map.fetch(allowed_by_name, key) do
+        {:ok, field} -> Map.put(acc, field, value)
+        :error -> acc
+      end
+    end)
   end
 
   defp relationship_attrs(model, data, allowed) do
+    allowed_by_name = Map.new(allowed, &{to_string(&1), &1})
+
     data
     |> Map.get("relationships", %{})
     |> Enum.reduce(%{}, fn {name, %{"data" => relationship}}, attrs ->
-      key = String.to_atom(name)
+      case Map.fetch(allowed_by_name, name) do
+        {:ok, key} ->
+          association = model.__schema__(:association, key)
+          Map.put(attrs, association.owner_key, relationship_id(relationship))
 
-      if key in allowed do
-        association = model.__schema__(:association, key)
-        Map.put(attrs, association.owner_key, relationship_id(relationship))
-      else
-        attrs
+        :error ->
+          attrs
       end
     end)
   end
@@ -232,7 +241,10 @@ defmodule Hawk.JsonApi do
     Keyword.put(
       opts,
       :page,
-      Map.merge(Keyword.get(opts, :page, %{}), %{column: String.to_atom(column), dir: :desc})
+      Map.merge(Keyword.get(opts, :page, %{}), %{
+        column: existing_param_atom!(column, "sort column"),
+        dir: :desc
+      })
     )
   end
 
@@ -240,7 +252,10 @@ defmodule Hawk.JsonApi do
     Keyword.put(
       opts,
       :page,
-      Map.merge(Keyword.get(opts, :page, %{}), %{column: String.to_atom(column), dir: :asc})
+      Map.merge(Keyword.get(opts, :page, %{}), %{
+        column: existing_param_atom!(column, "sort column"),
+        dir: :asc
+      })
     )
   end
 
@@ -308,11 +323,11 @@ defmodule Hawk.JsonApi do
   end
 
   defp include_path_to_preload([segment]) do
-    String.to_atom(segment)
+    existing_param_atom!(segment, "include")
   end
 
   defp include_path_to_preload([segment | rest]) do
-    {String.to_atom(segment), [include_path_to_preload(rest)]}
+    {existing_param_atom!(segment, "include"), [include_path_to_preload(rest)]}
   end
 
   defp merge_preload(preload, acc) when is_atom(preload) do
@@ -337,6 +352,13 @@ defmodule Hawk.JsonApi do
     do: nested |> Enum.reduce(existing, &merge_preload/2) |> Enum.reverse()
 
   defp merge_nested_preloads(_key, nested), do: nested
+
+  defp existing_param_atom!(value, label) when is_binary(value) do
+    String.to_existing_atom(value)
+  rescue
+    ArgumentError ->
+      reraise ArgumentError, [message: "unknown #{label} #{inspect(value)}"], __STACKTRACE__
+  end
 
   defp sort_values(model) do
     model

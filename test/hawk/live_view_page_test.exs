@@ -105,5 +105,20 @@ defmodule Hawk.LiveViewPageTest do
     end
   end
 
+  test "delete event rejects hostile resource names without creating atoms" do
+    hostile = "hawk_hostile_live_view_#{System.unique_integer([:positive])}"
+    socket = CourseWorkspaceLive.assign_page(socket(), Authority.system(), [])
+
+    assert_raise ArgumentError, ~r/unknown LiveView page resource/, fn ->
+      CourseWorkspaceLive.handle_event(
+        "hawk:delete",
+        %{"resource" => hostile, "id" => "1"},
+        socket
+      )
+    end
+
+    assert_raise ArgumentError, fn -> String.to_existing_atom(hostile) end
+  end
+
   defp socket, do: %{assigns: %{}}
 end

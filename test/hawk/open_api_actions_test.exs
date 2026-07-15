@@ -20,12 +20,13 @@ end
 defmodule Hawk.OpenApiActionsTest.Switches.Actions do
   use Hawk.Actions
 
-  action "toggle",
+  action("toggle",
     params: [
       enabled: [type: :boolean, doc: "Whether the switch should be on.", example: true],
       threshold: [type: :float, doc: "Optional numeric threshold.", example: 0.5],
       label: [type: :string, doc: "Human label for the command.", example: "night mode"]
     ]
+  )
 end
 
 defmodule Hawk.OpenApiActionsTest do
