@@ -75,6 +75,26 @@ defmodule Hawk.JsonApi.Controller do
           unquote(public?)
         )
       end
+
+      def relationship(conn, params) do
+        JsonApiController.relationship(
+          conn,
+          unquote(resource),
+          unquote(model),
+          params,
+          unquote(public?)
+        )
+      end
+
+      def related(conn, params) do
+        JsonApiController.related(
+          conn,
+          unquote(resource),
+          unquote(model),
+          params,
+          unquote(public?)
+        )
+      end
     end
   end
 
@@ -107,7 +127,7 @@ defmodule Hawk.JsonApi.Controller do
 
       case resource.one(authority: authority, context: context, filter: %{id: normalize_id(id)}) do
         {:ok, model} ->
-          json(conn, 200, JsonApi.document(model, context: request_context(conn)))
+          json(conn, 200, JsonApi.document(model, context: request_context(conn), links: true))
 
         :not_found ->
           json(conn, 404, not_found(resource))
@@ -118,6 +138,8 @@ defmodule Hawk.JsonApi.Controller do
   def create(conn, resource, model, params, public? \\ false) do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
+
+      JsonApi.validate_document!(params, model, :creatable)
 
       params
       |> JsonApi.attributes(model, :creatable)
@@ -133,6 +155,8 @@ defmodule Hawk.JsonApi.Controller do
 
       case resource.one(authority: authority, context: context, filter: %{id: normalize_id(id)}) do
         {:ok, existing} ->
+          JsonApi.validate_document!(params, model, :updatable)
+
           params
           |> JsonApi.attributes(model, :updatable)
           |> then(&resource.update(existing, &1, authority))
@@ -170,6 +194,54 @@ defmodule Hawk.JsonApi.Controller do
       case resource.one(authority: authority, context: context, filter: %{id: normalize_id(id)}) do
         {:ok, existing} ->
           respond_action(conn, resource, action_name, existing, params, authority)
+
+        :not_found ->
+          json(conn, 404, not_found(resource))
+      end
+    end)
+  end
+
+  def relationship(
+        conn,
+        resource,
+        _model,
+        %{"id" => id, "relationship" => relationship_name},
+        public? \\ false
+      ) do
+    with_error_boundary(conn, fn ->
+      authority = authority!(conn, public?)
+      context = request_context(conn)
+
+      case resource.one(authority: authority, context: context, filter: %{id: normalize_id(id)}) do
+        {:ok, model} ->
+          json(conn, 200, JsonApi.relationship_document(model, relationship_name))
+
+        :not_found ->
+          json(conn, 404, not_found(resource))
+      end
+    end)
+  end
+
+  def related(
+        conn,
+        resource,
+        model,
+        %{"id" => id, "relationship" => relationship_name},
+        public? \\ false
+      ) do
+    with_error_boundary(conn, fn ->
+      authority = authority!(conn, public?)
+      context = request_context(conn)
+      relationship = JsonApi.relationship_key!(model, relationship_name)
+
+      case resource.one(
+             authority: authority,
+             context: context,
+             filter: %{id: normalize_id(id)},
+             preloads: [relationship]
+           ) do
+        {:ok, model} ->
+          json(conn, 200, JsonApi.related_document(model, relationship_name))
 
         :not_found ->
           json(conn, 404, not_found(resource))

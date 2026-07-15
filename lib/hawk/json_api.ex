@@ -10,13 +10,56 @@ defmodule Hawk.JsonApi do
 
   def document(models, opts) when is_list(models) do
     %{data: Enum.map(models, &resource_object(&1, opts))}
+    |> put_document_links(models, opts)
     |> put_included(models, opts)
     |> put_pagination_meta(models, opts)
   end
 
   def document(model, opts) when is_struct(model) do
     %{data: resource_object(model, opts)}
+    |> put_document_links([model], opts)
     |> put_included([model], opts)
+  end
+
+  def relationship_document(model, relationship)
+      when is_struct(model) and is_binary(relationship) do
+    name = relationship_key!(model, relationship)
+    data = relationship_data(model, name, [name])
+
+    %{
+      links: relationship_links(model, name),
+      data: data
+    }
+  end
+
+  def related_document(model, relationship, opts \\ [])
+      when is_struct(model) and is_binary(relationship) do
+    name = relationship_key!(model, relationship)
+
+    case related_value(model, name) do
+      models when is_list(models) ->
+        document(
+          models,
+          opts |> Keyword.put(:links, true) |> Keyword.put(:self, collection_path(model, name))
+        )
+
+      nil ->
+        %{data: nil}
+
+      related ->
+        document(related, Keyword.put(opts, :links, true))
+    end
+  end
+
+  def validate_document!(params, model, capability) when capability in [:creatable, :updatable] do
+    data = request_data!(params)
+    json_api = model.__hawk_json_api__()
+
+    validate_type!(data, json_api.type, capability)
+    validate_attribute_members!(data, json_api, capability)
+    validate_relationship_members!(data, model, json_api, capability)
+
+    :ok
   end
 
   def attributes(params, model, capability) when capability in [:creatable, :updatable] do
@@ -66,8 +109,9 @@ defmodule Hawk.JsonApi do
       type: json_api.type,
       id: to_string(Map.get(model, :id)),
       attributes: resource_attributes(model, json_api, opts),
-      relationships: resource_relationships(model, json_api, Keyword.get(opts, :preloads, []))
+      relationships: resource_relationships(model, json_api, opts)
     }
+    |> put_resource_links(model, opts)
   end
 
   defp resource_attributes(model, json_api, opts) do
@@ -89,9 +133,17 @@ defmodule Hawk.JsonApi do
 
   defp resource_attribute(model, name, _metadata, _opts), do: Map.get(model, name)
 
-  defp resource_relationships(model, json_api, preloads) do
+  defp resource_relationships(model, json_api, opts) do
+    preloads = Keyword.get(opts, :preloads, [])
+
     Map.new(json_api.relationships, fn {name, _metadata} ->
-      {name, %{data: relationship_data(model, name, preloads)}}
+      relationship = %{data: relationship_data(model, name, preloads)}
+
+      if Keyword.get(opts, :links, false) do
+        {name, Map.put(relationship, :links, relationship_links(model, name))}
+      else
+        {name, relationship}
+      end
     end)
   end
 
@@ -102,6 +154,51 @@ defmodule Hawk.JsonApi do
       :one -> belongs_to_identifier(model, association)
       :many -> many_identifiers(Map.get(model, name), preload_requested?(preloads, name))
     end
+  end
+
+  defp relationship_links(model, name) do
+    base = resource_path(model)
+
+    %{
+      self: base <> "/relationships/" <> to_string(name),
+      related: base <> "/" <> to_string(name)
+    }
+  end
+
+  defp put_resource_links(resource, model, opts) do
+    if Keyword.get(opts, :links, false) do
+      Map.put(resource, :links, %{self: resource_path(model)})
+    else
+      resource
+    end
+  end
+
+  defp put_document_links(document, [first | _models], opts) do
+    if Keyword.get(opts, :links, false) do
+      Map.put(document, :links, %{self: Keyword.get(opts, :self, document_self_link(first))})
+    else
+      document
+    end
+  end
+
+  defp put_document_links(document, [], opts) do
+    if Keyword.get(opts, :links, false) do
+      Map.put(document, :links, %{self: Keyword.get(opts, :self, "/")})
+    else
+      document
+    end
+  end
+
+  defp document_self_link(model) when is_struct(model), do: resource_path(model)
+
+  defp collection_path(model, relationship) do
+    association = model.__struct__.__schema__(:association, relationship)
+    "/" <> association.related.__hawk_json_api__().type
+  end
+
+  defp resource_path(model) do
+    json_api = model.__struct__.__hawk_json_api__()
+    "/" <> json_api.type <> "/" <> to_string(Map.get(model, :id))
   end
 
   defp belongs_to_identifier(model, association) do
@@ -172,6 +269,128 @@ defmodule Hawk.JsonApi do
       models when is_list(models) -> models
       model -> [model]
     end
+  end
+
+  defp request_data!(params) do
+    case Map.get(params, "data") do
+      data when is_map(data) -> data
+      _other -> raise ArgumentError, "request document must include a data object"
+    end
+  end
+
+  defp validate_type!(data, expected_type, :creatable) do
+    case Map.get(data, "type") do
+      ^expected_type -> :ok
+      _other -> raise ArgumentError, "expected data.type to be #{inspect(expected_type)}"
+    end
+  end
+
+  defp validate_type!(data, expected_type, :updatable) do
+    case Map.get(data, "type") do
+      nil -> :ok
+      ^expected_type -> :ok
+      _other -> raise ArgumentError, "expected data.type to be #{inspect(expected_type)}"
+    end
+  end
+
+  defp validate_attribute_members!(data, json_api, capability) do
+    attributes = Map.get(data, "attributes", %{})
+
+    unless is_map(attributes) do
+      raise ArgumentError, "data.attributes must be an object"
+    end
+
+    allowed = allowed_attribute_names(json_api, capability)
+
+    attributes
+    |> Map.keys()
+    |> Enum.each(fn name ->
+      unless MapSet.member?(allowed, name) do
+        raise ArgumentError, "unknown attribute #{inspect(name)}"
+      end
+    end)
+  end
+
+  defp validate_relationship_members!(data, model, json_api, capability) do
+    relationships = Map.get(data, "relationships", %{})
+
+    unless is_map(relationships) do
+      raise ArgumentError, "data.relationships must be an object"
+    end
+
+    allowed = allowed_relationship_names(json_api, capability)
+
+    Enum.each(relationships, fn {name, relationship} ->
+      unless MapSet.member?(allowed, name) do
+        raise ArgumentError, "unknown relationship #{inspect(name)}"
+      end
+
+      validate_relationship_identifier!(model, String.to_existing_atom(name), relationship)
+    end)
+  end
+
+  defp allowed_attribute_names(json_api, capability) do
+    json_api
+    |> Map.fetch!(capability)
+    |> Enum.filter(&Map.has_key?(json_api.attributes, &1))
+    |> Enum.map(&to_string/1)
+    |> MapSet.new()
+  end
+
+  defp allowed_relationship_names(json_api, capability) do
+    json_api
+    |> Map.fetch!(capability)
+    |> Enum.filter(&Map.has_key?(json_api.relationships, &1))
+    |> Enum.map(&to_string/1)
+    |> MapSet.new()
+  end
+
+  defp validate_relationship_identifier!(model, name, %{"data" => data}) do
+    association = model.__schema__(:association, name)
+    expected_type = association.related.__hawk_json_api__().type
+
+    case {association.cardinality, data} do
+      {:one, nil} ->
+        :ok
+
+      {:one, %{"type" => ^expected_type, "id" => id}} when not is_nil(id) ->
+        :ok
+
+      {:one, %{"type" => other_type}} ->
+        raise ArgumentError,
+              "expected relationship #{name} type to be #{inspect(expected_type)}, got #{inspect(other_type)}"
+
+      {:many, items} when is_list(items) ->
+        Enum.each(items, &validate_many_relationship_identifier!(&1, name, expected_type))
+
+      {:many, _other} ->
+        raise ArgumentError, "relationship #{name} data must be an array"
+
+      {:one, _other} ->
+        raise ArgumentError,
+              "relationship #{name} data must be null or a resource identifier object"
+    end
+  end
+
+  defp validate_relationship_identifier!(_model, name, _relationship) do
+    raise ArgumentError, "relationship #{name} must include data"
+  end
+
+  defp validate_many_relationship_identifier!(
+         %{"type" => expected_type, "id" => id},
+         _name,
+         expected_type
+       )
+       when not is_nil(id),
+       do: :ok
+
+  defp validate_many_relationship_identifier!(%{"type" => other_type}, name, expected_type) do
+    raise ArgumentError,
+          "expected relationship #{name} type to be #{inspect(expected_type)}, got #{inspect(other_type)}"
+  end
+
+  defp validate_many_relationship_identifier!(_item, name, _expected_type) do
+    raise ArgumentError, "relationship #{name} data must contain resource identifier objects"
   end
 
   defp atomize_allowed(attrs, allowed) do
@@ -352,6 +571,29 @@ defmodule Hawk.JsonApi do
     do: nested |> Enum.reduce(existing, &merge_preload/2) |> Enum.reverse()
 
   defp merge_nested_preloads(_key, nested), do: nested
+
+  def relationship_key!(model, relationship) when is_struct(model) do
+    relationship_key!(model.__struct__, relationship)
+  end
+
+  def relationship_key!(model, relationship) when is_atom(model) and is_binary(relationship) do
+    allowed_by_name =
+      model.__hawk_json_api__().relationships
+      |> Map.keys()
+      |> Map.new(&{to_string(&1), &1})
+
+    case Map.fetch(allowed_by_name, relationship) do
+      {:ok, name} -> name
+      :error -> raise ArgumentError, "unknown relationship #{inspect(relationship)}"
+    end
+  end
+
+  defp related_value(model, name) do
+    case Map.get(model, name) do
+      %Ecto.Association.NotLoaded{} -> nil
+      value -> value
+    end
+  end
 
   defp existing_param_atom!(value, label) when is_binary(value) do
     String.to_existing_atom(value)

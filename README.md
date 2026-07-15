@@ -198,14 +198,27 @@ Generated actions:
 - `create/2`
 - `update/2`
 - `delete/2`
+- `relationship/2` for `GET .../:id/relationships/:relationship`
+- `related/2` for `GET .../:id/:relationship`
 - `action/2` for `POST .../:id/-actions/:action`
 
 Controller errors use JSON:API documents:
 
 - invalid include/filter/sort/page: `400`
+- invalid request document shape, resource type, attributes, or relationships: `400`
 - authorization failure: `403`
 - missing record: `404`
 - validation failure: `422`
+
+Create requests must include `data.type` matching the resource type. Update
+requests may omit `data.type` for small PATCH bodies, but when present it must
+match. Unknown writable attributes or relationships fail loudly instead of being
+silently ignored, and relationship identifiers must use the declared related
+resource type.
+
+Resource objects returned by `show/2` include resource and relationship links.
+Relationship endpoints return JSON:API relationship linkage or related resource
+documents, using the same reader policy and preload path as ordinary includes.
 
 Some requests support declared reader filters through JSON:API-style query params.
 Bare values become equality filters, and supported operators use one nested key:
