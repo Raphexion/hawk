@@ -1,10 +1,10 @@
 defmodule Hawk.LiveView do
   @moduledoc """
-  Small LiveView helper DSL for Hawk resources.
+  Small Phoenix LiveView helper DSL for Hawk resources.
 
-  The generated functions avoid depending on Phoenix at compile time. When used
-  inside a Phoenix LiveView, the returned socket shape is still the normal socket;
-  in tests or non-Phoenix contexts a `%{assigns: ...}` map works too.
+  Hawk is intended to run in Phoenix LiveViews. The generated helpers delegate to
+  `Phoenix.Component.assign/3` when available; plain map sockets remain supported
+  as a lightweight test boundary.
   """
 
   alias Hawk.LiveView

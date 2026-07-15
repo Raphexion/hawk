@@ -1,6 +1,6 @@
 defmodule Hawk.OpenApi.Controller do
   @moduledoc """
-  Tiny controller for serving a composed Hawk OpenAPI specification.
+  Phoenix controller helper for serving a composed Hawk OpenAPI specification.
 
   Example:
 

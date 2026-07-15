@@ -1,6 +1,4 @@
 defmodule Hawk.Reader.Preloader do
-  import Ecto.Query
-
   @moduledoc """
   Applies explicitly allowed reader preloads after fetching rows.
 
@@ -8,6 +6,7 @@ defmodule Hawk.Reader.Preloader do
   keys, then delegates batching to the host repo's `preload/2`. Resource modules
   own which associations are exposed as reader preloads.
   """
+  import Ecto.Query
 
   @type preload :: atom() | {atom(), [preload()]}
 

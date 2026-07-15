@@ -1,9 +1,10 @@
 defmodule Hawk.JsonApi.Controller do
   @moduledoc """
-  Phoenix-style controller helpers for Hawk JSON:API resources.
+  Phoenix controller helpers for Hawk JSON:API resources.
 
-  The generated actions work with Phoenix conns when Phoenix is present and with
-  simple `%{assigns: ...}` maps in tests.
+  Hawk is intended to run behind Phoenix controllers. The generated actions use
+  `Phoenix.Controller.json/2` and `Plug.Conn` response helpers when available;
+  plain map conns remain supported as a lightweight test boundary.
   """
 
   alias Hawk.JsonApi

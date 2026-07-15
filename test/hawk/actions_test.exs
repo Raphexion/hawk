@@ -24,8 +24,8 @@ end
 defmodule Hawk.ActionsTest.DuplicateResource.Actions do
   use Hawk.Actions
 
-  action "ping", doc: "first"
-  action "ping", doc: "second", handler: :second_ping
+  action("ping", doc: "first")
+  action("ping", doc: "second", handler: :second_ping)
 end
 
 defmodule Hawk.ActionsTest do

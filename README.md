@@ -1,7 +1,7 @@
 # Hawk
 
-Hawk is a reusable Elixir library for building declarative JSON:API backends on
-top of Ecto and PostgreSQL.
+Hawk is a reusable Elixir library for building declarative Phoenix JSON:API
+backends on top of Ecto and PostgreSQL.
 
 Hawk depends on Ecto, Ecto SQL, and Postgrex, but it does not define or supervise
 a concrete `Ecto.Repo`. Applications provide their own Repo modules, database
@@ -9,7 +9,7 @@ configuration, migrations, and supervision tree.
 
 ## Golden path
 
-A Hawk resource has four small modules plus optional web helpers:
+A Hawk resource has four small modules plus Phoenix-facing helpers:
 
 - `Model` declares the Ecto schema and explicit JSON:API surface.
 - `Policy` declares who can read/write.
