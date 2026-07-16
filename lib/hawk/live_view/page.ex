@@ -134,12 +134,5 @@ defmodule Hawk.LiveView.Page do
     end
   end
 
-  defp normalize_id(id) when is_binary(id) do
-    case Integer.parse(id) do
-      {integer, ""} -> integer
-      _other -> id
-    end
-  end
-
   defp normalize_id(id), do: id
 end

@@ -92,7 +92,7 @@ defmodule Hawk.JsonApiTest do
             "attributes" => %{"title" => "Math"},
             "relationships" => %{
               "school" => %{"data" => nil},
-              "teacher" => %{"data" => %{"type" => "teachers", "id" => "12"}},
+              "teacher" => %{"data" => %{"type" => "teachers", "id" => Videdal.teacher_id()}},
               "grades" => %{"data" => [%{"type" => "grades", "id" => "1"}]}
             }
           }
@@ -101,7 +101,7 @@ defmodule Hawk.JsonApiTest do
         :creatable
       )
 
-    assert attrs == %{title: "Math", school_id: nil, teacher_id: 12}
+    assert attrs == %{title: "Math", school_id: nil, teacher_id: Videdal.teacher_id()}
   end
 
   test "hostile attribute and relationship names are ignored without creating atoms" do
@@ -116,7 +116,7 @@ defmodule Hawk.JsonApiTest do
             "attributes" => %{"title" => "Math", hostile_attribute => "boom"},
             "relationships" => %{
               "school" => %{"data" => nil},
-              hostile_relationship => %{"data" => %{"type" => "schools", "id" => "7"}}
+              hostile_relationship => %{"data" => %{"type" => "schools", "id" => Videdal.school_id()}}
             }
           }
         },

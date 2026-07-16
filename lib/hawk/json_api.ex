@@ -422,17 +422,8 @@ defmodule Hawk.JsonApi do
     end)
   end
 
-  defp relationship_id(%{"id" => id}), do: parse_id(id)
+  defp relationship_id(%{"id" => id}), do: id
   defp relationship_id(nil), do: nil
-
-  defp parse_id(id) when is_binary(id) do
-    case Integer.parse(id) do
-      {integer, ""} -> integer
-      _other -> id
-    end
-  end
-
-  defp parse_id(id), do: id
 
   defp put_request_option(opts, _key, value, value), do: opts
   defp put_request_option(opts, key, value, _empty), do: Keyword.put(opts, key, value)
