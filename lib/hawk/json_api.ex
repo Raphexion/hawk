@@ -21,13 +21,24 @@ defmodule Hawk.JsonApi do
     |> put_included([model], opts)
   end
 
+  def metadata(source, opts \\ [])
+
+  def metadata(%module{}, opts), do: metadata(module, opts)
+
+  def metadata(module, opts) when is_atom(module) do
+    opts
+    |> Keyword.get(:json_api_by_model, %{})
+    |> Map.get(module, module.__hawk_json_api__())
+    |> normalize_metadata()
+  end
+
   def relationship_document(model, relationship)
       when is_struct(model) and is_binary(relationship) do
     name = relationship_key!(model, relationship)
     data = relationship_data(model, name, [name])
 
     %{
-      links: relationship_links(model, name),
+      links: relationship_links(model, metadata(model), name),
       data: data
     }
   end
@@ -146,7 +157,7 @@ defmodule Hawk.JsonApi do
   end
 
   defp resource_object(model, opts) do
-    json_api = model.__struct__.__hawk_json_api__()
+    json_api = metadata(model, opts)
 
     %{
       type: json_api.type,
@@ -154,7 +165,11 @@ defmodule Hawk.JsonApi do
       attributes: resource_attributes(model, json_api, opts),
       relationships: resource_relationships(model, json_api, opts)
     }
-    |> put_resource_links(model, opts)
+    |> put_resource_links(model, json_api, opts)
+  end
+
+  defp normalize_metadata(metadata) do
+    Map.merge(%{attributes: %{}, relationships: %{}, creatable: [], updatable: []}, metadata)
   end
 
   defp resource_attributes(model, json_api, opts) do
@@ -183,7 +198,7 @@ defmodule Hawk.JsonApi do
       relationship = %{data: relationship_data(model, name, preloads)}
 
       if Keyword.get(opts, :links, false) do
-        {name, Map.put(relationship, :links, relationship_links(model, name))}
+        {name, Map.put(relationship, :links, relationship_links(model, json_api, name))}
       else
         {name, relationship}
       end
@@ -191,7 +206,7 @@ defmodule Hawk.JsonApi do
   end
 
   defp relationship_data(model, name, preloads) do
-    association = model.__struct__.__schema__(:association, name)
+    association = schema_module(model).__schema__(:association, name)
 
     case association.cardinality do
       :one -> belongs_to_identifier(model, association)
@@ -199,8 +214,8 @@ defmodule Hawk.JsonApi do
     end
   end
 
-  defp relationship_links(model, name) do
-    base = resource_path(model)
+  defp relationship_links(model, json_api, name) do
+    base = resource_path(model, json_api)
 
     %{
       self: base <> "/relationships/" <> to_string(name),
@@ -208,9 +223,9 @@ defmodule Hawk.JsonApi do
     }
   end
 
-  defp put_resource_links(resource, model, opts) do
+  defp put_resource_links(resource, model, json_api, opts) do
     if Keyword.get(opts, :links, false) do
-      Map.put(resource, :links, %{self: resource_path(model)})
+      Map.put(resource, :links, %{self: resource_path(model, json_api)})
     else
       resource
     end
@@ -232,21 +247,20 @@ defmodule Hawk.JsonApi do
     end
   end
 
-  defp document_self_link(model) when is_struct(model), do: resource_path(model)
+  defp document_self_link(model) when is_struct(model), do: resource_path(model, metadata(model))
 
   defp collection_path(model, relationship) do
-    association = model.__struct__.__schema__(:association, relationship)
-    "/" <> association.related.__hawk_json_api__().type
+    association = schema_module(model).__schema__(:association, relationship)
+    "/" <> metadata(association.related).type
   end
 
-  defp resource_path(model) do
-    json_api = model.__struct__.__hawk_json_api__()
+  defp resource_path(model, json_api) do
     "/" <> json_api.type <> "/" <> to_string(Map.get(model, :id))
   end
 
   defp belongs_to_identifier(model, association) do
     id = Map.get(model, association.owner_key)
-    type = association.related.__hawk_json_api__().type
+    type = metadata(association.related).type
 
     if is_nil(id), do: nil, else: %{type: type, id: to_string(id)}
   end
@@ -259,7 +273,7 @@ defmodule Hawk.JsonApi do
     do:
       Enum.map(
         models,
-        &%{type: &1.__struct__.__hawk_json_api__().type, id: to_string(Map.get(&1, :id))}
+        &%{type: metadata(&1).type, id: to_string(Map.get(&1, :id))}
       )
 
   defp preload_requested?(preloads, name) do
@@ -607,12 +621,14 @@ defmodule Hawk.JsonApi do
   defp merge_nested_preloads(_key, nested), do: nested
 
   def relationship_key!(model, relationship) when is_struct(model) do
-    relationship_key!(model.__struct__, relationship)
+    relationship_key!(schema_module(model), relationship)
   end
 
   def relationship_key!(model, relationship) when is_atom(model) and is_binary(relationship) do
     allowed_by_name =
-      model.__hawk_json_api__().relationships
+      model
+      |> metadata()
+      |> Map.fetch!(:relationships)
       |> Map.keys()
       |> Map.new(&{to_string(&1), &1})
 
@@ -621,6 +637,8 @@ defmodule Hawk.JsonApi do
       :error -> raise ArgumentError, "unknown relationship #{inspect(relationship)}"
     end
   end
+
+  defp schema_module(%module{}), do: module
 
   defp related_value(model, name) do
     case Map.get(model, name) do

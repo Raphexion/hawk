@@ -117,6 +117,17 @@ defmodule Hawk.JsonApi.Controller do
     end
   end
 
+  defp json_api_metadata(resource, model) do
+    if function_exported?(resource, :__hawk_resource__, 1) do
+      case resource.__hawk_resource__(:json_api) do
+        false -> model.__hawk_json_api__()
+        json_api -> json_api.__hawk_json_api__()
+      end
+    else
+      model.__hawk_json_api__()
+    end
+  end
+
   def index(conn, resource, model, params, public? \\ false) do
     telemetry_span(conn, resource, model, :index, %{}, fn ->
       with_error_boundary(conn, fn ->
@@ -134,7 +145,8 @@ defmodule Hawk.JsonApi.Controller do
           JsonApi.document(resource.all(opts),
             preloads: Keyword.get(opts, :preloads, []),
             context: Keyword.get(opts, :context, %{}),
-            page: Keyword.get(opts, :page)
+            page: Keyword.get(opts, :page),
+            json_api_by_model: %{model => json_api_metadata(resource, model)}
           )
         )
       end)
@@ -143,33 +155,41 @@ defmodule Hawk.JsonApi.Controller do
 
   def show(conn, resource, model, %{"id" => id}, public? \\ false) do
     telemetry_span(conn, resource, model, :show, %{id_kind: id_kind(id)}, fn ->
-      do_show(conn, resource, id, public?)
+      do_show(conn, resource, model, id, public?)
     end)
   end
 
-  defp do_show(conn, resource, id, public?) do
+  defp do_show(conn, resource, model, id, public?) do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
       context = request_context(conn)
 
       case JsonApi.member_id!(id) do
-        {:uuid, uuid} -> show_by_uuid(conn, resource, authority, context, uuid)
-        {:short_id, prefix} -> show_by_short_id(conn, resource, authority, context, prefix)
+        {:uuid, uuid} -> show_by_uuid(conn, resource, model, authority, context, uuid)
+        {:short_id, prefix} -> show_by_short_id(conn, resource, model, authority, context, prefix)
       end
     end)
   end
 
-  defp show_by_uuid(conn, resource, authority, context, uuid) do
+  defp show_by_uuid(conn, resource, root_model, authority, context, uuid) do
     case resource.one(authority: authority, context: context, filter: %{id: uuid}) do
       {:ok, model} ->
-        json(conn, 200, JsonApi.document(model, context: request_context(conn), links: true))
+        json(
+          conn,
+          200,
+          JsonApi.document(model,
+            context: request_context(conn),
+            links: true,
+            json_api_by_model: %{root_model => json_api_metadata(resource, root_model)}
+          )
+        )
 
       :not_found ->
         json(conn, 404, not_found(resource))
     end
   end
 
-  defp show_by_short_id(conn, resource, authority, context, prefix) do
+  defp show_by_short_id(conn, resource, root_model, authority, context, prefix) do
     case resource.all(
            authority: authority,
            context: context,
@@ -177,7 +197,15 @@ defmodule Hawk.JsonApi.Controller do
            page: %{size: 2}
          ) do
       [model] ->
-        json(conn, 200, JsonApi.document(model, context: request_context(conn), links: true))
+        json(
+          conn,
+          200,
+          JsonApi.document(model,
+            context: request_context(conn),
+            links: true,
+            json_api_by_model: %{root_model => json_api_metadata(resource, root_model)}
+          )
+        )
 
       [] ->
         json(conn, 404, not_found(resource))

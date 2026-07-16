@@ -48,6 +48,41 @@ A Hawk resource has four small modules plus Phoenix-facing helpers:
 - `Actions` is optional and declares imperative JSON:API custom actions under `/-actions/`.
 - JSON:API, OpenAPI, and LiveView helpers are generated from those declarations.
 
+### JSON:API adapter
+
+New resources should keep JSON:API exposure in a sibling adapter module:
+
+```elixir
+defmodule MyApp.Courses.JsonApi do
+  use Hawk.JsonApi.Resource
+
+  type("courses")
+  doc("A course taught by a teacher.")
+
+  attribute(:title,
+    writable: true,
+    doc: "Human-readable course title.",
+    example: "Math"
+  )
+
+  attribute(:slug,
+    source: :public_slug,
+    creatable: true,
+    updatable: false
+  )
+
+  relationship(:teacher,
+    writable: true,
+    doc: "The teacher responsible for the course.",
+    example: %{type: "teachers", id: "..."}
+  )
+end
+```
+
+`writable: true` means both creatable and updatable. Use `creatable:` and
+`updatable:` when create/update capabilities differ. The older model-level
+`json_api do` block remains supported for compatibility and simple examples.
+
 ### Model
 
 ```elixir
