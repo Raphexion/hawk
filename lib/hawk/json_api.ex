@@ -32,26 +32,27 @@ defmodule Hawk.JsonApi do
     |> normalize_metadata()
   end
 
-  def relationship_document(model, relationship)
+  def relationship_document(model, relationship, opts \\ [])
       when is_struct(model) and is_binary(relationship) do
-    name = relationship_key!(model, relationship)
-    data = relationship_data(model, name, [name])
+    json_api = metadata(model, opts)
+    {name, source} = relationship_mapping!(json_api, relationship)
+    data = relationship_data(model, source, [source])
 
     %{
-      links: relationship_links(model, metadata(model), name),
+      links: relationship_links(model, json_api, name),
       data: data
     }
   end
 
   def related_document(model, relationship, opts \\ [])
       when is_struct(model) and is_binary(relationship) do
-    name = relationship_key!(model, relationship)
+    {_name, source} = relationship_mapping!(metadata(model, opts), relationship)
 
-    case related_value(model, name) do
+    case related_value(model, source) do
       models when is_list(models) ->
         document(
           models,
-          opts |> Keyword.put(:links, true) |> Keyword.put(:self, collection_path(model, name))
+          opts |> Keyword.put(:links, true) |> Keyword.put(:self, collection_path(model, source))
         )
 
       nil ->
@@ -126,7 +127,7 @@ defmodule Hawk.JsonApi do
     data
     |> Map.get("attributes", %{})
     |> atomize_allowed(allowed, json_api)
-    |> Map.merge(relationship_attrs(model, data, allowed))
+    |> Map.merge(relationship_attrs(model, data, allowed, json_api))
   end
 
   def request_options(params) when is_map(params) do
@@ -196,8 +197,9 @@ defmodule Hawk.JsonApi do
   defp resource_relationships(model, json_api, opts) do
     preloads = Keyword.get(opts, :preloads, [])
 
-    Map.new(json_api.relationships, fn {name, _metadata} ->
-      relationship = %{data: relationship_data(model, name, preloads)}
+    Map.new(json_api.relationships, fn {name, metadata} ->
+      source = relationship_source(name, metadata)
+      relationship = %{data: relationship_data(model, source, preloads)}
 
       if Keyword.get(opts, :links, false) do
         {name, Map.put(relationship, :links, relationship_links(model, json_api, name))}
@@ -384,7 +386,7 @@ defmodule Hawk.JsonApi do
         raise ArgumentError, "unknown relationship #{inspect(name)}"
       end
 
-      validate_relationship_identifier!(model, String.to_existing_atom(name), relationship)
+      validate_relationship_identifier!(model, relationship_source(json_api, name), relationship)
     end)
   end
 
@@ -470,7 +472,7 @@ defmodule Hawk.JsonApi do
     |> Map.get(:source, field)
   end
 
-  defp relationship_attrs(model, data, allowed) do
+  defp relationship_attrs(model, data, allowed, json_api) do
     allowed_by_name = Map.new(allowed, &{to_string(&1), &1})
 
     data
@@ -478,7 +480,8 @@ defmodule Hawk.JsonApi do
     |> Enum.reduce(%{}, fn {name, %{"data" => relationship}}, attrs ->
       case Map.fetch(allowed_by_name, name) do
         {:ok, key} ->
-          association = model.__schema__(:association, key)
+          source = relationship_source(json_api, key)
+          association = model.__schema__(:association, source)
           Map.put(attrs, association.owner_key, relationship_id(relationship))
 
         :error ->
@@ -628,23 +631,43 @@ defmodule Hawk.JsonApi do
 
   defp merge_nested_preloads(_key, nested), do: nested
 
-  def relationship_key!(model, relationship) when is_struct(model) do
-    relationship_key!(schema_module(model), relationship)
+  def relationship_key!(model, relationship, opts \\ [])
+
+  def relationship_key!(model, relationship, opts) when is_struct(model) do
+    relationship_key!(schema_module(model), relationship, opts)
   end
 
-  def relationship_key!(model, relationship) when is_atom(model) and is_binary(relationship) do
+  def relationship_key!(model, relationship, opts)
+      when is_atom(model) and is_binary(relationship) do
+    {_name, source} = relationship_mapping!(metadata(model, opts), relationship)
+    source
+  end
+
+  defp relationship_mapping!(json_api, relationship) do
     allowed_by_name =
-      model
-      |> metadata()
-      |> Map.fetch!(:relationships)
-      |> Map.keys()
-      |> Map.new(&{to_string(&1), &1})
+      json_api.relationships
+      |> Map.new(fn {name, metadata} ->
+        {to_string(name), {name, relationship_source(name, metadata)}}
+      end)
 
     case Map.fetch(allowed_by_name, relationship) do
-      {:ok, name} -> name
+      {:ok, mapping} -> mapping
       :error -> raise ArgumentError, "unknown relationship #{inspect(relationship)}"
     end
   end
+
+  defp relationship_source(json_api, name) when is_map(json_api) and is_binary(name) do
+    {_name, source} = relationship_mapping!(json_api, name)
+    source
+  end
+
+  defp relationship_source(json_api, name) when is_map(json_api) do
+    json_api.relationships
+    |> Map.fetch!(name)
+    |> then(&relationship_source(name, &1))
+  end
+
+  defp relationship_source(name, metadata), do: Map.get(metadata, :source, name)
 
   defp schema_module(%module{}), do: module
 

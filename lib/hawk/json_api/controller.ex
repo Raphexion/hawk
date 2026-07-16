@@ -331,8 +331,19 @@ defmodule Hawk.JsonApi.Controller do
       context = request_context(conn)
 
       case resource.one(authority: authority, context: context, filter: %{id: normalize_id(id)}) do
-        {:ok, model} -> json(conn, 200, JsonApi.relationship_document(model, relationship_name))
-        :not_found -> json(conn, 404, not_found(resource))
+        {:ok, model} ->
+          json(
+            conn,
+            200,
+            JsonApi.relationship_document(model, relationship_name,
+              json_api_by_model: %{
+                model_module(model) => json_api_metadata(resource, model_module(model))
+              }
+            )
+          )
+
+        :not_found ->
+          json(conn, 404, not_found(resource))
       end
     end)
   end
@@ -353,7 +364,11 @@ defmodule Hawk.JsonApi.Controller do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
       context = request_context(conn)
-      relationship = JsonApi.relationship_key!(model, relationship_name)
+
+      relationship =
+        JsonApi.relationship_key!(model, relationship_name,
+          json_api_by_model: %{model => json_api_metadata(resource, model)}
+        )
 
       case resource.one(
              authority: authority,
@@ -361,8 +376,19 @@ defmodule Hawk.JsonApi.Controller do
              filter: %{id: normalize_id(id)},
              preloads: [relationship]
            ) do
-        {:ok, model} -> json(conn, 200, JsonApi.related_document(model, relationship_name))
-        :not_found -> json(conn, 404, not_found(resource))
+        {:ok, model} ->
+          json(
+            conn,
+            200,
+            JsonApi.related_document(model, relationship_name,
+              json_api_by_model: %{
+                model_module(model) => json_api_metadata(resource, model_module(model))
+              }
+            )
+          )
+
+        :not_found ->
+          json(conn, 404, not_found(resource))
       end
     end)
   end
