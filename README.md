@@ -13,6 +13,32 @@ Hawk's current north-star design is captured in [`docs/hawk-resource-direction.m
 
 ## Golden path
 
+A Hawk resource facade ties the resource parts together and follows convention by default:
+
+```elixir
+defmodule MyApp.Courses do
+  use Hawk.Resource, model: MyApp.Course
+end
+```
+
+By convention Hawk expects sibling modules such as `MyApp.Courses.Reader`,
+`MyApp.Courses.Policy`, `MyApp.Courses.Writer`, `MyApp.Courses.JsonApi`, and
+`MyApp.Courses.LiveView`. Missing conventional modules fail at compile time so
+typos are caught early. Intentional absence is explicit:
+
+```elixir
+defmodule MyApp.CourseSummaries do
+  use Hawk.Resource,
+    model: MyApp.CourseSummary,
+    writer: false,
+    json_api: false,
+    live_view: false
+end
+```
+
+The facade generates public reader/writer/action delegations and exposes resource
+introspection through `__hawk_resource__/1`.
+
 A Hawk resource has four small modules plus Phoenix-facing helpers:
 
 - `Model` declares the Ecto schema and explicit JSON:API surface.
