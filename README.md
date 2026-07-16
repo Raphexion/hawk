@@ -24,7 +24,8 @@ end
 By convention Hawk expects sibling modules such as `MyApp.Courses.Reader`,
 `MyApp.Courses.Policy`, `MyApp.Courses.Writer`, `MyApp.Courses.JsonApi`, and
 `MyApp.Courses.LiveView`. Missing conventional modules fail at compile time so
-typos are caught early. Intentional absence is explicit:
+typos are caught early. Intentional absence is explicit and disables the
+corresponding adapter entrypoint:
 
 ```elixir
 defmodule MyApp.CourseSummaries do

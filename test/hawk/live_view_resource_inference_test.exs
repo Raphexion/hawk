@@ -59,5 +59,39 @@ defmodule Hawk.LiveViewResourceInferenceTest do
     assert socket.assigns.hawk_resource == :course
   end
 
+  test "LiveView refuses resources with live_view disabled" do
+    assert_raise ArgumentError,
+                 ~r/Hawk LiveView resource Hawk.LiveViewResourceInferenceTest.LiveViewDisabled has live_view disabled/,
+                 fn ->
+                   Code.compile_string("""
+                   defmodule Hawk.LiveViewResourceInferenceTest.LiveViewDisabled.Reader do
+                     def one(_opts), do: :not_found
+                     def one!(_opts), do: raise("not used")
+                     def all(_opts), do: []
+                   end
+
+                   defmodule Hawk.LiveViewResourceInferenceTest.LiveViewDisabled.Policy do
+                     def read_filter(_authority), do: :all
+                   end
+
+                   defmodule Hawk.LiveViewResourceInferenceTest.LiveViewDisabled.JsonApi do
+                     def __hawk_json_api__, do: %{type: "courses"}
+                   end
+
+                   defmodule Hawk.LiveViewResourceInferenceTest.LiveViewDisabled do
+                     use Hawk.Resource,
+                       model: Hawk.LiveViewResourceInferenceTest.Course,
+                       writer: false,
+                       live_view: false
+                   end
+
+                   defmodule Hawk.LiveViewResourceInferenceTest.LiveViewDisabledLive do
+                     use Hawk.LiveView,
+                       resource: Hawk.LiveViewResourceInferenceTest.LiveViewDisabled
+                   end
+                   """)
+                 end
+  end
+
   defp socket, do: %{assigns: %{}}
 end

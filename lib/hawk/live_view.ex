@@ -12,6 +12,7 @@ defmodule Hawk.LiveView do
   defmacro __using__(opts) do
     env = __CALLER__
     resource = Keyword.fetch!(opts, :resource) |> Macro.expand(env)
+    validate_live_view_enabled!(resource)
     as = Keyword.get(opts, :as) || infer_as!(resource)
     plural_as = Keyword.get(opts, :plural_as) || infer_plural_as(resource, as)
 
@@ -40,6 +41,14 @@ defmodule Hawk.LiveView do
           params
         )
       end
+    end
+  end
+
+  defp validate_live_view_enabled!(resource) do
+    if Code.ensure_compiled(resource) == {:module, resource} and
+         function_exported?(resource, :__hawk_resource__, 1) and
+         resource.__hawk_resource__(:live_view) == false do
+      raise ArgumentError, "Hawk LiveView resource #{inspect(resource)} has live_view disabled"
     end
   end
 

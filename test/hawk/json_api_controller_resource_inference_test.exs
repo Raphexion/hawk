@@ -69,6 +69,40 @@ defmodule Hawk.JsonApiControllerResourceInferenceTest do
     assert conn.resp_body.data.id == Videdal.course_id()
   end
 
+  test "controller refuses resources with json_api disabled" do
+    assert_raise ArgumentError,
+                 ~r/Hawk JSON:API controller resource Hawk.JsonApiControllerResourceInferenceTest.JsonApiDisabled has json_api disabled/,
+                 fn ->
+                   Code.compile_string("""
+                   defmodule Hawk.JsonApiControllerResourceInferenceTest.JsonApiDisabled.Reader do
+                     def one(_opts), do: :not_found
+                     def one!(_opts), do: raise("not used")
+                     def all(_opts), do: []
+                   end
+
+                   defmodule Hawk.JsonApiControllerResourceInferenceTest.JsonApiDisabled.Policy do
+                     def read_filter(_authority), do: :all
+                   end
+
+                   defmodule Hawk.JsonApiControllerResourceInferenceTest.JsonApiDisabled.LiveView do
+                     def __hawk_live_view__, do: %{surfaces: []}
+                   end
+
+                   defmodule Hawk.JsonApiControllerResourceInferenceTest.JsonApiDisabled do
+                     use Hawk.Resource,
+                       model: Hawk.JsonApiControllerResourceInferenceTest.Course,
+                       writer: false,
+                       json_api: false
+                   end
+
+                   defmodule Hawk.JsonApiControllerResourceInferenceTest.JsonApiDisabledController do
+                     use Hawk.JsonApi.Controller,
+                       resource: Hawk.JsonApiControllerResourceInferenceTest.JsonApiDisabled
+                   end
+                   """)
+                 end
+  end
+
   defp conn do
     %{assigns: %{authority: Hawk.Authority.system()}, status: nil, resp_body: nil}
   end

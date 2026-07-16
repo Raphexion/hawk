@@ -14,6 +14,7 @@ defmodule Hawk.JsonApi.Controller do
     env = __CALLER__
     resource = Keyword.fetch!(opts, :resource) |> Macro.expand(env)
     model = controller_model!(resource, Keyword.get(opts, :model), env)
+    validate_json_api_enabled!(resource)
     public? = Keyword.get(opts, :public, false)
 
     quote do
@@ -114,6 +115,15 @@ defmodule Hawk.JsonApi.Controller do
       true ->
         raise ArgumentError,
               "Hawk JSON:API controller requires :model when resource #{inspect(resource)} is not a Hawk.Resource facade"
+    end
+  end
+
+  defp validate_json_api_enabled!(resource) do
+    if Code.ensure_compiled(resource) == {:module, resource} and
+         function_exported?(resource, :__hawk_resource__, 1) and
+         resource.__hawk_resource__(:json_api) == false do
+      raise ArgumentError,
+            "Hawk JSON:API controller resource #{inspect(resource)} has json_api disabled"
     end
   end
 
