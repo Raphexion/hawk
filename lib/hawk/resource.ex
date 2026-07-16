@@ -67,6 +67,8 @@ defmodule Hawk.Resource do
     validate_functions!(modules.json_api, :json_api, __hawk_json_api__: 0)
     validate_functions!(modules.live_view, :live_view, __hawk_live_view__: 0)
     validate_functions!(modules.actions, :actions, __hawk_actions__: 0)
+
+    validate_json_api_contract!(modules.model, modules.json_api)
   end
 
   defp validate_module!(false, _key), do: :ok
@@ -86,6 +88,51 @@ defmodule Hawk.Resource do
       unless function_exported?(module, function, arity) do
         raise ArgumentError,
               "Hawk resource #{key} module #{inspect(module)} must define #{function}/#{arity}"
+      end
+    end)
+  end
+
+  defp validate_json_api_contract!(_model, false), do: :ok
+
+  defp validate_json_api_contract!(model, json_api_module) do
+    json_api = json_api_module.__hawk_json_api__()
+
+    Enum.each(Map.get(json_api, :attributes, %{}), fn {name, metadata} ->
+      source = Map.get(metadata, :source, name)
+
+      if is_nil(model.__schema__(:type, source)) do
+        raise ArgumentError,
+              "Hawk resource json_api module #{inspect(json_api_module)} attribute #{inspect(name)} source #{inspect(source)} must reference a field on #{inspect(model)}"
+      end
+    end)
+
+    Enum.each(Map.get(json_api, :relationships, %{}), fn {name, metadata} ->
+      source = Map.get(metadata, :source, name)
+
+      if is_nil(model.__schema__(:association, source)) do
+        raise ArgumentError,
+              "Hawk resource json_api module #{inspect(json_api_module)} relationship #{inspect(name)} source #{inspect(source)} must reference an association on #{inspect(model)}"
+      end
+    end)
+
+    validate_json_api_capability!(json_api_module, json_api, :creatable)
+    validate_json_api_capability!(json_api_module, json_api, :updatable)
+  end
+
+  defp validate_json_api_capability!(json_api_module, json_api, capability) do
+    declared =
+      json_api
+      |> Map.get(:attributes, %{})
+      |> Map.keys()
+      |> Kernel.++(Map.keys(Map.get(json_api, :relationships, %{})))
+      |> MapSet.new()
+
+    json_api
+    |> Map.get(capability, [])
+    |> Enum.each(fn name ->
+      unless MapSet.member?(declared, name) do
+        raise ArgumentError,
+              "Hawk resource json_api module #{inspect(json_api_module)} #{capability} field #{inspect(name)} must be declared as an attribute or relationship"
       end
     end)
   end

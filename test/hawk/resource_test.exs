@@ -212,4 +212,82 @@ defmodule Hawk.ResourceTest do
                    """)
                  end
   end
+
+  test "json_api attribute sources must reference model fields" do
+    assert_raise ArgumentError,
+                 ~r/Hawk resource json_api module Hawk.ResourceTest.BadAttributeSource.JsonApi attribute :headline source :missing_title must reference a field on Hawk.ResourceTest.Course/,
+                 fn ->
+                   Code.compile_string("""
+                   defmodule Hawk.ResourceTest.BadAttributeSource.Reader do
+                     def one(opts), do: {:one, opts}
+                     def one!(opts), do: {:one!, opts}
+                     def all(opts), do: {:all, opts}
+                   end
+
+                   defmodule Hawk.ResourceTest.BadAttributeSource.Policy do
+                     def read_filter(_authority), do: :all
+                   end
+
+                   defmodule Hawk.ResourceTest.BadAttributeSource.Writer do
+                     def create(attrs, authority), do: {:create, attrs, authority}
+                     def update(model, attrs, authority), do: {:update, model, attrs, authority}
+                     def delete(model, authority), do: {:delete, model, authority}
+                   end
+
+                   defmodule Hawk.ResourceTest.BadAttributeSource.JsonApi do
+                     use Hawk.JsonApi.Resource
+
+                     type("courses")
+                     attribute(:headline, source: :missing_title)
+                   end
+
+                   defmodule Hawk.ResourceTest.BadAttributeSource.LiveView do
+                     def __hawk_live_view__, do: %{}
+                   end
+
+                   defmodule Hawk.ResourceTest.BadAttributeSource do
+                     use Hawk.Resource, model: Hawk.ResourceTest.Course
+                   end
+                   """)
+                 end
+  end
+
+  test "json_api relationship sources must reference model associations" do
+    assert_raise ArgumentError,
+                 ~r/Hawk resource json_api module Hawk.ResourceTest.BadRelationshipSource.JsonApi relationship :teacher source :missing_teacher must reference an association on Hawk.ResourceTest.Course/,
+                 fn ->
+                   Code.compile_string("""
+                   defmodule Hawk.ResourceTest.BadRelationshipSource.Reader do
+                     def one(opts), do: {:one, opts}
+                     def one!(opts), do: {:one!, opts}
+                     def all(opts), do: {:all, opts}
+                   end
+
+                   defmodule Hawk.ResourceTest.BadRelationshipSource.Policy do
+                     def read_filter(_authority), do: :all
+                   end
+
+                   defmodule Hawk.ResourceTest.BadRelationshipSource.Writer do
+                     def create(attrs, authority), do: {:create, attrs, authority}
+                     def update(model, attrs, authority), do: {:update, model, attrs, authority}
+                     def delete(model, authority), do: {:delete, model, authority}
+                   end
+
+                   defmodule Hawk.ResourceTest.BadRelationshipSource.JsonApi do
+                     use Hawk.JsonApi.Resource
+
+                     type("courses")
+                     relationship(:teacher, source: :missing_teacher)
+                   end
+
+                   defmodule Hawk.ResourceTest.BadRelationshipSource.LiveView do
+                     def __hawk_live_view__, do: %{}
+                   end
+
+                   defmodule Hawk.ResourceTest.BadRelationshipSource do
+                     use Hawk.Resource, model: Hawk.ResourceTest.Course
+                   end
+                   """)
+                 end
+  end
 end

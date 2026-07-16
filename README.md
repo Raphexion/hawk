@@ -37,7 +37,9 @@ end
 ```
 
 The facade generates public reader/writer/action delegations and exposes resource
-introspection through `__hawk_resource__/1`.
+introspection through `__hawk_resource__/1`. It also validates adapter contracts
+at compile time; JSON:API adapter `source:` entries must point at real model
+fields or associations, and writable fields must be declared.
 
 A Hawk resource has four small modules plus Phoenix-facing helpers:
 
