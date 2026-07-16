@@ -29,6 +29,7 @@ defmodule Hawk.JsonApi.Routes do
 
       function_exported?(module, :__hawk_json_api__, 0) ->
         %{
+          resource: module.__hawk_resource__(),
           json_api: Hawk.JsonApi.metadata(module),
           capabilities: %{writer: true, actions: true}
         }
@@ -42,6 +43,7 @@ defmodule Hawk.JsonApi.Routes do
 
       json_api ->
         %{
+          resource: resource,
           json_api: Hawk.JsonApi.metadata(json_api),
           capabilities: resource.__hawk_resource__(:capabilities)
         }
@@ -53,11 +55,11 @@ defmodule Hawk.JsonApi.Routes do
     member_path = collection_path <> "/:id"
 
     [
-      %{method: :get, path: collection_path, action: :index},
-      writer_route(resource, :create, %{method: :post, path: collection_path, action: :create}),
-      %{method: :get, path: member_path, action: :show},
-      writer_route(resource, :update, %{method: :patch, path: member_path, action: :update}),
-      writer_route(resource, :delete, %{method: :delete, path: member_path, action: :delete}),
+      route(resource, :get, collection_path, :index, :read),
+      writer_route(resource, :create, route(resource, :post, collection_path, :create, :write)),
+      route(resource, :get, member_path, :show, :read),
+      writer_route(resource, :update, route(resource, :patch, member_path, :update, :write)),
+      writer_route(resource, :delete, route(resource, :delete, member_path, :delete, :write)),
       action_route(resource, member_path),
       relationship_route(resource, member_path),
       related_route(resource, member_path)
@@ -68,21 +70,32 @@ defmodule Hawk.JsonApi.Routes do
   defp writer_route(%{capabilities: %{writer: true}}, _action, route), do: route
   defp writer_route(_resource, _action, _route), do: nil
 
-  defp action_route(%{capabilities: %{actions: true}}, member_path),
-    do: %{method: :post, path: member_path <> "/-actions/:action", action: :action}
+  defp action_route(%{capabilities: %{actions: true}} = resource, member_path),
+    do: route(resource, :post, member_path <> "/-actions/:action", :action, :action)
 
   defp action_route(_resource, _member_path), do: nil
 
   defp relationship_route(resource, member_path) do
     if map_size(resource.json_api.relationships) > 0 do
-      %{method: :get, path: member_path <> "/relationships/:relationship", action: :relationship}
+      route(resource, :get, member_path <> "/relationships/:relationship", :relationship, :read)
     end
   end
 
   defp related_route(resource, member_path) do
     if map_size(resource.json_api.relationships) > 0 do
-      %{method: :get, path: member_path <> "/:relationship", action: :related}
+      route(resource, :get, member_path <> "/:relationship", :related, :read)
     end
+  end
+
+  defp route(resource, method, path, action, capability) do
+    %{
+      method: method,
+      path: path,
+      action: action,
+      controller_action: action,
+      capability: capability,
+      resource: resource.resource
+    }
   end
 
   defp resource_path(opts, type) do
