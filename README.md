@@ -83,6 +83,39 @@ end
 `updatable:` when create/update capabilities differ. The older model-level
 `json_api do` block remains supported for compatibility and simple examples.
 
+### LiveView adapter
+
+LiveView exposure belongs in a sibling adapter too. Hawk handles data plumbing;
+your templates still own the markup.
+
+```elixir
+defmodule MyApp.Courses.LiveView do
+  use Hawk.LiveView.Resource
+
+  as(:course)
+  plural_as(:courses)
+
+  index :teacher_focus do
+    doc("Courses shown to teachers.")
+    filter(:teacher_id)
+
+    table do
+      column(:title, label: "Course")
+      column(:registration_state)
+    end
+  end
+
+  show :detail do
+    field(:title)
+    field(:registration_state, label: "State")
+  end
+end
+```
+
+`use Hawk.LiveView, resource: MyApp.Courses` reads `as` and `plural_as` from
+the LiveView adapter when present, then falls back to model-based convention.
+Surface filters are UX narrowing only; policies remain the security boundary.
+
 ### Model
 
 ```elixir

@@ -13,7 +13,7 @@ defmodule Hawk.LiveView do
     env = __CALLER__
     resource = Keyword.fetch!(opts, :resource) |> Macro.expand(env)
     as = Keyword.get(opts, :as) || infer_as!(resource)
-    plural_as = Keyword.get(opts, :plural_as, pluralize(as))
+    plural_as = Keyword.get(opts, :plural_as) || infer_plural_as(resource, as)
 
     quote do
       def assign_index(socket, authority, opts \\ []) do
@@ -49,16 +49,39 @@ defmodule Hawk.LiveView do
         raise ArgumentError, "Hawk LiveView resource #{inspect(resource)} is not available"
 
       function_exported?(resource, :__hawk_resource__, 1) ->
-        resource.__hawk_resource__(:model)
-        |> Module.split()
-        |> List.last()
-        |> Macro.underscore()
-        |> String.to_atom()
+        resource
+        |> live_view_metadata()
+        |> Map.get(:as, model_as(resource.__hawk_resource__(:model)))
 
       true ->
         raise ArgumentError,
               "Hawk LiveView requires :as when resource #{inspect(resource)} is not a Hawk.Resource facade"
     end
+  end
+
+  defp infer_plural_as(resource, as) do
+    resource
+    |> live_view_metadata()
+    |> Map.get(:plural_as, pluralize(as))
+  end
+
+  defp live_view_metadata(resource) do
+    if function_exported?(resource, :__hawk_resource__, 1) do
+      case resource.__hawk_resource__(:live_view) do
+        false -> %{}
+        live_view -> live_view.__hawk_live_view__()
+      end
+    else
+      %{}
+    end
+  end
+
+  defp model_as(model) do
+    model
+    |> Module.split()
+    |> List.last()
+    |> Macro.underscore()
+    |> String.to_atom()
   end
 
   def assign_index(socket, resource, as, plural_as, authority, opts \\ []) do
