@@ -98,39 +98,44 @@ defmodule Hawk.JsonApi.Controller do
     end
   end
 
-  def index(conn, resource, _model, params, public? \\ false) do
-    with_error_boundary(conn, fn ->
-      authority = authority!(conn, public?)
+  def index(conn, resource, model, params, public? \\ false) do
+    telemetry_span(conn, resource, model, :index, %{}, fn ->
+      with_error_boundary(conn, fn ->
+        authority = authority!(conn, public?)
 
-      opts =
-        params
-        |> JsonApi.request_options()
-        |> Keyword.put(:authority, authority)
-        |> Keyword.put(:context, request_context(conn))
+        opts =
+          params
+          |> JsonApi.request_options()
+          |> Keyword.put(:authority, authority)
+          |> Keyword.put(:context, request_context(conn))
 
-      json(
-        conn,
-        200,
-        JsonApi.document(resource.all(opts),
-          preloads: Keyword.get(opts, :preloads, []),
-          context: Keyword.get(opts, :context, %{}),
-          page: Keyword.get(opts, :page)
+        json(
+          conn,
+          200,
+          JsonApi.document(resource.all(opts),
+            preloads: Keyword.get(opts, :preloads, []),
+            context: Keyword.get(opts, :context, %{}),
+            page: Keyword.get(opts, :page)
+          )
         )
-      )
+      end)
     end)
   end
 
-  def show(conn, resource, _model, %{"id" => id}, public? \\ false) do
+  def show(conn, resource, model, %{"id" => id}, public? \\ false) do
+    telemetry_span(conn, resource, model, :show, %{id_kind: id_kind(id)}, fn ->
+      do_show(conn, resource, id, public?)
+    end)
+  end
+
+  defp do_show(conn, resource, id, public?) do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
       context = request_context(conn)
 
       case JsonApi.member_id!(id) do
-        {:uuid, uuid} ->
-          show_by_uuid(conn, resource, authority, context, uuid)
-
-        {:short_id, prefix} ->
-          show_by_short_id(conn, resource, authority, context, prefix)
+        {:uuid, uuid} -> show_by_uuid(conn, resource, authority, context, uuid)
+        {:short_id, prefix} -> show_by_short_id(conn, resource, authority, context, prefix)
       end
     end)
   end
@@ -164,19 +169,27 @@ defmodule Hawk.JsonApi.Controller do
   end
 
   def create(conn, resource, model, params, public? \\ false) do
-    with_error_boundary(conn, fn ->
-      authority = authority!(conn, public?)
+    telemetry_span(conn, resource, model, :create, %{}, fn ->
+      with_error_boundary(conn, fn ->
+        authority = authority!(conn, public?)
 
-      JsonApi.validate_document!(params, model, :creatable)
+        JsonApi.validate_document!(params, model, :creatable)
 
-      params
-      |> JsonApi.attributes(model, :creatable)
-      |> resource.create(authority)
-      |> respond(conn, 201)
+        params
+        |> JsonApi.attributes(model, :creatable)
+        |> resource.create(authority)
+        |> respond(conn, 201)
+      end)
     end)
   end
 
   def update(conn, resource, model, %{"id" => id} = params, public? \\ false) do
+    telemetry_span(conn, resource, model, :update, %{id_kind: id_kind(id)}, fn ->
+      do_update(conn, resource, model, id, params, public?)
+    end)
+  end
+
+  defp do_update(conn, resource, model, id, params, public?) do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
       context = request_context(conn)
@@ -196,7 +209,13 @@ defmodule Hawk.JsonApi.Controller do
     end)
   end
 
-  def delete(conn, resource, _model, %{"id" => id}, public? \\ false) do
+  def delete(conn, resource, model, %{"id" => id}, public? \\ false) do
+    telemetry_span(conn, resource, model, :delete, %{id_kind: id_kind(id)}, fn ->
+      do_delete(conn, resource, id, public?)
+    end)
+  end
+
+  defp do_delete(conn, resource, id, public?) do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
       context = request_context(conn)
@@ -211,10 +230,16 @@ defmodule Hawk.JsonApi.Controller do
   def action(
         conn,
         resource,
-        _model,
+        model,
         %{"id" => id, "action" => action_name} = params,
         public? \\ false
       ) do
+    telemetry_span(conn, resource, model, :action, %{id_kind: id_kind(id)}, fn ->
+      do_action(conn, resource, id, action_name, params, public?)
+    end)
+  end
+
+  defp do_action(conn, resource, id, action_name, params, public?) do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
       context = request_context(conn)
@@ -232,20 +257,23 @@ defmodule Hawk.JsonApi.Controller do
   def relationship(
         conn,
         resource,
-        _model,
+        model,
         %{"id" => id, "relationship" => relationship_name},
         public? \\ false
       ) do
+    telemetry_span(conn, resource, model, :relationship, %{id_kind: id_kind(id)}, fn ->
+      do_relationship(conn, resource, id, relationship_name, public?)
+    end)
+  end
+
+  defp do_relationship(conn, resource, id, relationship_name, public?) do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
       context = request_context(conn)
 
       case resource.one(authority: authority, context: context, filter: %{id: normalize_id(id)}) do
-        {:ok, model} ->
-          json(conn, 200, JsonApi.relationship_document(model, relationship_name))
-
-        :not_found ->
-          json(conn, 404, not_found(resource))
+        {:ok, model} -> json(conn, 200, JsonApi.relationship_document(model, relationship_name))
+        :not_found -> json(conn, 404, not_found(resource))
       end
     end)
   end
@@ -257,6 +285,12 @@ defmodule Hawk.JsonApi.Controller do
         %{"id" => id, "relationship" => relationship_name},
         public? \\ false
       ) do
+    telemetry_span(conn, resource, model, :related, %{id_kind: id_kind(id)}, fn ->
+      do_related(conn, resource, model, id, relationship_name, public?)
+    end)
+  end
+
+  defp do_related(conn, resource, model, id, relationship_name, public?) do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
       context = request_context(conn)
@@ -268,14 +302,50 @@ defmodule Hawk.JsonApi.Controller do
              filter: %{id: normalize_id(id)},
              preloads: [relationship]
            ) do
-        {:ok, model} ->
-          json(conn, 200, JsonApi.related_document(model, relationship_name))
-
-        :not_found ->
-          json(conn, 404, not_found(resource))
+        {:ok, model} -> json(conn, 200, JsonApi.related_document(model, relationship_name))
+        :not_found -> json(conn, 404, not_found(resource))
       end
     end)
   end
+
+  defp telemetry_span(_conn, resource, model, action, metadata, fun) when is_function(fun, 0) do
+    start_metadata =
+      metadata
+      |> Map.merge(%{action: action, resource: resource, model: model})
+      |> Map.reject(fn {_key, value} -> is_nil(value) end)
+
+    :telemetry.span([:hawk, :json_api, :controller, action], start_metadata, fn ->
+      conn = fun.()
+      {conn, Map.merge(start_metadata, telemetry_stop_metadata(conn))}
+    end)
+  end
+
+  defp telemetry_stop_metadata(conn) do
+    status = Map.get(conn, :status)
+
+    %{
+      status: status,
+      result: telemetry_result(status)
+    }
+  end
+
+  defp telemetry_result(status) when status in 200..299, do: :ok
+  defp telemetry_result(400), do: :bad_request
+  defp telemetry_result(403), do: :not_authorized
+  defp telemetry_result(404), do: :not_found
+  defp telemetry_result(422), do: :invalid
+  defp telemetry_result(status) when is_integer(status) and status >= 500, do: :error
+  defp telemetry_result(_status), do: :unknown
+
+  defp id_kind(id) when is_binary(id) do
+    cond do
+      match?({:ok, _uuid}, Ecto.UUID.cast(id)) -> :uuid
+      Regex.match?(~r/\A[0-9a-fA-F]{8}\z/, id) -> :short_id
+      true -> :invalid
+    end
+  end
+
+  defp id_kind(_id), do: :invalid
 
   defp respond_action(conn, resource, action_name, existing, params, authority) do
     case Hawk.Actions.dispatch(

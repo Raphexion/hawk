@@ -254,6 +254,38 @@ Bare values become equality filters, and supported operators use one nested key:
 /api/v1/courses?filter[school_id]=school-1&filter[active][eq]=true&filter[name][ilike]=%25math%25
 ```
 
+### Telemetry
+
+Hawk emits standard `:telemetry.span/3` events for generated JSON:API controller
+actions. Phoenix applications can consume them with normal Telemetry.Metrics or
+custom handlers.
+
+Events use this shape:
+
+- `[:hawk, :json_api, :controller, :index, :start]`
+- `[:hawk, :json_api, :controller, :index, :stop]`
+- `[:hawk, :json_api, :controller, :show, :start]`
+- `[:hawk, :json_api, :controller, :show, :stop]`
+- and equivalent events for `create`, `update`, `delete`, `relationship`,
+  `related`, and `action`.
+
+Start metadata includes safe routing information such as `:action`, `:resource`,
+`:model`, and, for member routes, `:id_kind` (`:uuid`, `:short_id`, or
+`:invalid`). Stop metadata adds `:status` and `:result` (`:ok`, `:bad_request`,
+`:not_authorized`, `:not_found`, `:invalid`, or `:error`). Hawk deliberately does
+not emit raw IDs, short ID prefixes, request params, or mutation attributes by
+default.
+
+Example metric:
+
+```elixir
+summary("hawk.json_api.controller.show.duration",
+  event_name: [:hawk, :json_api, :controller, :show, :stop],
+  measurement: :duration,
+  tags: [:resource, :status, :result, :id_kind]
+)
+```
+
 ### OpenAPI controller
 
 ```elixir

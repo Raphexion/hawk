@@ -41,6 +41,7 @@ defmodule Hawk.MixProject do
       {:ecto, ">= 3.5.0 and < 4.0.0"},
       {:ecto_sql, ">= 3.5.0 and < 4.0.0"},
       {:postgrex, ">= 0.15.0 and < 1.0.0"},
+      {:telemetry, "~> 1.0"},
       # Code quality
       {:dialyxir, "~> 1.3", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
