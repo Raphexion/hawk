@@ -301,16 +301,23 @@ end
 
 Controllers can still pass `model:` explicitly when integrating with older hand-written facades.
 
-Generated actions:
+Generated actions follow resource capabilities:
 
 - `index/2`
 - `show/2`
-- `create/2`
-- `update/2`
-- `delete/2`
+- `create/2` when `writer` is enabled
+- `update/2` when `writer` is enabled
+- `delete/2` when `writer` is enabled
 - `relationship/2` for `GET .../:id/relationships/:relationship`
 - `related/2` for `GET .../:id/:relationship`
-- `action/2` for `POST .../:id/-actions/:action`
+- `action/2` for `POST .../:id/-actions/:action` when `actions` is enabled
+
+`Hawk.JsonApi.Routes.routes/2` returns the same capability-aware route specs for
+framework/router integration:
+
+```elixir
+Hawk.JsonApi.Routes.routes(MyApp.Courses, path_prefix: "/api/v1")
+```
 
 Controller errors use JSON:API documents:
 
