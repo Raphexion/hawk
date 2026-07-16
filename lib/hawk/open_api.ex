@@ -4,7 +4,7 @@ defmodule Hawk.OpenApi do
   """
 
   def spec(resources, opts \\ []) when is_list(resources) do
-    resources = Enum.map(resources, &normalize_resource/1)
+    resources = resources |> Enum.map(&normalize_resource/1) |> Enum.reject(&is_nil/1)
 
     %{
       openapi: "3.1.0",
@@ -23,11 +23,15 @@ defmodule Hawk.OpenApi do
   end
 
   defp normalize_resource(module) when is_atom(module) do
+    Code.ensure_compiled(module)
+
     if function_exported?(module, :__hawk_resource__, 1) do
       model = module.__hawk_resource__(:model)
-      json_api = json_api_metadata(module, model)
 
-      %{model: model, resource: module, json_api: json_api}
+      case json_api_metadata!(module) do
+        nil -> nil
+        json_api -> %{model: model, resource: module, json_api: json_api}
+      end
     else
       %{
         model: module,
@@ -37,9 +41,9 @@ defmodule Hawk.OpenApi do
     end
   end
 
-  defp json_api_metadata(resource, model) do
+  defp json_api_metadata!(resource) do
     case resource.__hawk_resource__(:json_api) do
-      false -> Hawk.JsonApi.metadata(model)
+      false -> nil
       json_api -> json_api.__hawk_json_api__()
     end
   end

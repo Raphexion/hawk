@@ -62,4 +62,13 @@ defmodule Hawk.OpenApiResourceAdapterTest do
              schema: %{type: "string", enum: ["public_slug", "-public_slug"]}
            } in parameters
   end
+
+  test "OpenAPI omits resources with json_api disabled" do
+    spec = Hawk.OpenApi.spec([Videdal.ExternalCourses, Videdal.InternalNotes])
+
+    assert Map.has_key?(spec.paths, "/courses")
+    refute Map.has_key?(spec.paths, "/internal_notes")
+    assert Map.has_key?(spec.components.schemas, :ExternalCourseResource)
+    refute Map.has_key?(spec.components.schemas, :InternalNoteResource)
+  end
 end

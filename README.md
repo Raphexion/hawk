@@ -402,7 +402,8 @@ end
 ```
 
 Pass resource facades when available; model modules remain supported for older
-code. This exposes `spec/0` and `show/2`. The specification is composed from Hawk
+code. Facades with `json_api: false` are omitted because this OpenAPI generator
+documents the JSON:API surface only. This exposes `spec/0` and `show/2`. The specification is composed from Hawk
 resource declarations: JSON:API adapter schemas, request bodies, error documents,
 sort parameters, pagination parameters, valid include paths, declared
 `/-actions/` operations, the optional `path_prefix`, and optional resource
