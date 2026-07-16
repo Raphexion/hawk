@@ -1,0 +1,176 @@
+# Hawk Resource Direction
+
+Hawk is a resource-oriented Phoenix backend framework. JSON:API and LiveView are first-class adapters over Hawk Resources, not the core abstraction themselves.
+
+## Core shape
+
+- Hawk Resources are the product: Reader, Writer, Policy, Actions, and adapter contracts define how a domain resource is read, mutated, authorized, documented, and exposed.
+- Resources model domain resources, not necessarily database tables. Table-backed schemas, views, projections, summaries, and computed resources should all fit.
+- JSON:API and LiveView should feel native and work well together while consuming the same resource capability model.
+
+## Convention with explicit absence
+
+The golden path should be low-boilerplate:
+
+```elixir
+defmodule MyApp.Courses do
+  use Hawk.Resource, model: MyApp.Course
+end
+```
+
+By convention this expects modules such as:
+
+- `MyApp.Courses.Reader`
+- `MyApp.Courses.Policy`
+- `MyApp.Courses.Writer`
+- `MyApp.Courses.JsonApi`
+- `MyApp.Courses.LiveView`
+
+Hawk should fail at compile time when expected modules are missing or malformed. Absence should be explicit and self-documenting:
+
+```elixir
+use Hawk.Resource,
+  model: MyApp.Course,
+  writer: false,
+  json_api: false,
+  live_view: false
+```
+
+Actions are optional by default, because many resources do not have broad workflow commands.
+
+## Adapter contracts
+
+JSON:API and LiveView should have separate adapter modules and DSLs:
+
+- `MyApp.Courses.JsonApi` owns external API shape: type, attributes, relationships, renamed fields, cached/computed values, docs, examples, writable request mapping, OpenAPI metadata.
+- `MyApp.Courses.LiveView` owns LiveView surfaces: tables, forms, actions, params, filters, assigns, and event plumbing.
+
+The current `json_api do` block on models is a compatibility stepping stone. The long-term direction is explicit adapter contracts beside the resource.
+
+## LiveView direction
+
+Hawk should provide the boring data plumbing, not decide the HTML/CSS.
+
+LiveView helpers should establish a consistent lifecycle for:
+
+- assigning index/show data
+- pagination, sorting, filters, and params
+- create/update form validation
+- submit handling
+- delete handling
+- action handling
+- policy-aware errors
+
+Developers should focus on UI markup while Hawk makes the data, authorization, validation, and event pattern hard to get wrong.
+
+A resource may have multiple named LiveView surfaces:
+
+```elixir
+index :teacher_focus do
+  authority_filter fn authority -> %{teacher_id: authority.identity} end
+  table do
+    column :title
+    column :registration_state
+  end
+end
+
+index :principal_school do
+  authority_filter fn authority -> %{school_id: authority.scopes.school_id} end
+  table do
+    column :title
+    column :teacher
+  end
+end
+```
+
+Surface filters are UX narrowing only. They must use declared Reader filters and can never widen policy.
+
+## Read invariant
+
+**Hawk Read Invariant:** every read is:
+
+```text
+policy_filter AND caller_filter AND resource_forced_filter
+```
+
+Policy is the security boundary. Adapter filters from JSON:API, LiveView surfaces, LiveView params, or internal callers are additional narrowing only. Unknown filters fail closed. Preloads use the related resource's own Reader and Policy.
+
+There are no hidden read bypasses. Even system reads should use `Authority.system()` and flow through the same machinery.
+
+## Write/action invariant
+
+**Hawk Write Invariant:** every create/update/delete/action passes through a declared Writer or Action pipeline that validates input, validates policy, and crosses the repository boundary or an equivalent workflow boundary.
+
+System writes should also validate policy explicitly; `system` can be allowed, but it should not bypass the policy-validation path.
+
+Actions are resource-scoped workflows/commands. They may orchestrate across resources, use `Ecto.Multi`, send emails, enqueue jobs, and perform broader side effects. They remain declared, authorized, documented, telemetry-instrumented, and testable.
+
+Member actions first resolve the primary resource through the policy-aware Reader, then validate action permission:
+
+- cannot read/see target -> `404`
+- can read target but cannot act -> `403`
+
+## Errors
+
+Hawk should move toward one canonical internal error representation used by readers, writers, actions, JSON:API, LiveView, and telemetry.
+
+Internally, errors should use atoms and structured fields:
+
+```elixir
+%Hawk.Error{
+  status: 400,
+  code: :invalid_uuid,
+  title: "Bad request",
+  detail: "id must be a valid UUID",
+  source: %{parameter: "id"}
+}
+```
+
+Adapters render this differently:
+
+- JSON:API renders `errors: [...]`
+- LiveView maps to assigns/form errors
+- telemetry maps to `result`
+- tests assert stable `code`
+
+Details should have good defaults and be customizable later, but stable codes are the contract.
+
+## Short IDs
+
+Short IDs are a pragmatic read-only convenience, not a general identifier type.
+
+Accepted:
+
+- simple member `show` reads, e.g. `GET /courses/:id`
+
+Rejected:
+
+- mutations
+- custom actions
+- relationship endpoints
+- request body relationship identifiers
+
+Short ID lookup uses an indexed UUID range and checks up to two matches:
+
+- zero matches -> `404`
+- one match -> return the resource
+- multiple matches -> `400` ambiguous prefix
+
+This keeps human-friendly URLs without making writes ambiguous.
+
+## Telemetry
+
+Phoenix request metrics already cover endpoint-level latency/status. Hawk telemetry is only valuable when it adds resource semantics Phoenix cannot know:
+
+- Hawk resource
+- action
+- result category
+- ID kind (`:uuid`, `:short_id`, `:invalid`)
+
+Telemetry should avoid raw IDs, request params, mutation attrs, and sensitive payloads by default.
+
+## Route and capability consistency
+
+Hawk should eventually provide explicit Phoenix route macros that generate only supported routes. Hand-written routes remain possible, but contract tests should catch route/capability drift.
+
+`use Hawk.JsonApi.Controller` and `use Hawk.LiveView` should eventually need only `resource: MyApp.Courses`, with model and adapter metadata inferred from the resource facade.

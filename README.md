@@ -7,6 +7,10 @@ Hawk depends on Ecto, Ecto SQL, and Postgrex, but it does not define or supervis
 a concrete `Ecto.Repo`. Applications provide their own Repo modules, database
 configuration, migrations, and supervision tree.
 
+## Direction
+
+Hawk's current north-star design is captured in [`docs/hawk-resource-direction.md`](docs/hawk-resource-direction.md).
+
 ## Golden path
 
 A Hawk resource has four small modules plus Phoenix-facing helpers:
