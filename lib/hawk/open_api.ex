@@ -22,8 +22,26 @@ defmodule Hawk.OpenApi do
     }
   end
 
-  defp normalize_resource(model) when is_atom(model) do
-    %{model: model, resource: model.__hawk_resource__(), json_api: model.__hawk_json_api__()}
+  defp normalize_resource(module) when is_atom(module) do
+    if function_exported?(module, :__hawk_resource__, 1) do
+      model = module.__hawk_resource__(:model)
+      json_api = json_api_metadata(module, model)
+
+      %{model: model, resource: module, json_api: json_api}
+    else
+      %{
+        model: module,
+        resource: module.__hawk_resource__(),
+        json_api: Hawk.JsonApi.metadata(module)
+      }
+    end
+  end
+
+  defp json_api_metadata(resource, model) do
+    case resource.__hawk_resource__(:json_api) do
+      false -> Hawk.JsonApi.metadata(model)
+      json_api -> json_api.__hawk_json_api__()
+    end
   end
 
   defp tags(resources) do
@@ -273,7 +291,7 @@ defmodule Hawk.OpenApi do
 
   defp attribute_properties(resource) do
     Map.new(resource.json_api.attributes, fn {name, metadata} ->
-      {name, field_schema(resource.model.__schema__(:type, name), metadata)}
+      {name, field_schema(attribute_type(resource, name, metadata), metadata)}
     end)
   end
 
@@ -289,7 +307,7 @@ defmodule Hawk.OpenApi do
     resource.json_api.attributes
     |> Map.take(allowed)
     |> Map.new(fn {name, metadata} ->
-      {name, field_schema(resource.model.__schema__(:type, name), metadata)}
+      {name, field_schema(attribute_type(resource, name, metadata), metadata)}
     end)
   end
 
@@ -299,6 +317,11 @@ defmodule Hawk.OpenApi do
     resource.json_api.relationships
     |> Map.take(allowed)
     |> Map.new(fn {name, metadata} -> {name, relationship_schema(metadata)} end)
+  end
+
+  defp attribute_type(resource, name, metadata) do
+    source = Map.get(metadata, :source, name)
+    resource.model.__schema__(:type, source)
   end
 
   defp relationship_schema(metadata) do
@@ -350,7 +373,22 @@ defmodule Hawk.OpenApi do
   defp include_values(resource) do
     resource.model
     |> include_values(resource.resource |> Module.concat(Reader), 2, [])
+    |> Enum.map(&external_include_value(resource, &1))
     |> Enum.sort()
+  end
+
+  defp external_include_value(resource, include) do
+    [first | rest] = String.split(include, ".")
+    external = external_relationship_name(resource, String.to_existing_atom(first))
+    Enum.join([external | rest], ".")
+  end
+
+  defp external_relationship_name(resource, source) do
+    resource.json_api.relationships
+    |> Enum.find_value(source, fn {name, metadata} ->
+      if Map.get(metadata, :source, name) == source, do: name
+    end)
+    |> to_string()
   end
 
   defp include_values(schema, reader, depth, seen) do

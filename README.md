@@ -393,15 +393,16 @@ defmodule MyAppWeb.OpenApiController do
     title: "My API",
     version: "1.0.0",
     path_prefix: "/api/v1",
-    resources: [MyApp.Course, MyApp.Grade]
+    resources: [MyApp.Courses, MyApp.Grades]
 end
 ```
 
-This exposes `spec/0` and `show/2`. The specification is composed from Hawk
-resource declarations: JSON:API schemas, request bodies, error documents, sort
-parameters, pagination parameters, valid include paths, declared `/-actions/`
-operations, the optional `path_prefix`, and optional resource organization
-metadata.
+Pass resource facades when available; model modules remain supported for older
+code. This exposes `spec/0` and `show/2`. The specification is composed from Hawk
+resource declarations: JSON:API adapter schemas, request bodies, error documents,
+sort parameters, pagination parameters, valid include paths, declared
+`/-actions/` operations, the optional `path_prefix`, and optional resource
+organization metadata.
 
 Custom actions automatically appear in the OpenAPI/Swagger spec as `POST`
 operations under paths such as `/api/v1/courses/{id}/-actions/open-registration`.
