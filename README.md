@@ -38,7 +38,10 @@ end
 ```
 
 The facade generates public reader/writer/action delegations and exposes resource
-introspection through `__hawk_resource__/1`. It also validates adapter contracts
+introspection through `__hawk_resource__/1`. JSON:API controllers generated from
+a facade only expose actions supported by the resource capabilities: read actions
+are always available, create/update/delete require `writer`, and `/-actions/`
+requires `actions`. It also validates adapter contracts
 at compile time; JSON:API adapter `source:` entries must point at real model
 fields or associations, writable fields must be declared, and LiveView fields /
 filters must reference real model fields and declared reader filters.

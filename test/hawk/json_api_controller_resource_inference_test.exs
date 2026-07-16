@@ -69,6 +69,16 @@ defmodule Hawk.JsonApiControllerResourceInferenceTest do
     assert conn.resp_body.data.id == Videdal.course_id()
   end
 
+  test "controller only exposes write actions when writer is enabled" do
+    refute function_exported?(Controller, :create, 2)
+    refute function_exported?(Controller, :update, 2)
+    refute function_exported?(Controller, :delete, 2)
+  end
+
+  test "controller only exposes custom action endpoint when actions are enabled" do
+    refute function_exported?(Controller, :action, 2)
+  end
+
   test "controller refuses resources with json_api disabled" do
     assert_raise ArgumentError,
                  ~r/Hawk JSON:API controller resource Hawk.JsonApiControllerResourceInferenceTest.JsonApiDisabled has json_api disabled/,

@@ -16,6 +16,7 @@ defmodule Hawk.JsonApi.Controller do
     model = controller_model!(resource, Keyword.get(opts, :model), env)
     validate_json_api_enabled!(resource)
     public? = Keyword.get(opts, :public, false)
+    capabilities = controller_capabilities(resource)
 
     quote do
       def index(conn, params) do
@@ -38,6 +39,44 @@ defmodule Hawk.JsonApi.Controller do
         )
       end
 
+      unquote(quote_writer_actions(resource, model, public?, capabilities))
+      unquote(quote_custom_action(resource, model, public?, capabilities))
+
+      def relationship(conn, params) do
+        JsonApiController.relationship(
+          conn,
+          unquote(resource),
+          unquote(model),
+          params,
+          unquote(public?)
+        )
+      end
+
+      def related(conn, params) do
+        JsonApiController.related(
+          conn,
+          unquote(resource),
+          unquote(model),
+          params,
+          unquote(public?)
+        )
+      end
+    end
+  end
+
+  defp controller_capabilities(resource) do
+    if Code.ensure_compiled(resource) == {:module, resource} and
+         function_exported?(resource, :__hawk_resource__, 1) do
+      resource.__hawk_resource__(:capabilities)
+    else
+      %{writer: true, actions: true}
+    end
+  end
+
+  defp quote_writer_actions(_resource, _model, _public?, %{writer: false}), do: []
+
+  defp quote_writer_actions(resource, model, public?, _capabilities) do
+    quote do
       def create(conn, params) do
         JsonApiController.create(
           conn,
@@ -67,29 +106,15 @@ defmodule Hawk.JsonApi.Controller do
           unquote(public?)
         )
       end
+    end
+  end
 
+  defp quote_custom_action(_resource, _model, _public?, %{actions: false}), do: []
+
+  defp quote_custom_action(resource, model, public?, _capabilities) do
+    quote do
       def action(conn, params) do
         JsonApiController.action(
-          conn,
-          unquote(resource),
-          unquote(model),
-          params,
-          unquote(public?)
-        )
-      end
-
-      def relationship(conn, params) do
-        JsonApiController.relationship(
-          conn,
-          unquote(resource),
-          unquote(model),
-          params,
-          unquote(public?)
-        )
-      end
-
-      def related(conn, params) do
-        JsonApiController.related(
           conn,
           unquote(resource),
           unquote(model),
