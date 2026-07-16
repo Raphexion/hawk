@@ -80,8 +80,10 @@ end
 ```
 
 `writable: true` means both creatable and updatable. Use `creatable:` and
-`updatable:` when create/update capabilities differ. The older model-level
-`json_api do` block remains supported for compatibility and simple examples.
+`updatable:` when create/update capabilities differ. `source:` maps the external
+JSON:API name to the internal model/writer attr for both rendering and request
+payloads. The older model-level `json_api do` block remains supported for
+compatibility and simple examples.
 
 ### LiveView adapter
 

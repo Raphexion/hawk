@@ -117,6 +117,9 @@ defmodule Hawk.JsonApi.Controller do
     end
   end
 
+  defp json_api_opts(resource, model),
+    do: [json_api_by_model: %{model => json_api_metadata(resource, model)}]
+
   defp json_api_metadata(resource, model) do
     if function_exported?(resource, :__hawk_resource__, 1) do
       case resource.__hawk_resource__(:json_api) do
@@ -215,17 +218,20 @@ defmodule Hawk.JsonApi.Controller do
     end
   end
 
+  defp model_module(%module{}), do: module
+
   def create(conn, resource, model, params, public? \\ false) do
     telemetry_span(conn, resource, model, :create, %{}, fn ->
       with_error_boundary(conn, fn ->
         authority = authority!(conn, public?)
 
-        JsonApi.validate_document!(params, model, :creatable)
+        json_api_opts = json_api_opts(resource, model)
+        JsonApi.validate_document!(params, model, :creatable, json_api_opts)
 
         params
-        |> JsonApi.attributes(model, :creatable)
+        |> JsonApi.attributes(model, :creatable, json_api_opts)
         |> resource.create(authority)
-        |> respond(conn, 201)
+        |> respond(conn, resource, model, 201)
       end)
     end)
   end
@@ -243,12 +249,13 @@ defmodule Hawk.JsonApi.Controller do
 
       case resource.one(authority: authority, context: context, filter: %{id: normalize_id(id)}) do
         {:ok, existing} ->
-          JsonApi.validate_document!(params, model, :updatable)
+          json_api_opts = json_api_opts(resource, model)
+          JsonApi.validate_document!(params, model, :updatable, json_api_opts)
 
           params
-          |> JsonApi.attributes(model, :updatable)
+          |> JsonApi.attributes(model, :updatable, json_api_opts)
           |> then(&resource.update(existing, &1, authority))
-          |> respond(conn, 200)
+          |> respond(conn, resource, model, 200)
 
         :not_found ->
           json(conn, 404, not_found(resource))
@@ -268,8 +275,13 @@ defmodule Hawk.JsonApi.Controller do
       context = request_context(conn)
 
       case resource.one(authority: authority, context: context, filter: %{id: normalize_id(id)}) do
-        {:ok, existing} -> existing |> resource.delete(authority) |> respond(conn, 200)
-        :not_found -> json(conn, 404, not_found(resource))
+        {:ok, existing} ->
+          existing
+          |> resource.delete(authority)
+          |> respond(conn, resource, model_module(existing), 200)
+
+        :not_found ->
+          json(conn, 404, not_found(resource))
       end
     end)
   end
@@ -403,22 +415,30 @@ defmodule Hawk.JsonApi.Controller do
            authority
          ) do
       :unknown_action -> json(conn, 404, action_not_found(resource, action_name))
-      result -> respond(result, conn, 200)
+      result -> respond(result, conn, resource, model_module(existing), 200)
     end
   end
 
-  defp respond({:ok, model}, conn, status),
-    do: json(conn, status, JsonApi.document(model, context: request_context(conn)))
+  defp respond({:ok, returned_model}, conn, resource, model, status) do
+    json(
+      conn,
+      status,
+      JsonApi.document(returned_model,
+        context: request_context(conn),
+        json_api_by_model: %{model => json_api_metadata(resource, model)}
+      )
+    )
+  end
 
-  defp respond(:ok, conn, status), do: json(conn, status, %{data: nil})
+  defp respond(:ok, conn, _resource, _model, status), do: json(conn, status, %{data: nil})
 
-  defp respond({:not_authorized, _context} = result, conn, _status),
+  defp respond({:not_authorized, _context} = result, conn, _resource, _model, _status),
     do: json(conn, 403, Hawk.Errors.to_json_api(result))
 
-  defp respond({:invalid, _context} = result, conn, _status),
+  defp respond({:invalid, _context} = result, conn, _resource, _model, _status),
     do: json(conn, 422, Hawk.Errors.to_json_api(result))
 
-  defp respond({:error, _message} = result, conn, _status),
+  defp respond({:error, _message} = result, conn, _resource, _model, _status),
     do: json(conn, 500, Hawk.Errors.to_json_api(result))
 
   defp with_error_boundary(conn, fun) when is_function(fun, 0) do

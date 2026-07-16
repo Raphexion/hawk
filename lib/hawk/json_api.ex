@@ -105,9 +105,10 @@ defmodule Hawk.JsonApi do
   defp uuid?(id), do: match?({:ok, _uuid}, Ecto.UUID.cast(id))
   defp short_id?(id), do: Regex.match?(~r/\A[0-9a-fA-F]{8}\z/, id)
 
-  def validate_document!(params, model, capability) when capability in [:creatable, :updatable] do
+  def validate_document!(params, model, capability, opts \\ [])
+      when capability in [:creatable, :updatable] do
     data = request_data!(params)
-    json_api = model.__hawk_json_api__()
+    json_api = metadata(model, opts)
 
     validate_type!(data, json_api.type, capability)
     validate_attribute_members!(data, json_api, capability)
@@ -116,14 +117,15 @@ defmodule Hawk.JsonApi do
     :ok
   end
 
-  def attributes(params, model, capability) when capability in [:creatable, :updatable] do
-    json_api = model.__hawk_json_api__()
+  def attributes(params, model, capability, opts \\ [])
+      when capability in [:creatable, :updatable] do
+    json_api = metadata(model, opts)
     allowed = Map.fetch!(json_api, capability)
     data = Map.get(params, "data", %{})
 
     data
     |> Map.get("attributes", %{})
-    |> atomize_allowed(allowed)
+    |> atomize_allowed(allowed, json_api)
     |> Map.merge(relationship_attrs(model, data, allowed))
   end
 
@@ -450,16 +452,22 @@ defmodule Hawk.JsonApi do
     raise ArgumentError, "relationship #{name} data must contain resource identifier objects"
   end
 
-  defp atomize_allowed(attrs, allowed) do
+  defp atomize_allowed(attrs, allowed, json_api) do
     allowed_by_name = Map.new(allowed, &{to_string(&1), &1})
 
     attrs
     |> Enum.reduce(%{}, fn {key, value}, acc ->
       case Map.fetch(allowed_by_name, key) do
-        {:ok, field} -> Map.put(acc, field, value)
+        {:ok, field} -> Map.put(acc, writable_attribute_key(json_api, field), value)
         :error -> acc
       end
     end)
+  end
+
+  defp writable_attribute_key(json_api, field) do
+    json_api.attributes
+    |> Map.fetch!(field)
+    |> Map.get(:source, field)
   end
 
   defp relationship_attrs(model, data, allowed) do
