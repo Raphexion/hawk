@@ -125,14 +125,42 @@ defmodule Hawk.JsonApi.Controller do
       authority = authority!(conn, public?)
       context = request_context(conn)
 
-      case resource.one(authority: authority, context: context, filter: %{id: normalize_id(id)}) do
-        {:ok, model} ->
-          json(conn, 200, JsonApi.document(model, context: request_context(conn), links: true))
+      case JsonApi.member_id!(id) do
+        {:uuid, uuid} ->
+          show_by_uuid(conn, resource, authority, context, uuid)
 
-        :not_found ->
-          json(conn, 404, not_found(resource))
+        {:short_id, prefix} ->
+          show_by_short_id(conn, resource, authority, context, prefix)
       end
     end)
+  end
+
+  defp show_by_uuid(conn, resource, authority, context, uuid) do
+    case resource.one(authority: authority, context: context, filter: %{id: uuid}) do
+      {:ok, model} ->
+        json(conn, 200, JsonApi.document(model, context: request_context(conn), links: true))
+
+      :not_found ->
+        json(conn, 404, not_found(resource))
+    end
+  end
+
+  defp show_by_short_id(conn, resource, authority, context, prefix) do
+    case resource.all(
+           authority: authority,
+           context: context,
+           filter: JsonApi.short_id_filter(prefix),
+           page: %{size: 2}
+         ) do
+      [model] ->
+        json(conn, 200, JsonApi.document(model, context: request_context(conn), links: true))
+
+      [] ->
+        json(conn, 404, not_found(resource))
+
+      [_first, _second | _rest] ->
+        json(conn, 400, bad_request("id prefix #{inspect(prefix)} is ambiguous"))
+    end
   end
 
   def create(conn, resource, model, params, public? \\ false) do

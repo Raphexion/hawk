@@ -58,6 +58,42 @@ defmodule Hawk.JsonApi do
     end
   end
 
+  def member_id!(id) when is_binary(id) do
+    cond do
+      uuid?(id) ->
+        {:uuid, id}
+
+      short_id?(id) ->
+        {:short_id, String.downcase(id)}
+
+      true ->
+        raise ArgumentError, "id must be a valid UUID or 8-character short id"
+    end
+  end
+
+  def short_id_filter(prefix) when is_binary(prefix) do
+    lower =
+      IO.iodata_to_binary([
+        prefix,
+        "-",
+        "0000",
+        "-",
+        "0000",
+        "-",
+        "0000",
+        "-",
+        String.duplicate("0", 12)
+      ])
+
+    upper =
+      IO.iodata_to_binary([prefix, "-", "ffff", "-", "ffff", "-", "ffff", "-", "ffffffffffff"])
+
+    {:and, %{id: {:gte, lower}}, %{id: {:lte, upper}}}
+  end
+
+  defp uuid?(id), do: match?({:ok, _uuid}, Ecto.UUID.cast(id))
+  defp short_id?(id), do: Regex.match?(~r/\A[0-9a-fA-F]{8}\z/, id)
+
   def validate_document!(params, model, capability) when capability in [:creatable, :updatable] do
     data = request_data!(params)
     json_api = model.__hawk_json_api__()

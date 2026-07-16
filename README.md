@@ -221,6 +221,28 @@ Resource objects returned by `show/2` include resource and relationship links.
 Relationship endpoints return JSON:API relationship linkage or related resource
 documents, using the same reader policy and preload path as ordinary includes.
 
+#### Short IDs
+
+`show/2` accepts either a full UUID or a short ID, defined as the first
+8 hexadecimal characters of a UUID. Short IDs are a human convenience for simple
+read-only member lookups only:
+
+- `GET /courses/:id` accepts full UUIDs and short IDs.
+- mutations (`PATCH`, `DELETE`), custom actions, relationship endpoints, and
+  request body relationship identifiers require full UUIDs.
+
+Hawk keeps this deliberately prudent because short IDs are prefixes, not stable
+identifiers. A short ID lookup resolves through an indexed UUID range, bounded to
+2 rows: no match returns `404`, exactly one match returns that resource, and
+multiple matches return `400` with an ambiguous-prefix error. Mutating through a
+prefix would make ambiguity dangerous, so write paths require full UUIDs.
+
+The range lookup is designed for PostgreSQL UUID primary keys: Hawk turns the
+8-character prefix into a lower/upper UUID bound and queries the `id` field with
+`>=` / `<=`, so the normal btree UUID index can be used. Hawk intentionally avoids
+`id::text LIKE 'prefix%'`, which is easier to write but can force scans or require
+a separate functional index.
+
 Some requests support declared reader filters through JSON:API-style query params.
 Bare values become equality filters, and supported operators use one nested key:
 

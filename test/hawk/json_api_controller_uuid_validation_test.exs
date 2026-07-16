@@ -15,7 +15,7 @@ defmodule Hawk.JsonApiControllerUuidValidationTest do
     conn = Controller.show(conn(), %{"id" => @invalid_id})
 
     assert conn.status == 400
-    assert_error(conn, "id must be a valid UUID")
+    assert_error(conn, "id must be a valid UUID or 8-character short id")
     refute_received {:videdal_repo, :all, _query}
   end
 

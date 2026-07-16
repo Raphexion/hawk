@@ -131,6 +131,37 @@ defmodule Hawk.JsonApiTest do
     refute_existing_atom(hostile_relationship)
   end
 
+  test "short id filters use an indexed UUID range" do
+    lower =
+      IO.iodata_to_binary([
+        "1234abcd",
+        "-",
+        "0000",
+        "-",
+        "0000",
+        "-",
+        "0000",
+        "-",
+        String.duplicate("0", 12)
+      ])
+
+    upper =
+      IO.iodata_to_binary([
+        "1234abcd",
+        "-",
+        "ffff",
+        "-",
+        "ffff",
+        "-",
+        "ffff",
+        "-",
+        "ffffffffffff"
+      ])
+
+    assert Hawk.JsonApi.short_id_filter("1234abcd") ==
+             {:and, %{id: {:gte, lower}}, %{id: {:lte, upper}}}
+  end
+
   test "hostile include and sort params are rejected without creating atoms" do
     hostile_include = hostile_name("include")
     hostile_sort = hostile_name("sort")
