@@ -7,6 +7,7 @@ defmodule Videdal.ResourceFacadeTest do
   alias Videdal.CourseGradeSummaries
   alias Videdal.CourseGradeSummary
   alias Videdal.Courses
+  alias Videdal.Courses.{JsonApi, LiveView}
   alias Videdal.Enrollment
   alias Videdal.Enrollments
   alias Videdal.Grade
@@ -120,6 +121,19 @@ defmodule Videdal.ResourceFacadeTest do
 
     assert {:not_authorized, delete_context} = CourseGradeSummaries.delete(summary, authority)
     assert delete_context.operation == :delete
+  end
+
+  test "course facade exposes resource metadata from sibling adapter modules" do
+    assert Courses.__hawk_resource__(:model) == Course
+    assert Courses.__hawk_resource__(:reader) == Videdal.Courses.Reader
+    assert Courses.__hawk_resource__(:policy) == Videdal.Courses.Policy
+    assert Courses.__hawk_resource__(:writer) == Videdal.Courses.Writer
+    assert Courses.__hawk_resource__(:actions) == Videdal.Courses.Actions
+    assert Courses.__hawk_resource__(:json_api) == Videdal.Courses.JsonApi
+    assert Courses.__hawk_resource__(:live_view) == Videdal.Courses.LiveView
+
+    assert JsonApi.__hawk_json_api__().type == "courses"
+    assert LiveView.__hawk_live_view__().as == :course
   end
 
   test "course facade delegates reads, CRUD mutations, and actions through sibling modules" do

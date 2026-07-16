@@ -3,7 +3,7 @@ defmodule Videdal.Controllers.OpenApiController do
     title: "Videdal API",
     version: "1.0.0",
     path_prefix: "/api/v1",
-    resources: [Videdal.Course, Videdal.Grade]
+    resources: [Videdal.Courses, Videdal.Grade]
 end
 
 defmodule Videdal.Controllers.OpenApiControllerTest do

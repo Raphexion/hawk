@@ -3,19 +3,6 @@ defmodule Videdal.Courses do
   Public facade for the Videdal `Courses` resource.
   """
 
-  alias Videdal.Courses.{Actions, Reader, Writer}
-
-  def one(opts), do: Reader.one(opts)
-  def one!(opts), do: Reader.one!(opts)
-  def all(opts), do: Reader.all(opts)
-
-  def create(attrs, authority), do: Writer.create(attrs, authority)
-  def update(course, attrs, authority), do: Writer.update(course, attrs, authority)
-  def delete(course, authority), do: Writer.delete(course, authority)
-
-  def open_registration(course, params, authority),
-    do: Actions.open_registration(course, params, authority)
-
-  def close_registration(course, params, authority),
-    do: Actions.close_registration(course, params, authority)
+  use Hawk.Resource,
+    model: Videdal.Course
 end
