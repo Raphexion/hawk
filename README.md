@@ -210,11 +210,12 @@ Controller errors use JSON:API documents:
 - missing record: `404`
 - validation failure: `422`
 
+Controller member routes validate path IDs as UUIDs before querying the reader.
 Create requests must include `data.type` matching the resource type. Update
 requests may omit `data.type` for small PATCH bodies, but when present it must
 match. Unknown writable attributes or relationships fail loudly instead of being
 silently ignored, and relationship identifiers must use the declared related
-resource type.
+resource type and a valid UUID id.
 
 Resource objects returned by `show/2` include resource and relationship links.
 Relationship endpoints return JSON:API relationship linkage or related resource
@@ -345,22 +346,25 @@ defmodule MyAppWeb.CoursesControllerTest do
     repo: MyApp.Repo
 
   authorities do
+    school_id = "00000000-0000-0000-0000-000000000007"
+    teacher_id = "00000000-0000-0000-0000-000000000012"
+
     %{
-      school_admin: Hawk.Authority.new(:school_admin, 1, scopes: %{school_id: 7}),
-      teacher: Hawk.Authority.new(:teacher, 12, scopes: %{school_id: 7, teacher_id: 12})
+      school_admin: Hawk.Authority.new(:school_admin, "00000000-0000-0000-0000-000000000001", scopes: %{school_id: school_id}),
+      teacher: Hawk.Authority.new(:teacher, teacher_id, scopes: %{school_id: school_id, teacher_id: teacher_id})
     }
   end
 
   pre_sample authorities do
     %{
-      school: %MyApp.School{id: 7},
-      teacher: %MyApp.Teacher{id: authorities.teacher.identity, school_id: 7}
+      school: %MyApp.School{id: authorities.school_admin.scopes.school_id},
+      teacher: %MyApp.Teacher{id: authorities.teacher.identity, school_id: authorities.teacher.scopes.school_id}
     }
   end
 
   sample _authorities, known, index do
     %MyApp.Course{
-      id: index,
+      id: "00000000-0000-0000-0000-00000000000#{index}",
       title: "Course #{index}",
       school_id: known.school.id,
       teacher_id: known.teacher.id

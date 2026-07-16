@@ -94,7 +94,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
   test "show returns a JSON:API error when missing" do
     Process.put({Videdal.Repo, :all_results}, [])
 
-    conn = CoursesController.show(conn(), %{"id" => "404"})
+    conn = CoursesController.show(conn(), %{"id" => Videdal.other_course_id()})
 
     assert conn.status == 404
 

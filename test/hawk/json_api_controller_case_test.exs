@@ -15,18 +15,24 @@ defmodule Hawk.JsonApiControllerCaseTest do
     count = Process.get(:json_api_controller_case_pre_authorities_count, 0) + 1
     Process.put(:json_api_controller_case_pre_authorities_count, count)
 
-    %{school_id: 7, teacher_id: 12}
+    %{school_id: Videdal.school_id(), teacher_id: Videdal.teacher_id()}
   end
 
   authorities pre_authorities do
     assert Process.get(:json_api_controller_case_pre_authorities_count) == 1
-    assert pre_authorities.school_id == 7
+    assert pre_authorities.school_id == Videdal.school_id()
 
     %{
-      principal: Hawk.Authority.new(:principal, 1),
-      school_admin: Hawk.Authority.new(:school_admin, 2, scopes: %{school_id: 7}),
-      teacher: Hawk.Authority.new(:teacher, 12, scopes: %{school_id: 7, teacher_id: 12}),
-      unknown: Hawk.Authority.new(:unknown, 99)
+      principal: Hawk.Authority.new(:principal, Videdal.principal_id()),
+      school_admin:
+        Hawk.Authority.new(:school_admin, Videdal.school_admin_id(),
+          scopes: %{school_id: Videdal.school_id()}
+        ),
+      teacher:
+        Hawk.Authority.new(:teacher, Videdal.teacher_id(),
+          scopes: %{school_id: Videdal.school_id(), teacher_id: Videdal.teacher_id()}
+        ),
+      unknown: Hawk.Authority.new(:unknown, Videdal.parent_id())
     }
   end
 
@@ -39,7 +45,7 @@ defmodule Hawk.JsonApiControllerCaseTest do
 
   sample _pre_authorities, _authorities, known, index do
     %Videdal.Course{
-      id: index,
+      id: sample_id(index),
       title: "Course #{index}",
       school_id: known.school_id,
       teacher_id: known.teacher_id
@@ -48,8 +54,8 @@ defmodule Hawk.JsonApiControllerCaseTest do
 
   test "sample generator builds multiple related models" do
     assert [first, second, third] = sample_models(3)
-    assert {first.id, second.id, third.id} == {1, 2, 3}
-    assert Enum.all?([first, second, third], &(&1.school_id == 7))
+    assert {first.id, second.id, third.id} == {sample_id(1), sample_id(2), sample_id(3)}
+    assert Enum.all?([first, second, third], &(&1.school_id == Videdal.school_id()))
   end
 
   test "generate_sample reuses pre_sample context inside one test" do
@@ -58,23 +64,23 @@ defmodule Hawk.JsonApiControllerCaseTest do
     first = generate_sample(1)
     second = generate_sample(2)
 
-    assert {first.id, second.id} == {1, 2}
+    assert {first.id, second.id} == {sample_id(1), sample_id(2)}
     assert Process.get(:json_api_controller_case_pre_sample_count) == 1
   end
 
   test "public authority is available even when not listed explicitly" do
     put_json_api_results([sample_model()])
 
-    conn = controller().show(conn_for(:public), %{"id" => "1"})
+    conn = controller().show(conn_for(:public), %{"id" => sample_id(1)})
 
     assert conn.status == 200
-    assert conn.resp_body.data.id == "1"
+    assert conn.resp_body.data.id == sample_id(1)
   end
 
   test "specific controller behaviour can be tested beside the generated matrix" do
     put_json_api_results([sample_model()])
 
-    conn = controller().show(conn_for(:principal), %{"id" => "1"})
+    conn = controller().show(conn_for(:principal), %{"id" => sample_id(1)})
 
     assert conn.status == 200
 
@@ -85,4 +91,8 @@ defmodule Hawk.JsonApiControllerCaseTest do
              waitlist_count: 0
            }
   end
+
+  defp sample_id(1), do: Videdal.course_id()
+  defp sample_id(2), do: Videdal.other_course_id()
+  defp sample_id(3), do: Videdal.enrollment_id()
 end

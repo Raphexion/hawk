@@ -11,6 +11,12 @@ defmodule Hawk.JsonApiIncludeTest do
   alias Videdal.Course
   alias Videdal.Grade
 
+  @course_id Videdal.course_id()
+  @grade_id Videdal.grade_id()
+  @school_admin_id Videdal.school_admin_id()
+  @school_id Videdal.school_id()
+  @teacher_id Videdal.teacher_id()
+
   test "dotted include paths preserve order and merge nested paths" do
     assert Hawk.JsonApi.request_options(%{"include" => "teacher,grades.student,grades.course"}) ==
              [
@@ -20,27 +26,27 @@ defmodule Hawk.JsonApiIncludeTest do
 
   test "already-loaded has-many relationships are not exposed unless included through Hawk" do
     course = %Course{
-      id: 3,
+      id: @course_id,
       title: "Math",
-      school_id: 7,
-      teacher_id: 12,
-      grades: [%Grade{id: 1, score: 12}]
+      school_id: @school_id,
+      teacher_id: @teacher_id,
+      grades: [%Grade{id: @grade_id, score: 12}]
     }
 
     assert Hawk.JsonApi.document(course).data.relationships.grades == %{data: []}
 
     assert Hawk.JsonApi.document(course, preloads: [:grades]).data.relationships.grades == %{
-             data: [%{type: "grades", id: "1"}]
+             data: [%{type: "grades", id: @grade_id}]
            }
   end
 
   test "documents include full resource objects for requested preloads" do
     course = %Course{
-      id: 3,
+      id: @course_id,
       title: "Math",
-      school_id: 7,
-      teacher_id: 12,
-      grades: [%Grade{id: 1, score: 12, course_id: 3}]
+      school_id: @school_id,
+      teacher_id: @teacher_id,
+      grades: [%Grade{id: @grade_id, score: 12, course_id: @course_id}]
     }
 
     document = Hawk.JsonApi.document(course, preloads: [:grades])
@@ -48,11 +54,11 @@ defmodule Hawk.JsonApiIncludeTest do
     assert document.included == [
              %{
                type: "grades",
-               id: "1",
+               id: @grade_id,
                attributes: %{score: 12},
                relationships: %{
                  student: %{data: nil},
-                 course: %{data: %{type: "courses", id: "3"}}
+                 course: %{data: %{type: "courses", id: @course_id}}
                }
              }
            ]
@@ -61,7 +67,7 @@ defmodule Hawk.JsonApiIncludeTest do
   test "controllers return JSON:API bad request errors for invalid includes" do
     conn =
       InvalidIncludeCoursesController.index(
-        conn(%{role: :school_admin, scopes: %{school_id: 7}}),
+        conn(%{role: :school_admin, scopes: %{school_id: @school_id}}),
         %{"include" => "grades.secret"}
       )
 
@@ -81,7 +87,7 @@ defmodule Hawk.JsonApiIncludeTest do
 
   defp conn(%{role: role, scopes: scopes}) do
     %{
-      assigns: %{authority: Hawk.Authority.new(role, 1, scopes: scopes)},
+      assigns: %{authority: Hawk.Authority.new(role, @school_admin_id, scopes: scopes)},
       status: nil,
       resp_body: nil
     }

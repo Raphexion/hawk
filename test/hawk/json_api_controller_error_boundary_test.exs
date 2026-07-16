@@ -42,7 +42,7 @@ defmodule Hawk.JsonApiControllerErrorBoundaryTest do
   test "validation, authorization, and missing records keep their explicit statuses" do
     Process.put({Videdal.Repo, :all_results}, [])
 
-    missing = ErrorBoundaryCoursesController.show(conn(), %{"id" => "404"})
+    missing = ErrorBoundaryCoursesController.show(conn(), %{"id" => Videdal.other_course_id()})
     assert missing.status == 404
 
     unauthorized =

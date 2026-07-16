@@ -45,12 +45,12 @@ defmodule Videdal.Course do
 
     relationship(:school,
       doc: "The school offering the course.",
-      example: %{type: "schools", id: "7"}
+      example: %{type: "schools", id: Videdal.school_id()}
     )
 
     relationship(:teacher,
       doc: "The teacher responsible for the course.",
-      example: %{type: "teachers", id: "12"}
+      example: %{type: "teachers", id: Videdal.teacher_id()}
     )
 
     relationship(:grades,

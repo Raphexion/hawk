@@ -51,6 +51,13 @@ defmodule Hawk.JsonApi do
     end
   end
 
+  def validate_uuid!(id, label \\ "id") do
+    case Ecto.UUID.cast(id) do
+      {:ok, _uuid} -> id
+      :error -> raise ArgumentError, "#{label} must be a valid UUID"
+    end
+  end
+
   def validate_document!(params, model, capability) when capability in [:creatable, :updatable] do
     data = request_data!(params)
     json_api = model.__hawk_json_api__()
@@ -354,7 +361,7 @@ defmodule Hawk.JsonApi do
         :ok
 
       {:one, %{"type" => ^expected_type, "id" => id}} when not is_nil(id) ->
-        :ok
+        validate_uuid!(id, "relationship #{name} id")
 
       {:one, %{"type" => other_type}} ->
         raise ArgumentError,
@@ -378,11 +385,11 @@ defmodule Hawk.JsonApi do
 
   defp validate_many_relationship_identifier!(
          %{"type" => expected_type, "id" => id},
-         _name,
+         name,
          expected_type
        )
        when not is_nil(id),
-       do: :ok
+       do: validate_uuid!(id, "relationship #{name} id")
 
   defp validate_many_relationship_identifier!(%{"type" => other_type}, name, expected_type) do
     raise ArgumentError,

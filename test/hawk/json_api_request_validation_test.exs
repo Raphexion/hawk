@@ -72,6 +72,23 @@ defmodule Hawk.JsonApiRequestValidationTest do
     assert_error(conn, "expected relationship school type to be \"schools\", got \"teachers\"")
   end
 
+  test "create rejects relationship identifiers that are not UUIDs" do
+    conn =
+      Controller.create(conn(), %{
+        "data" => %{
+          "type" => "courses",
+          "attributes" => %{"title" => "Math"},
+          "relationships" => %{
+            "school" => %{"data" => %{"type" => "schools", "id" => "not-a-uuid"}},
+            "teacher" => %{"data" => %{"type" => "teachers", "id" => @teacher_id}}
+          }
+        }
+      })
+
+    assert conn.status == 400
+    assert_error(conn, "relationship school id must be a valid UUID")
+  end
+
   test "create accepts valid documents" do
     conn =
       Controller.create(conn(), %{

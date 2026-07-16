@@ -392,5 +392,5 @@ defmodule Hawk.JsonApi.Controller do
     }
   end
 
-  defp normalize_id(id), do: id
+  defp normalize_id(id), do: JsonApi.validate_uuid!(id)
 end

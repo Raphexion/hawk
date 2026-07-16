@@ -23,7 +23,7 @@ defmodule Hawk.JsonApiAttributeTest.LocalizedPosts do
   def all(_opts) do
     [
       %Hawk.JsonApiAttributeTest.LocalizedPost{
-        id: 1,
+        id: "00000000-0000-0000-0000-000000000016",
         slug: "north-sea",
         translations: %{
           "en" => %{"title" => "House by the sea"},
@@ -54,7 +54,7 @@ defmodule Hawk.JsonApiAttributeTest do
 
   test "JSON:API attributes can be backed by source fields and context-aware resolvers" do
     post = %Hawk.JsonApiAttributeTest.LocalizedPost{
-      id: 1,
+      id: "00000000-0000-0000-0000-000000000016",
       slug: "north-sea",
       translations: %{
         "en" => %{"title" => "House by the sea"},

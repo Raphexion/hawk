@@ -93,7 +93,7 @@ defmodule Hawk.JsonApiTest do
             "relationships" => %{
               "school" => %{"data" => nil},
               "teacher" => %{"data" => %{"type" => "teachers", "id" => Videdal.teacher_id()}},
-              "grades" => %{"data" => [%{"type" => "grades", "id" => "1"}]}
+              "grades" => %{"data" => [%{"type" => "grades", "id" => Videdal.grade_id()}]}
             }
           }
         },
@@ -116,7 +116,9 @@ defmodule Hawk.JsonApiTest do
             "attributes" => %{"title" => "Math", hostile_attribute => "boom"},
             "relationships" => %{
               "school" => %{"data" => nil},
-              hostile_relationship => %{"data" => %{"type" => "schools", "id" => Videdal.school_id()}}
+              hostile_relationship => %{
+                "data" => %{"type" => "schools", "id" => Videdal.school_id()}
+              }
             }
           }
         },
