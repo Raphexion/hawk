@@ -212,14 +212,17 @@ Request shape:
 
 ### JSON:API controller
 
+When the controller points at a `Hawk.Resource` facade, Hawk infers the model from the resource:
+
 ```elixir
 defmodule MyAppWeb.CourseController do
   use Hawk.JsonApi.Controller,
     resource: MyApp.Courses,
-    model: MyApp.Course,
     public: true
 end
 ```
+
+Controllers can still pass `model:` explicitly when integrating with older hand-written facades.
 
 Generated actions:
 
@@ -369,10 +372,11 @@ For simple single-resource pages:
 ```elixir
 defmodule MyAppWeb.CourseIndexLive do
   use Hawk.LiveView,
-    resource: MyApp.Courses,
-    as: :course
+    resource: MyApp.Courses
 end
 ```
+
+When `resource:` is a `Hawk.Resource` facade, Hawk infers the singular/plural assign names from the model. Older hand-written facades can still pass `as:` explicitly.
 
 This provides helpers such as `assign_index/3`, `assign_show/4`, and a default
 `"hawk:delete"` event handler that routes mutations through the writer and maps

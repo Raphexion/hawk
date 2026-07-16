@@ -11,8 +11,9 @@ defmodule Hawk.JsonApi.Controller do
   alias Hawk.JsonApi.Controller, as: JsonApiController
 
   defmacro __using__(opts) do
-    resource = Keyword.fetch!(opts, :resource)
-    model = Keyword.fetch!(opts, :model)
+    env = __CALLER__
+    resource = Keyword.fetch!(opts, :resource) |> Macro.expand(env)
+    model = controller_model!(resource, Keyword.get(opts, :model), env)
     public? = Keyword.get(opts, :public, false)
 
     quote do
@@ -95,6 +96,24 @@ defmodule Hawk.JsonApi.Controller do
           unquote(public?)
         )
       end
+    end
+  end
+
+  defp controller_model!(_resource, model, env) when not is_nil(model),
+    do: Macro.expand(model, env)
+
+  defp controller_model!(resource, nil, _env) do
+    cond do
+      Code.ensure_compiled(resource) != {:module, resource} ->
+        raise ArgumentError,
+              "Hawk JSON:API controller resource #{inspect(resource)} is not available"
+
+      function_exported?(resource, :__hawk_resource__, 1) ->
+        resource.__hawk_resource__(:model)
+
+      true ->
+        raise ArgumentError,
+              "Hawk JSON:API controller requires :model when resource #{inspect(resource)} is not a Hawk.Resource facade"
     end
   end
 

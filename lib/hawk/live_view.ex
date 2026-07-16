@@ -10,8 +10,9 @@ defmodule Hawk.LiveView do
   alias Hawk.LiveView
 
   defmacro __using__(opts) do
-    resource = Keyword.fetch!(opts, :resource)
-    as = Keyword.fetch!(opts, :as)
+    env = __CALLER__
+    resource = Keyword.fetch!(opts, :resource) |> Macro.expand(env)
+    as = Keyword.get(opts, :as) || infer_as!(resource)
     plural_as = Keyword.get(opts, :plural_as, pluralize(as))
 
     quote do
@@ -39,6 +40,24 @@ defmodule Hawk.LiveView do
           params
         )
       end
+    end
+  end
+
+  defp infer_as!(resource) do
+    cond do
+      Code.ensure_compiled(resource) != {:module, resource} ->
+        raise ArgumentError, "Hawk LiveView resource #{inspect(resource)} is not available"
+
+      function_exported?(resource, :__hawk_resource__, 1) ->
+        resource.__hawk_resource__(:model)
+        |> Module.split()
+        |> List.last()
+        |> Macro.underscore()
+        |> String.to_atom()
+
+      true ->
+        raise ArgumentError,
+              "Hawk LiveView requires :as when resource #{inspect(resource)} is not a Hawk.Resource facade"
     end
   end
 
