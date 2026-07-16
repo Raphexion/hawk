@@ -10,6 +10,7 @@ defmodule Hawk.ResourceTest.Courses.Reader do
   def one(opts), do: {:one, opts}
   def one!(opts), do: {:one!, opts}
   def all(opts), do: {:all, opts}
+  def filter_keys, do: MapSet.new([:title])
 end
 
 defmodule Hawk.ResourceTest.Courses.Policy do
@@ -30,7 +31,19 @@ defmodule Hawk.ResourceTest.Courses.JsonApi do
 end
 
 defmodule Hawk.ResourceTest.Courses.LiveView do
-  def __hawk_live_view__, do: %{surfaces: []}
+  use Hawk.LiveView.Resource
+
+  index :default do
+    filter(:title)
+
+    table do
+      column(:title)
+    end
+  end
+
+  show :default do
+    field(:title)
+  end
 end
 
 defmodule Hawk.ResourceTest.Courses.Actions do
@@ -285,6 +298,87 @@ defmodule Hawk.ResourceTest do
                    end
 
                    defmodule Hawk.ResourceTest.BadRelationshipSource do
+                     use Hawk.Resource, model: Hawk.ResourceTest.Course
+                   end
+                   """)
+                 end
+  end
+
+  test "live_view fields must reference model fields" do
+    assert_raise ArgumentError,
+                 ~r/Hawk resource live_view module Hawk.ResourceTest.BadLiveField.LiveView show :detail field :headline source :missing_title must reference a field on Hawk.ResourceTest.Course/,
+                 fn ->
+                   Code.compile_string("""
+                   defmodule Hawk.ResourceTest.BadLiveField.Reader do
+                     def one(opts), do: {:one, opts}
+                     def one!(opts), do: {:one!, opts}
+                     def all(opts), do: {:all, opts}
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveField.Policy do
+                     def read_filter(_authority), do: :all
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveField.Writer do
+                     def create(attrs, authority), do: {:create, attrs, authority}
+                     def update(model, attrs, authority), do: {:update, model, attrs, authority}
+                     def delete(model, authority), do: {:delete, model, authority}
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveField.JsonApi do
+                     def __hawk_json_api__, do: %{type: "courses"}
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveField.LiveView do
+                     use Hawk.LiveView.Resource
+
+                     show :detail do
+                       field(:headline, source: :missing_title)
+                     end
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveField do
+                     use Hawk.Resource, model: Hawk.ResourceTest.Course
+                   end
+                   """)
+                 end
+  end
+
+  test "live_view filters must be declared reader filters" do
+    assert_raise ArgumentError,
+                 ~r/Hawk resource live_view module Hawk.ResourceTest.BadLiveFilter.LiveView index :default filter :teacher_id must be declared by reader Hawk.ResourceTest.BadLiveFilter.Reader/,
+                 fn ->
+                   Code.compile_string("""
+                   defmodule Hawk.ResourceTest.BadLiveFilter.Reader do
+                     def one(opts), do: {:one, opts}
+                     def one!(opts), do: {:one!, opts}
+                     def all(opts), do: {:all, opts}
+                     def filter_keys, do: MapSet.new([:title])
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveFilter.Policy do
+                     def read_filter(_authority), do: :all
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveFilter.Writer do
+                     def create(attrs, authority), do: {:create, attrs, authority}
+                     def update(model, attrs, authority), do: {:update, model, attrs, authority}
+                     def delete(model, authority), do: {:delete, model, authority}
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveFilter.JsonApi do
+                     def __hawk_json_api__, do: %{type: "courses"}
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveFilter.LiveView do
+                     use Hawk.LiveView.Resource
+
+                     index :default do
+                       filter(:teacher_id)
+                     end
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveFilter do
                      use Hawk.Resource, model: Hawk.ResourceTest.Course
                    end
                    """)

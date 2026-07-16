@@ -69,6 +69,7 @@ defmodule Hawk.Resource do
     validate_functions!(modules.actions, :actions, __hawk_actions__: 0)
 
     validate_json_api_contract!(modules.model, modules.json_api)
+    validate_live_view_contract!(modules.model, modules.reader, modules.live_view)
   end
 
   defp validate_module!(false, _key), do: :ok
@@ -133,6 +134,84 @@ defmodule Hawk.Resource do
       unless MapSet.member?(declared, name) do
         raise ArgumentError,
               "Hawk resource json_api module #{inspect(json_api_module)} #{capability} field #{inspect(name)} must be declared as an attribute or relationship"
+      end
+    end)
+  end
+
+  defp validate_live_view_contract!(_model, _reader, false), do: :ok
+
+  defp validate_live_view_contract!(model, reader, live_view_module) do
+    live_view = live_view_module.__hawk_live_view__()
+
+    case Map.get(live_view, :surfaces, %{}) do
+      surfaces when is_map(surfaces) ->
+        surfaces
+        |> Map.get(:index, %{})
+        |> Enum.each(fn {surface, metadata} ->
+          validate_live_view_filters!(
+            live_view_module,
+            reader,
+            surface,
+            Map.get(metadata, :filters, [])
+          )
+
+          validate_live_view_fields!(
+            model,
+            live_view_module,
+            :index,
+            surface,
+            Map.get(metadata, :table, [])
+          )
+        end)
+
+        surfaces
+        |> Map.get(:show, %{})
+        |> Enum.each(fn {surface, metadata} ->
+          validate_live_view_fields!(
+            model,
+            live_view_module,
+            :show,
+            surface,
+            Map.get(metadata, :fields, [])
+          )
+        end)
+
+      _legacy_shape ->
+        :ok
+    end
+  end
+
+  defp validate_live_view_filters!(_live_view_module, _reader, _surface, []), do: :ok
+
+  defp validate_live_view_filters!(live_view_module, reader, surface, filters) do
+    if function_exported?(reader, :filter_keys, 0) do
+      validate_live_view_filters!(
+        live_view_module,
+        reader,
+        surface,
+        filters,
+        MapSet.new(reader.filter_keys())
+      )
+    end
+  end
+
+  defp validate_live_view_filters!(live_view_module, reader, surface, filters, allowed) do
+    Enum.each(filters, fn filter ->
+      unless MapSet.member?(allowed, filter) do
+        raise ArgumentError,
+              "Hawk resource live_view module #{inspect(live_view_module)} index #{inspect(surface)} filter #{inspect(filter)} must be declared by reader #{inspect(reader)}"
+      end
+    end)
+  end
+
+  defp validate_live_view_fields!(model, live_view_module, kind, surface, fields) do
+    Enum.each(fields, fn metadata ->
+      name = Map.fetch!(metadata, :name)
+      source = Map.get(metadata, :source, name)
+
+      if is_nil(model.__schema__(:type, source)) do
+        raise ArgumentError,
+              "Hawk resource live_view module #{inspect(live_view_module)} #{kind} #{inspect(surface)} field #{inspect(name)} source #{inspect(source)} must reference a field on #{inspect(model)}"
       end
     end)
   end
