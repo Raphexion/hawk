@@ -156,7 +156,7 @@ defmodule Hawk.JsonApi.Controller do
     do: [json_api_by_model: %{model => json_api_metadata(resource, model)}]
 
   defp json_api_metadata(resource, model) do
-    if function_exported?(resource, :__hawk_resource__, 1) do
+    if Code.ensure_loaded?(resource) and function_exported?(resource, :__hawk_resource__, 1) do
       case resource.__hawk_resource__(:json_api) do
         false -> model.__hawk_json_api__()
         json_api -> json_api.__hawk_json_api__()

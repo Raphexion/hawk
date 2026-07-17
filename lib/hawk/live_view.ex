@@ -15,6 +15,7 @@ defmodule Hawk.LiveView do
     validate_live_view_enabled!(resource)
     as = Keyword.get(opts, :as) || infer_as!(resource)
     plural_as = Keyword.get(opts, :plural_as) || infer_plural_as(resource, as)
+    capabilities = live_view_capabilities(resource)
 
     quote do
       def assign_index(socket, authority, opts \\ []) do
@@ -32,6 +33,23 @@ defmodule Hawk.LiveView do
         LiveView.assign_show(socket, unquote(resource), unquote(as), authority, id, opts)
       end
 
+      unquote(quote_delete_handler(resource, as, plural_as, capabilities))
+    end
+  end
+
+  defp live_view_capabilities(resource) do
+    if Code.ensure_compiled(resource) == {:module, resource} and
+         function_exported?(resource, :__hawk_resource__, 1) do
+      resource.__hawk_resource__(:capabilities)
+    else
+      %{writer: true}
+    end
+  end
+
+  defp quote_delete_handler(_resource, _as, _plural_as, %{writer: false}), do: []
+
+  defp quote_delete_handler(resource, as, plural_as, _capabilities) do
+    quote do
       def handle_event("hawk:delete", params, socket) do
         LiveView.handle_delete(
           socket,

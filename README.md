@@ -123,7 +123,9 @@ end
 
 `use Hawk.LiveView, resource: MyApp.Courses` reads `as` and `plural_as` from
 the LiveView adapter when present, then falls back to model-based convention.
-Surface filters are UX narrowing only; policies remain the security boundary.
+Generated LiveView event handlers follow resource capabilities; for example,
+read-only resources with `writer: false` do not get the default `"hawk:delete"`
+handler. Surface filters are UX narrowing only; policies remain the security boundary.
 
 ### Model
 
