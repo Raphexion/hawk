@@ -414,10 +414,11 @@ end
 Pass resource facades when available; model modules remain supported for older
 code. Facades with `json_api: false` are omitted because this OpenAPI generator
 documents the JSON:API surface only. This exposes `spec/0` and `show/2`. The specification is composed from Hawk
-resource declarations: JSON:API adapter schemas, request bodies, error documents,
-sort parameters, pagination parameters, valid include paths, declared
-`/-actions/` operations, the optional `path_prefix`, and optional resource
-organization metadata.
+resource declarations and the same `Hawk.JsonApi.Routes` route specs used for
+capability-aware routing: JSON:API adapter schemas, request bodies, error
+documents, sort parameters, pagination parameters, valid include paths, declared
+`/-actions/` operations, relationship routes, the optional `path_prefix`, and
+optional resource organization metadata.
 
 Custom actions automatically appear in the OpenAPI/Swagger spec as `POST`
 operations under paths such as `/api/v1/courses/{id}/-actions/open-registration`.

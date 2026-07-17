@@ -3,6 +3,8 @@ defmodule Hawk.OpenApi do
   Composes OpenAPI specifications from Hawk JSON:API resource declarations.
   """
 
+  alias Hawk.JsonApi.Routes
+
   def spec(resources, opts \\ []) when is_list(resources) do
     resources = resources |> Enum.map(&normalize_resource/1) |> Enum.reject(&is_nil/1)
 
@@ -29,14 +31,23 @@ defmodule Hawk.OpenApi do
       model = module.__hawk_resource__(:model)
 
       case json_api_metadata!(module) do
-        nil -> nil
-        json_api -> %{model: model, resource: module, json_api: json_api}
+        nil ->
+          nil
+
+        json_api ->
+          %{
+            model: model,
+            resource: module,
+            json_api: json_api,
+            capabilities: module.__hawk_resource__(:capabilities)
+          }
       end
     else
       %{
         model: module,
         resource: module.__hawk_resource__(),
-        json_api: Hawk.JsonApi.metadata(module)
+        json_api: Hawk.JsonApi.metadata(module),
+        capabilities: %{writer: true, actions: true}
       }
     end
   end
@@ -64,24 +75,47 @@ defmodule Hawk.OpenApi do
   end
 
   defp resource_paths(resource, path_prefix) do
-    path = Path.join(["/", path_prefix, resource.json_api.type])
-    member_path = path <> "/{id}"
+    resource
+    |> Routes.routes(path_prefix: path_prefix)
+    |> Enum.flat_map(&operation_entries(resource, &1))
+    |> Enum.reduce(%{}, fn {path, method, operation}, paths ->
+      Map.update(paths, path, %{method => operation}, &Map.put(&1, method, operation))
+    end)
+  end
 
-    %{
-      path => %{
-        get: index_operation(resource),
-        post: write_operation(resource, :creatable, "Create #{resource_name(resource)}", 201)
-      },
-      member_path => %{
-        get: show_operation(resource),
-        patch:
-          write_operation(resource, :updatable, "Update #{resource_name(resource)}", 200,
-            parameters: [id_parameter()]
-          ),
-        delete: delete_operation(resource)
-      }
-    }
-    |> Map.merge(action_paths(resource, member_path))
+  defp operation_entries(resource, %{action: :action} = route) do
+    resource.resource
+    |> Hawk.Actions.actions()
+    |> Enum.map(fn {name, metadata} ->
+      route.path
+      |> openapi_path()
+      |> String.replace("{action}", name)
+      |> then(&{&1, route.method, action_operation(resource, name, metadata)})
+    end)
+  end
+
+  defp operation_entries(resource, route) do
+    [{openapi_path(route.path), route.method, route_operation(resource, route)}]
+  end
+
+  defp route_operation(resource, %{action: :index}), do: index_operation(resource)
+  defp route_operation(resource, %{action: :show}), do: show_operation(resource)
+
+  defp route_operation(resource, %{action: :create}),
+    do: write_operation(resource, :creatable, "Create #{resource_name(resource)}", 201)
+
+  defp route_operation(resource, %{action: :update}) do
+    write_operation(resource, :updatable, "Update #{resource_name(resource)}", 200,
+      parameters: [id_parameter()]
+    )
+  end
+
+  defp route_operation(resource, %{action: :delete}), do: delete_operation(resource)
+  defp route_operation(resource, %{action: :relationship}), do: relationship_operation(resource)
+  defp route_operation(resource, %{action: :related}), do: related_operation(resource)
+
+  defp openapi_path(path) do
+    Regex.replace(~r/:([a-zA-Z_]+)/, path, "{\\1}")
   end
 
   defp index_operation(resource) do
@@ -125,13 +159,24 @@ defmodule Hawk.OpenApi do
     })
   end
 
-  defp action_paths(resource, member_path) do
-    resource.resource
-    |> Hawk.Actions.actions()
-    |> Enum.map(fn {name, metadata} ->
-      {member_path <> "/-actions/" <> name, %{post: action_operation(resource, name, metadata)}}
-    end)
-    |> Map.new()
+  defp relationship_operation(resource) do
+    resource
+    |> operation_metadata()
+    |> Map.merge(%{
+      summary: "Show #{resource_name(resource)} relationship linkage",
+      parameters: [id_parameter(), relationship_parameter(resource)],
+      responses: responses(resource, 200, relationship_document_schema())
+    })
+  end
+
+  defp related_operation(resource) do
+    resource
+    |> operation_metadata()
+    |> Map.merge(%{
+      summary: "Show #{resource_name(resource)} related resource",
+      parameters: [id_parameter(), relationship_parameter(resource)],
+      responses: responses(resource, 200, data_schema(resource))
+    })
   end
 
   defp action_operation(resource, name, metadata) do
@@ -184,6 +229,18 @@ defmodule Hawk.OpenApi do
     %{name: "id", in: "path", required: true, schema: %{type: "string"}}
   end
 
+  defp relationship_parameter(resource) do
+    %{
+      name: "relationship",
+      in: "path",
+      required: true,
+      schema: %{
+        type: "string",
+        enum: resource.json_api.relationships |> Map.keys() |> Enum.map(&to_string/1)
+      }
+    }
+  end
+
   defp request_body(resource, capability) do
     %{
       required: true,
@@ -225,6 +282,10 @@ defmodule Hawk.OpenApi do
   end
 
   defp data_schema(resource), do: %{type: "object", properties: %{data: schema_ref(resource)}}
+
+  defp relationship_document_schema do
+    %{type: "object", properties: %{data: %{type: "object"}}}
+  end
 
   defp array_schema(resource) do
     %{type: "object", properties: %{data: %{type: "array", items: schema_ref(resource)}}}

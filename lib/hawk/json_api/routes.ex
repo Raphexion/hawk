@@ -13,6 +13,10 @@ defmodule Hawk.JsonApi.Routes do
     Enum.flat_map(resources, &routes(&1, opts))
   end
 
+  def routes(%{json_api: _json_api, capabilities: _capabilities} = resource, opts) do
+    resource_routes(resource, opts)
+  end
+
   def routes(resource, opts) when is_atom(resource) do
     case normalize_resource(resource) do
       nil -> []
@@ -33,6 +37,9 @@ defmodule Hawk.JsonApi.Routes do
           json_api: Hawk.JsonApi.metadata(module),
           capabilities: %{writer: true, actions: true}
         }
+
+      true ->
+        nil
     end
   end
 

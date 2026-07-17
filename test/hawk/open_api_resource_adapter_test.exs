@@ -71,4 +71,19 @@ defmodule Hawk.OpenApiResourceAdapterTest do
     assert Map.has_key?(spec.components.schemas, :ExternalCourseResource)
     refute Map.has_key?(spec.components.schemas, :InternalNoteResource)
   end
+
+  test "OpenAPI follows route capabilities for read-only resources" do
+    spec = Hawk.OpenApi.spec([Videdal.CourseCatalog])
+
+    assert spec.paths["/course-catalog"].get
+    refute Map.has_key?(spec.paths["/course-catalog"], :post)
+
+    assert spec.paths["/course-catalog/{id}"].get
+    refute Map.has_key?(spec.paths["/course-catalog/{id}"], :patch)
+    refute Map.has_key?(spec.paths["/course-catalog/{id}"], :delete)
+    refute Map.has_key?(spec.paths, "/course-catalog/{id}/-actions/{action}")
+
+    assert Map.has_key?(spec.paths, "/course-catalog/{id}/relationships/{relationship}")
+    assert Map.has_key?(spec.paths, "/course-catalog/{id}/{relationship}")
+  end
 end
