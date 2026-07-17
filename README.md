@@ -319,6 +319,19 @@ framework/router integration:
 Hawk.JsonApi.Routes.routes(MyApp.Courses, path_prefix: "/api/v1")
 ```
 
+Routers can use the macro adapter to emit ordinary `get/3`, `post/3`, `patch/3`,
+and `delete/3` calls from those specs:
+
+```elixir
+import Hawk.JsonApi.Router
+
+hawk_json_api MyApp.Courses, MyAppWeb.CourseController,
+  path_prefix: "/api/v1"
+```
+
+The macro validates that every emitted route points at an exported controller
+action, so capability drift fails while the router compiles.
+
 Controller errors use JSON:API documents:
 
 - invalid include/filter/sort/page: `400`
