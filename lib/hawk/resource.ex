@@ -143,75 +143,57 @@ defmodule Hawk.Resource do
   defp validate_live_view_contract!(model, reader, live_view_module) do
     live_view = live_view_module.__hawk_live_view__()
 
-    case Map.get(live_view, :surfaces, %{}) do
-      surfaces when is_map(surfaces) ->
-        surfaces
-        |> Map.get(:index, %{})
-        |> Enum.each(fn {surface, metadata} ->
-          validate_live_view_filters!(
-            live_view_module,
-            reader,
-            surface,
-            Map.get(metadata, :filters, [])
-          )
+    validate_live_view_filters!(
+      live_view_module,
+      reader,
+      Map.get(live_view[:index] || %{}, :filters, [])
+    )
 
-          validate_live_view_fields!(
-            model,
-            live_view_module,
-            :index,
-            surface,
-            Map.get(metadata, :table, [])
-          )
-        end)
+    validate_live_view_fields!(
+      model,
+      live_view_module,
+      :index,
+      Map.get(live_view[:index] || %{}, :table, [])
+    )
 
-        surfaces
-        |> Map.get(:show, %{})
-        |> Enum.each(fn {surface, metadata} ->
-          validate_live_view_fields!(
-            model,
-            live_view_module,
-            :show,
-            surface,
-            Map.get(metadata, :fields, [])
-          )
-        end)
-
-      _legacy_shape ->
-        :ok
-    end
+    validate_live_view_fields!(
+      model,
+      live_view_module,
+      :show,
+      Map.get(live_view[:show] || %{}, :fields, [])
+    )
   end
 
-  defp validate_live_view_filters!(_live_view_module, _reader, _surface, []), do: :ok
+  defp validate_live_view_filters!(_live_view_module, _reader, []), do: :ok
 
-  defp validate_live_view_filters!(live_view_module, reader, surface, filters) do
+  defp validate_live_view_filters!(live_view_module, reader, filters) do
     if function_exported?(reader, :filter_keys, 0) do
       validate_live_view_filters!(
         live_view_module,
         reader,
-        surface,
         filters,
         MapSet.new(reader.filter_keys())
       )
     end
   end
 
-  defp validate_live_view_filters!(live_view_module, reader, surface, filters, allowed) do
+  defp validate_live_view_filters!(live_view_module, reader, filters, allowed) do
     Enum.each(filters, fn filter ->
       unless MapSet.member?(allowed, filter) do
         raise ArgumentError,
-              "Hawk resource live_view module #{inspect(live_view_module)} index #{inspect(surface)} filter #{inspect(filter)} must be declared by reader #{inspect(reader)}"
+              "Hawk resource live_view module #{inspect(live_view_module)} index filter #{inspect(filter)} must be declared by reader #{inspect(reader)}"
       end
     end)
   end
 
-  defp validate_live_view_fields!(model, live_view_module, kind, surface, fields) do
+  defp validate_live_view_fields!(model, live_view_module, kind, fields) do
     Enum.each(fields, fn metadata ->
       name = Map.fetch!(metadata, :name)
       source = Map.get(metadata, :source, name)
 
       if is_nil(model.__schema__(:type, source)) do
         raise ArgumentError,
-              "Hawk resource live_view module #{inspect(live_view_module)} #{kind} #{inspect(surface)} field #{inspect(name)} source #{inspect(source)} must reference a field on #{inspect(model)}"
+              "Hawk resource live_view module #{inspect(live_view_module)} #{kind} field #{inspect(name)} source #{inspect(source)} must reference a field on #{inspect(model)}"
       end
     end)
   end

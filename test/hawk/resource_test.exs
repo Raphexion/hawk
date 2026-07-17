@@ -33,7 +33,7 @@ end
 defmodule Hawk.ResourceTest.Courses.LiveView do
   use Hawk.LiveView.Resource
 
-  index :default do
+  index do
     filter(:title)
 
     table do
@@ -41,7 +41,7 @@ defmodule Hawk.ResourceTest.Courses.LiveView do
     end
   end
 
-  show :default do
+  show do
     field(:title)
   end
 end
@@ -92,7 +92,7 @@ defmodule Hawk.ResourceTest.CustomFacade.CustomJsonApi do
 end
 
 defmodule Hawk.ResourceTest.CustomFacade.CustomLiveView do
-  def __hawk_live_view__, do: %{surfaces: [:custom]}
+  def __hawk_live_view__, do: %{index: %{}, show: %{}}
 end
 
 defmodule Hawk.ResourceTest.CustomFacade do
@@ -306,7 +306,7 @@ defmodule Hawk.ResourceTest do
 
   test "live_view fields must reference model fields" do
     assert_raise ArgumentError,
-                 ~r/Hawk resource live_view module Hawk.ResourceTest.BadLiveField.LiveView show :detail field :headline source :missing_title must reference a field on Hawk.ResourceTest.Course/,
+                 ~r/Hawk resource live_view module Hawk.ResourceTest.BadLiveField.LiveView show field :headline source :missing_title must reference a field on Hawk.ResourceTest.Course/,
                  fn ->
                    Code.compile_string("""
                    defmodule Hawk.ResourceTest.BadLiveField.Reader do
@@ -332,7 +332,7 @@ defmodule Hawk.ResourceTest do
                    defmodule Hawk.ResourceTest.BadLiveField.LiveView do
                      use Hawk.LiveView.Resource
 
-                     show :detail do
+                     show do
                        field(:headline, source: :missing_title)
                      end
                    end
@@ -346,7 +346,7 @@ defmodule Hawk.ResourceTest do
 
   test "live_view filters must be declared reader filters" do
     assert_raise ArgumentError,
-                 ~r/Hawk resource live_view module Hawk.ResourceTest.BadLiveFilter.LiveView index :default filter :teacher_id must be declared by reader Hawk.ResourceTest.BadLiveFilter.Reader/,
+                 ~r/Hawk resource live_view module Hawk.ResourceTest.BadLiveFilter.LiveView index filter :teacher_id must be declared by reader Hawk.ResourceTest.BadLiveFilter.Reader/,
                  fn ->
                    Code.compile_string("""
                    defmodule Hawk.ResourceTest.BadLiveFilter.Reader do
@@ -373,7 +373,7 @@ defmodule Hawk.ResourceTest do
                    defmodule Hawk.ResourceTest.BadLiveFilter.LiveView do
                      use Hawk.LiveView.Resource
 
-                     index :default do
+                     index do
                        filter(:teacher_id)
                      end
                    end

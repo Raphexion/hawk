@@ -4,7 +4,7 @@ defmodule Hawk.LiveViewResourceTest.CourseLiveView do
   as(:class)
   plural_as(:classes)
 
-  index :teacher_focus do
+  index do
     doc("Courses shown to teachers.")
     filter(:teacher_id)
 
@@ -14,7 +14,7 @@ defmodule Hawk.LiveViewResourceTest.CourseLiveView do
     end
   end
 
-  show :detail do
+  show do
     field(:title)
     field(:registration_state, label: "State")
   end
@@ -33,32 +33,27 @@ defmodule Hawk.LiveViewResourceTest do
     assert CourseLiveView.__hawk_live_view__() == %{
              as: :class,
              plural_as: :classes,
-             surfaces: %{
-               index: %{
-                 teacher_focus: %{
-                   doc: "Courses shown to teachers.",
-                   filters: [:teacher_id],
-                   table: [
-                     %{name: :title, label: "Course"},
-                     %{name: :registration_state}
-                   ]
-                 }
-               },
-               show: %{
-                 detail: %{
-                   fields: [
-                     %{name: :title},
-                     %{name: :registration_state, label: "State"}
-                   ]
-                 }
-               }
+             index: %{
+               doc: "Courses shown to teachers.",
+               filters: [:teacher_id],
+               table: [
+                 %{name: :title, label: "Course"},
+                 %{name: :registration_state}
+               ]
+             },
+             show: %{
+               fields: [
+                 %{name: :title},
+                 %{name: :registration_state, label: "State"}
+               ]
              }
            }
   end
 
-  test "empty LiveView adapter has explicit empty surfaces" do
+  test "empty LiveView adapter has explicit empty index and show contracts" do
     assert EmptyLiveView.__hawk_live_view__() == %{
-             surfaces: %{index: %{}, show: %{}}
+             index: %{},
+             show: %{}
            }
   end
 end

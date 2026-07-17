@@ -43,7 +43,7 @@ Actions are optional by default, because many resources do not have broad workfl
 JSON:API and LiveView should have separate adapter modules and DSLs:
 
 - `MyApp.Courses.JsonApi` owns external API shape: type, attributes, relationships, renamed fields, cached/computed values, docs, examples, writable request mapping, OpenAPI metadata.
-- `MyApp.Courses.LiveView` owns LiveView surfaces: tables, forms, actions, params, filters, assigns, and event plumbing.
+- `MyApp.Courses.LiveView` owns LiveView presentation and event contracts: tables, forms, actions, params, filters, assigns, and event plumbing.
 
 The current `json_api do` block on models is a compatibility stepping stone. The long-term direction is explicit adapter contracts beside the resource.
 
@@ -63,27 +63,7 @@ LiveView helpers should establish a consistent lifecycle for:
 
 Developers should focus on UI markup while Hawk makes the data, authorization, validation, and event pattern hard to get wrong.
 
-A resource may have multiple named LiveView surfaces:
-
-```elixir
-index :teacher_focus do
-  authority_filter fn authority -> %{teacher_id: authority.identity} end
-  table do
-    column :title
-    column :registration_state
-  end
-end
-
-index :principal_school do
-  authority_filter fn authority -> %{school_id: authority.scopes.school_id} end
-  table do
-    column :title
-    column :teacher
-  end
-end
-```
-
-Surface filters are UX narrowing only. They must use declared Reader filters and can never widen policy.
+LiveView should not define a second visibility system. Different authorities see different rows through the same policy-aware Reader path used by JSON:API. LiveView filters are UX narrowing only: they must use declared Reader filters and can never widen policy.
 
 ## Read invariant
 
@@ -93,7 +73,7 @@ Surface filters are UX narrowing only. They must use declared Reader filters and
 policy_filter AND caller_filter AND resource_forced_filter
 ```
 
-Policy is the security boundary. Adapter filters from JSON:API, LiveView surfaces, LiveView params, or internal callers are additional narrowing only. Unknown filters fail closed. Preloads use the related resource's own Reader and Policy.
+Policy is the security boundary. Adapter filters from JSON:API, LiveView params, or internal callers are additional narrowing only. Unknown filters fail closed. Preloads use the related resource's own Reader and Policy.
 
 There are no hidden read bypasses. Even system reads should use `Authority.system()` and flow through the same machinery.
 

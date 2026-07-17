@@ -25,7 +25,7 @@ defmodule Hawk.LiveViewResourceInferenceTest.Courses.JsonApi do
 end
 
 defmodule Hawk.LiveViewResourceInferenceTest.Courses.LiveView do
-  def __hawk_live_view__, do: %{surfaces: []}
+  def __hawk_live_view__, do: %{index: %{}, show: %{}}
 end
 
 defmodule Hawk.LiveViewResourceInferenceTest.Courses do

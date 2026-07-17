@@ -8,7 +8,7 @@ defmodule Videdal.Courses.LiveView do
   as(:course)
   plural_as(:courses)
 
-  index :default do
+  index do
     table do
       column(:title, label: "Course")
       column(:registration_state, label: "Registration")
@@ -17,7 +17,7 @@ defmodule Videdal.Courses.LiveView do
     end
   end
 
-  show :default do
+  show do
     field(:title)
     field(:registration_state, label: "Registration")
     field(:seat_count, label: "Seats")

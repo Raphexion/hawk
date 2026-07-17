@@ -34,7 +34,7 @@ defmodule Hawk.JsonApiControllerResourceInferenceTest.Courses.JsonApi do
 end
 
 defmodule Hawk.JsonApiControllerResourceInferenceTest.Courses.LiveView do
-  def __hawk_live_view__, do: %{surfaces: []}
+  def __hawk_live_view__, do: %{index: %{}, show: %{}}
 end
 
 defmodule Hawk.JsonApiControllerResourceInferenceTest.Courses do
@@ -95,7 +95,7 @@ defmodule Hawk.JsonApiControllerResourceInferenceTest do
                    end
 
                    defmodule Hawk.JsonApiControllerResourceInferenceTest.JsonApiDisabled.LiveView do
-                     def __hawk_live_view__, do: %{surfaces: []}
+                     def __hawk_live_view__, do: %{index: %{}, show: %{}}
                    end
 
                    defmodule Hawk.JsonApiControllerResourceInferenceTest.JsonApiDisabled do

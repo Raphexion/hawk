@@ -104,17 +104,14 @@ defmodule MyApp.Courses.LiveView do
   as(:course)
   plural_as(:courses)
 
-  index :teacher_focus do
-    doc("Courses shown to teachers.")
-    filter(:teacher_id)
-
+  index do
     table do
       column(:title, label: "Course")
       column(:registration_state)
     end
   end
 
-  show :detail do
+  show do
     field(:title)
     field(:registration_state, label: "State")
   end
@@ -125,7 +122,8 @@ end
 the LiveView adapter when present, then falls back to model-based convention.
 Generated LiveView event handlers follow resource capabilities; for example,
 read-only resources with `writer: false` do not get the default `"hawk:delete"`
-handler. Surface filters are UX narrowing only; policies remain the security boundary.
+handler. LiveView filters are caller-provided narrowing only; policies remain the
+security boundary and are shared with JSON:API reads.
 
 ### Model
 

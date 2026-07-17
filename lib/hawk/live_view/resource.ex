@@ -2,9 +2,9 @@ defmodule Hawk.LiveView.Resource do
   @moduledoc """
   LiveView adapter contract DSL for Hawk resources.
 
-  This module describes LiveView-facing resource surfaces: assign names,
-  index/show surfaces, filters, tables, and fields. It owns data plumbing shape;
-  templates still own markup and styling.
+  This module describes the LiveView-facing resource contract: assign names,
+  index table metadata, show fields, and allowed UI filters. It owns data
+  plumbing shape; templates still own markup and styling.
   """
 
   defmacro __using__(_opts) do
@@ -13,12 +13,10 @@ defmodule Hawk.LiveView.Resource do
         only: [
           as: 1,
           plural_as: 1,
-          index: 2,
-          show: 2
+          index: 1,
+          show: 1
         ]
 
-      Module.register_attribute(__MODULE__, :hawk_live_view_indexes, accumulate: true)
-      Module.register_attribute(__MODULE__, :hawk_live_view_shows, accumulate: true)
       @before_compile Hawk.LiveView.Resource
     end
   end
@@ -35,36 +33,26 @@ defmodule Hawk.LiveView.Resource do
     end
   end
 
-  defmacro index(name, do: block) when is_atom(name) do
-    surface = parse_index(block, __CALLER__)
+  defmacro index(do: block) do
+    contract = parse_index(block, __CALLER__)
 
     quote do
-      Module.put_attribute(
-        __MODULE__,
-        :hawk_live_view_indexes,
-        {unquote(name), unquote(Macro.escape(surface))}
-      )
+      @hawk_live_view_index unquote(Macro.escape(contract))
     end
   end
 
-  defmacro show(name, do: block) when is_atom(name) do
-    surface = parse_show(block, __CALLER__)
+  defmacro show(do: block) do
+    contract = parse_show(block, __CALLER__)
 
     quote do
-      Module.put_attribute(
-        __MODULE__,
-        :hawk_live_view_shows,
-        {unquote(name), unquote(Macro.escape(surface))}
-      )
+      @hawk_live_view_show unquote(Macro.escape(contract))
     end
   end
 
   defmacro __before_compile__(env) do
     metadata = %{
-      surfaces: %{
-        index: surface_map(env.module, :hawk_live_view_indexes),
-        show: surface_map(env.module, :hawk_live_view_shows)
-      }
+      index: Module.get_attribute(env.module, :hawk_live_view_index) || %{},
+      show: Module.get_attribute(env.module, :hawk_live_view_show) || %{}
     }
 
     metadata = put_optional(metadata, :as, Module.get_attribute(env.module, :hawk_live_view_as))
@@ -133,13 +121,6 @@ defmodule Hawk.LiveView.Resource do
 
   defp expressions({:__block__, _meta, expressions}), do: expressions
   defp expressions(expression), do: [expression]
-
-  defp surface_map(module, attribute) do
-    module
-    |> Module.get_attribute(attribute)
-    |> Enum.reverse()
-    |> Map.new()
-  end
 
   defp put_optional(map, _key, nil), do: map
   defp put_optional(map, key, value), do: Map.put(map, key, value)
