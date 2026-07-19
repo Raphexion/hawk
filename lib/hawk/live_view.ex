@@ -16,6 +16,7 @@ defmodule Hawk.LiveView do
     as = Keyword.get(opts, :as) || infer_as!(resource)
     plural_as = Keyword.get(opts, :plural_as) || infer_plural_as(resource, as)
     capabilities = live_view_capabilities(resource)
+    live_view = live_view_metadata(resource)
 
     quote do
       def assign_index(socket, authority, opts \\ []) do
@@ -25,15 +26,24 @@ defmodule Hawk.LiveView do
           unquote(as),
           unquote(plural_as),
           authority,
-          opts
+          opts,
+          unquote(Macro.escape(live_view))
         )
       end
 
       def assign_show(socket, authority, id, opts \\ []) do
-        LiveView.assign_show(socket, unquote(resource), unquote(as), authority, id, opts)
+        LiveView.assign_show(
+          socket,
+          unquote(resource),
+          unquote(as),
+          authority,
+          id,
+          opts,
+          unquote(Macro.escape(live_view))
+        )
       end
 
-      unquote(quote_delete_handler(resource, as, plural_as, capabilities))
+      unquote(quote_delete_handler(resource, as, plural_as, capabilities, live_view))
     end
   end
 
@@ -46,9 +56,9 @@ defmodule Hawk.LiveView do
     end
   end
 
-  defp quote_delete_handler(_resource, _as, _plural_as, %{writer: false}), do: []
+  defp quote_delete_handler(_resource, _as, _plural_as, %{writer: false}, _live_view), do: []
 
-  defp quote_delete_handler(resource, as, plural_as, _capabilities) do
+  defp quote_delete_handler(resource, as, plural_as, _capabilities, live_view) do
     quote do
       def handle_event("hawk:delete", params, socket) do
         LiveView.handle_delete(
@@ -56,7 +66,8 @@ defmodule Hawk.LiveView do
           unquote(resource),
           unquote(as),
           unquote(plural_as),
-          params
+          params,
+          unquote(Macro.escape(live_view))
         )
       end
     end
@@ -112,15 +123,24 @@ defmodule Hawk.LiveView do
   end
 
   def assign_index(socket, resource, as, plural_as, authority, opts \\ []) do
+    assign_index(socket, resource, as, plural_as, authority, opts, %{})
+  end
+
+  def assign_index(socket, resource, as, plural_as, authority, opts, live_view) do
     results = resource.all(Keyword.put(opts, :authority, authority))
 
     socket
     |> assign(:hawk_resource, as)
     |> assign(:hawk_page, Keyword.get(opts, :page, %{}))
+    |> assign(:hawk_table, live_view_table(live_view))
     |> assign(plural_as, results)
   end
 
   def assign_show(socket, resource, as, authority, id, opts \\ []) do
+    assign_show(socket, resource, as, authority, id, opts, %{})
+  end
+
+  def assign_show(socket, resource, as, authority, id, opts, live_view) do
     opts =
       opts
       |> Keyword.put(:authority, authority)
@@ -130,6 +150,7 @@ defmodule Hawk.LiveView do
       {:ok, model} ->
         socket
         |> assign(:hawk_resource, as)
+        |> assign(:hawk_fields, live_view_fields(live_view))
         |> assign(as, model)
 
       :not_found ->
@@ -139,12 +160,26 @@ defmodule Hawk.LiveView do
     end
   end
 
-  def handle_delete(socket, resource, as, plural_as, %{"id" => id, "authority" => authority}) do
+  def handle_delete(socket, resource, as, plural_as, params) do
+    handle_delete(socket, resource, as, plural_as, params, %{})
+  end
+
+  def handle_delete(
+        socket,
+        resource,
+        as,
+        plural_as,
+        %{"id" => id, "authority" => authority},
+        live_view
+      ) do
     case resource.one(authority: authority, filter: %{id: normalize_id(id)}) do
       {:ok, model} ->
         case resource.delete(model, authority) do
-          {:ok, _model} -> {:noreply, assign_index(socket, resource, as, plural_as, authority)}
-          result -> {:noreply, assign(socket, :hawk_error, live_error(result))}
+          {:ok, _model} ->
+            {:noreply, assign_index(socket, resource, as, plural_as, authority, [], live_view)}
+
+          result ->
+            {:noreply, assign(socket, :hawk_error, live_error(result))}
         end
 
       :not_found ->
@@ -154,6 +189,9 @@ defmodule Hawk.LiveView do
          })}
     end
   end
+
+  defp live_view_table(live_view), do: live_view |> Map.get(:index, %{}) |> Map.get(:table, [])
+  defp live_view_fields(live_view), do: live_view |> Map.get(:show, %{}) |> Map.get(:fields, [])
 
   defp live_error(result) do
     case Hawk.Errors.to_live_view(result) do

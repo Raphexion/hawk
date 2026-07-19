@@ -39,6 +39,14 @@ defmodule Hawk.LiveViewTest do
     assert socket.assigns.courses == courses
     assert socket.assigns.hawk_resource == :course
     assert socket.assigns.hawk_page == %{column: :title, dir: :asc, size: 10}
+
+    assert socket.assigns.hawk_table == [
+             %{name: :title, label: "Course"},
+             %{name: :registration_state, label: "Registration"},
+             %{name: :seat_count, label: "Seats"},
+             %{name: :waitlist_count, label: "Waitlist"}
+           ]
+
     assert_received {:videdal_repo, :all, query}
     assert inspect(query) =~ "order_by: [asc: c0.title]"
   end
@@ -51,6 +59,14 @@ defmodule Hawk.LiveViewTest do
 
     assert socket.assigns.course == course
     assert socket.assigns.hawk_resource == :course
+
+    assert socket.assigns.hawk_fields == [
+             %{name: :title},
+             %{name: :registration_state, label: "Registration"},
+             %{name: :seat_count, label: "Seats"},
+             %{name: :waitlist_count, label: "Waitlist"}
+           ]
+
     assert_received {:videdal_repo, :all, query}
     assert inspect(query) =~ "c0.id == ^\"#{@course_id}\""
   end
