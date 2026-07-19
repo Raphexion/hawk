@@ -7,7 +7,7 @@ defmodule Hawk.LiveView do
   as a lightweight test boundary.
   """
 
-  alias Hawk.LiveView
+  alias Hawk.{Filter, LiveView}
 
   defmacro __using__(opts) do
     env = __CALLER__
@@ -127,6 +127,11 @@ defmodule Hawk.LiveView do
   end
 
   def assign_index(socket, resource, as, plural_as, authority, opts, live_view) do
+    opts =
+      opts
+      |> Keyword.delete(:params)
+      |> put_live_view_filter(Keyword.get(opts, :params, %{}), live_view)
+
     results = resource.all(Keyword.put(opts, :authority, authority))
 
     socket
@@ -189,6 +194,57 @@ defmodule Hawk.LiveView do
          })}
     end
   end
+
+  defp put_live_view_filter(opts, params, live_view) do
+    case parse_live_view_filter(params, live_view) do
+      :all -> opts
+      filter -> Keyword.update(opts, :filter, filter, &Filter.and(&1, filter))
+    end
+  end
+
+  defp parse_live_view_filter(params, live_view) when is_map(params) do
+    params
+    |> Map.get("filter", %{})
+    |> parse_live_view_filter_map(live_view_filters(live_view))
+  end
+
+  defp parse_live_view_filter(_params, _live_view), do: :all
+
+  defp parse_live_view_filter_map(filter, _allowed) when filter in [nil, %{}], do: :all
+
+  defp parse_live_view_filter_map(filter, allowed) when is_map(filter) do
+    allowed_by_name = Map.new(allowed, &{to_string(&1), &1})
+
+    Map.new(filter, fn {name, value} ->
+      case Map.fetch(allowed_by_name, name) do
+        {:ok, key} -> {key, parse_live_view_filter_value(value)}
+        :error -> raise ArgumentError, "unknown LiveView filter #{inspect(name)}"
+      end
+    end)
+  end
+
+  defp parse_live_view_filter_map(_filter, _allowed),
+    do: raise(ArgumentError, "LiveView filter params must be an object")
+
+  defp parse_live_view_filter_value(%{} = value) when map_size(value) == 1 do
+    [{operator, operand}] = Map.to_list(value)
+    {parse_live_view_filter_operator!(operator), operand}
+  end
+
+  defp parse_live_view_filter_value(value), do: value
+
+  defp parse_live_view_filter_operator!(operator)
+       when operator in ["eq", "neq", "in", "not_in", "lt", "lte", "gt", "gte", "like", "ilike"] do
+    String.to_existing_atom(operator)
+  end
+
+  defp parse_live_view_filter_operator!(operator) when is_atom(operator), do: operator
+
+  defp parse_live_view_filter_operator!(operator),
+    do: raise(ArgumentError, "unsupported LiveView filter operator #{inspect(operator)}")
+
+  defp live_view_filters(live_view),
+    do: live_view |> Map.get(:index, %{}) |> Map.get(:filters, [])
 
   defp live_view_table(live_view), do: live_view |> Map.get(:index, %{}) |> Map.get(:table, [])
   defp live_view_fields(live_view), do: live_view |> Map.get(:show, %{}) |> Map.get(:fields, [])

@@ -26,6 +26,7 @@ defmodule Hawk.LiveViewTest do
   @school_admin_id Videdal.school_admin_id()
   @school_id Videdal.school_id()
   @student_id Videdal.student_id()
+  @teacher_id Videdal.teacher_id()
 
   test "assign_index loads resources into predictable plural assigns" do
     courses = [%Course{id: @course_id, title: "Math"}]
@@ -49,6 +50,52 @@ defmodule Hawk.LiveViewTest do
 
     assert_received {:videdal_repo, :all, query}
     assert inspect(query) =~ "order_by: [asc: c0.title]"
+  end
+
+  test "assign_index applies declared LiveView filters as reader narrowing" do
+    courses = [%Course{id: @course_id, title: "Math", teacher_id: @teacher_id}]
+    Process.put({Videdal.Repo, :all_results}, courses)
+
+    socket =
+      CourseIndexLive.assign_index(socket(), Authority.system(),
+        params: %{"filter" => %{"teacher_id" => @teacher_id}}
+      )
+
+    assert socket.assigns.courses == courses
+    assert_received {:videdal_repo, :all, query}
+    assert inspect(query) =~ "c0.teacher_id == ^\"#{@teacher_id}\""
+  end
+
+  test "assign_index combines LiveView params with existing caller filters" do
+    courses = [
+      %Course{id: @course_id, title: "Math", school_id: @school_id, teacher_id: @teacher_id}
+    ]
+
+    Process.put({Videdal.Repo, :all_results}, courses)
+
+    socket =
+      CourseIndexLive.assign_index(socket(), Authority.system(),
+        filter: %{school_id: @school_id},
+        params: %{"filter" => %{"teacher_id" => @teacher_id}}
+      )
+
+    assert socket.assigns.courses == courses
+    assert_received {:videdal_repo, :all, query}
+    inspected = inspect(query)
+    assert inspected =~ "c0.school_id == ^\"#{@school_id}\""
+    assert inspected =~ "c0.teacher_id == ^\"#{@teacher_id}\""
+  end
+
+  test "assign_index rejects undeclared LiveView filters without creating atoms" do
+    hostile = "hawk_hostile_live_filter_#{System.unique_integer([:positive])}"
+
+    assert_raise ArgumentError, "unknown LiveView filter #{inspect(hostile)}", fn ->
+      CourseIndexLive.assign_index(socket(), Authority.system(),
+        params: %{"filter" => %{hostile => "boom"}}
+      )
+    end
+
+    refute_existing_atom(hostile)
   end
 
   test "assign_show loads one resource into predictable singular assigns" do
@@ -146,5 +193,12 @@ defmodule Hawk.LiveViewTest do
 
   defp socket do
     %{assigns: %{}}
+  end
+
+  defp refute_existing_atom(value) do
+    _existing = String.to_existing_atom(value)
+    flunk("expected #{inspect(value)} not to be an existing atom")
+  rescue
+    ArgumentError -> :ok
   end
 end

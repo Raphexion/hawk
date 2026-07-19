@@ -9,6 +9,8 @@ defmodule Videdal.Courses.LiveView do
   plural_as(:courses)
 
   index do
+    filter(:teacher_id)
+
     table do
       column(:title, label: "Course")
       column(:registration_state, label: "Registration")

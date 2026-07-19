@@ -105,6 +105,8 @@ defmodule MyApp.Courses.LiveView do
   plural_as(:courses)
 
   index do
+    filter(:teacher_id)
+
     table do
       column(:title, label: "Course")
       column(:registration_state)
@@ -122,8 +124,10 @@ end
 the LiveView adapter when present, then falls back to model-based convention.
 Generated LiveView event handlers follow resource capabilities; for example,
 read-only resources with `writer: false` do not get the default `"hawk:delete"`
-handler. LiveView filters are caller-provided narrowing only; policies remain the
-security boundary and are shared with JSON:API reads.
+handler. LiveView filters are caller-provided narrowing only; pass them as
+`params: %{"filter" => ...}` to `assign_index/3`. Hawk accepts only filters
+declared in the LiveView adapter and validated against the Reader; policies
+remain the security boundary and are shared with JSON:API reads.
 
 ### Model
 
