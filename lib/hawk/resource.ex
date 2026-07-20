@@ -64,6 +64,7 @@ defmodule Hawk.Resource do
     validate_functions!(modules.reader, :reader, all: 1, one: 1, one!: 1)
     validate_functions!(modules.policy, :policy, read_filter: 1)
     validate_functions!(modules.writer, :writer, create: 2, update: 3, delete: 2)
+    validate_writer_form_contract!(modules.writer)
     validate_functions!(modules.json_api, :json_api, __hawk_json_api__: 0)
     validate_functions!(modules.live_view, :live_view, __hawk_live_view__: 0)
     validate_functions!(modules.actions, :actions, __hawk_actions__: 0)
@@ -91,6 +92,29 @@ defmodule Hawk.Resource do
               "Hawk resource #{key} module #{inspect(module)} must define #{function}/#{arity}"
       end
     end)
+  end
+
+  defp validate_writer_form_contract!(false), do: :ok
+
+  defp validate_writer_form_contract!(writer) do
+    create? = function_exported?(writer, :change_create, 2)
+    update? = function_exported?(writer, :change_update, 3)
+
+    cond do
+      create? and update? ->
+        :ok
+
+      create? ->
+        raise ArgumentError,
+              "Hawk resource writer module #{inspect(writer)} must define change_update/3 when change_create/2 is defined"
+
+      update? ->
+        raise ArgumentError,
+              "Hawk resource writer module #{inspect(writer)} must define change_create/2 when change_update/3 is defined"
+
+      true ->
+        :ok
+    end
   end
 
   defp validate_json_api_contract!(_model, false), do: :ok
@@ -143,17 +167,25 @@ defmodule Hawk.Resource do
   defp validate_live_view_contract!(model, reader, live_view_module) do
     live_view = live_view_module.__hawk_live_view__()
 
+    index = live_view[:index] || %{}
+
     validate_live_view_filters!(
       live_view_module,
       reader,
-      Map.get(live_view[:index] || %{}, :filters, [])
+      Map.get(index, :filters, []) ++ live_view_search_names(index)
+    )
+
+    validate_live_view_sorts!(
+      live_view_module,
+      reader,
+      Map.get(index, :sorts, [])
     )
 
     validate_live_view_fields!(
       model,
       live_view_module,
       :index,
-      Map.get(live_view[:index] || %{}, :table, [])
+      Map.get(index, :table, [])
     )
 
     validate_live_view_fields!(
@@ -184,6 +216,29 @@ defmodule Hawk.Resource do
               "Hawk resource live_view module #{inspect(live_view_module)} index filter #{inspect(filter)} must be declared by reader #{inspect(reader)}"
       end
     end)
+  end
+
+  defp validate_live_view_sorts!(_live_view_module, _reader, []), do: :ok
+
+  defp validate_live_view_sorts!(live_view_module, reader, sorts) do
+    if function_exported?(reader, :sort_keys, 0) do
+      validate_live_view_sorts!(live_view_module, reader, sorts, MapSet.new(reader.sort_keys()))
+    end
+  end
+
+  defp validate_live_view_sorts!(live_view_module, reader, sorts, allowed) do
+    Enum.each(sorts, fn sort ->
+      unless MapSet.member?(allowed, sort) do
+        raise ArgumentError,
+              "Hawk resource live_view module #{inspect(live_view_module)} index sort #{inspect(sort)} must be declared by reader #{inspect(reader)}"
+      end
+    end)
+  end
+
+  defp live_view_search_names(index) do
+    index
+    |> Map.get(:searches, [])
+    |> Enum.map(&Map.fetch!(&1, :name))
   end
 
   defp validate_live_view_fields!(model, live_view_module, kind, fields) do
@@ -230,10 +285,27 @@ defmodule Hawk.Resource do
   defp quote_writer_delegates(false), do: []
 
   defp quote_writer_delegates(writer) do
+    form_delegates = quote_writer_form_delegates(writer)
+
     quote do
       def create(attrs, authority), do: unquote(writer).create(attrs, authority)
       def update(model, attrs, authority), do: unquote(writer).update(model, attrs, authority)
       def delete(model, authority), do: unquote(writer).delete(model, authority)
+      unquote(form_delegates)
+    end
+  end
+
+  defp quote_writer_form_delegates(writer) do
+    if function_exported?(writer, :change_create, 2) and
+         function_exported?(writer, :change_update, 3) do
+      quote do
+        def change_create(attrs, authority), do: unquote(writer).change_create(attrs, authority)
+
+        def change_update(model, attrs, authority),
+          do: unquote(writer).change_update(model, attrs, authority)
+      end
+    else
+      []
     end
   end
 

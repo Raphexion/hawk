@@ -66,6 +66,30 @@ defmodule Hawk.LiveViewTest do
     assert inspect(query) =~ "c0.teacher_id == ^\"#{@teacher_id}\""
   end
 
+  test "assign_index applies search, sort, and page params" do
+    courses = [%Course{id: @course_id, title: "History", teacher_id: @teacher_id}]
+    Process.put({Videdal.Repo, :all_results}, courses)
+
+    socket =
+      CourseIndexLive.assign_index(socket(), Authority.system(),
+        params: %{
+          "search" => %{"title" => "histo"},
+          "sort" => "-title",
+          "page" => %{"number" => "3", "size" => "10"}
+        }
+      )
+
+    assert socket.assigns.courses == courses
+    assert socket.assigns.hawk_page == %{column: :title, dir: :desc, number: 3, size: 10}
+    assert socket.assigns.hawk_index_state.filter == %{title: {:ilike, "%histo%"}}
+    assert_received {:videdal_repo, :all, query}
+    inspected = inspect(query)
+    assert inspected =~ "ilike(c0.title, ^\"%histo%\")"
+    assert inspected =~ "desc: c0.title"
+    assert inspected =~ "limit: ^10"
+    assert inspected =~ "offset: ^20"
+  end
+
   test "assign_index combines LiveView params with existing caller filters" do
     courses = [
       %Course{id: @course_id, title: "Math", school_id: @school_id, teacher_id: @teacher_id}

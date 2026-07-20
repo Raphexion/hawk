@@ -106,6 +106,9 @@ defmodule MyApp.Courses.LiveView do
 
   index do
     filter(:teacher_id)
+    search(:title, operator: :ilike)
+    sort(:id)
+    sort(:title)
 
     table do
       column(:title, label: "Course")
@@ -124,10 +127,14 @@ end
 the LiveView adapter when present, then falls back to model-based convention.
 Generated LiveView event handlers follow resource capabilities; for example,
 read-only resources with `writer: false` do not get the default `"hawk:delete"`
-handler. LiveView filters are caller-provided narrowing only; pass them as
-`params: %{"filter" => ...}` to `assign_index/3`. Hawk accepts only filters
-declared in the LiveView adapter and validated against the Reader; policies
-remain the security boundary and are shared with JSON:API reads.
+handler. LiveView index params are caller-provided narrowing/presentation only;
+pass them as `params: %{"filter" => ..., "search" => ..., "sort" => ..., "page" => ...}`
+to `assign_index/3`. Hawk accepts only filters/searches/sorts declared in the
+LiveView adapter and validated against the Reader. Search declarations can turn a
+text field into an `:ilike` filter, so `%{"search" => %{"title" => "histo"}}`
+becomes `%{title: {:ilike, "%histo%"}}`. Sort and search changes reset the page
+number to `1`; page changes keep the current query state. Policies remain the
+security boundary and are shared with JSON:API reads.
 
 ### Model
 
@@ -233,19 +240,24 @@ and the shorthand `page_size` / `page_number` query parameters.
 
 ```elixir
 defmodule MyApp.Courses.Writer do
-  alias Hawk.{MutationContext, RepositoryBoundary, Writer}
-  alias MyApp.{Course, Repo}
-  alias MyApp.Courses.Policy
+  use Hawk.Writer.Resource,
+    model: MyApp.Course,
+    repo: MyApp.Repo,
+    policy: MyApp.Courses.Policy
 
-  def create(attrs, authority) do
-    MutationContext.create(%Course{}, attrs, authority)
-    |> Writer.cast([:title, :teacher_id])
-    |> Writer.validate_required([:title, :teacher_id])
-    |> MutationContext.validate_policy(&Policy.create?/1)
-    |> RepositoryBoundary.insert(Repo)
+  create do
+    cast([:title, :teacher_id])
+    validate_required([:title, :teacher_id])
   end
 end
 ```
+
+`Hawk.Writer.Resource` generates `change_create/2` and `create/2` from the same
+pipeline. `change_create/2` returns a non-persisting changeset with
+`action: :validate`, which is the boundary LiveView form helpers use for live
+validation errors. `create/2` keeps owning persistence through the repository
+boundary. Hand-written writers can expose the same form boundary with
+`change_create/2` and `change_update/3` when they need custom pipelines.
 
 ### Actions
 

@@ -9,6 +9,20 @@ defmodule Hawk.WriterTest do
 
   @school_id Videdal.school_id()
 
+  describe "changeset/2" do
+    test "extracts a validation changeset without persisting" do
+      changeset =
+        %Student{}
+        |> context(%{name: ""})
+        |> Writer.cast([:name])
+        |> Writer.validate_required([:name])
+        |> Writer.changeset()
+
+      assert %Changeset{action: :validate, valid?: false} = changeset
+      assert changeset.errors[:name] == {"can't be blank", [validation: :required]}
+    end
+  end
+
   describe "defaults/2" do
     test "puts defaults only when attrs are missing" do
       context =

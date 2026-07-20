@@ -79,7 +79,14 @@ defmodule Hawk.PhoenixIntegrationBoundaryTest do
       CourseLive.assign_index(socket(), Authority.system())
 
     assert socket.assigns.courses == courses
-    assert socket.phoenix_assigned == [:courses, :hawk_table, :hawk_page, :hawk_resource]
+
+    assert socket.phoenix_assigned == [
+             :courses,
+             :hawk_table,
+             :hawk_page,
+             :hawk_index_state,
+             :hawk_resource
+           ]
   end
 
   defp conn do

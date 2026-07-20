@@ -7,6 +7,9 @@ defmodule Hawk.LiveViewResourceTest.CourseLiveView do
   index do
     doc("Courses shown to teachers.")
     filter(:teacher_id)
+    search(:title, operator: :ilike)
+    sort(:id)
+    sort(:title)
 
     table do
       column(:title, label: "Course")
@@ -36,6 +39,8 @@ defmodule Hawk.LiveViewResourceTest do
              index: %{
                doc: "Courses shown to teachers.",
                filters: [:teacher_id],
+               searches: [%{name: :title, operator: :ilike}],
+               sorts: [:id, :title],
                table: [
                  %{name: :title, label: "Course"},
                  %{name: :registration_state}

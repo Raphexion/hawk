@@ -344,6 +344,125 @@ defmodule Hawk.ResourceTest do
                  end
   end
 
+  test "writer form helpers must be declared as a pair" do
+    assert_raise ArgumentError,
+                 ~r"Hawk resource writer module Hawk.ResourceTest.PartialFormWriter.Writer must define change_update/3 when change_create/2 is defined",
+                 fn ->
+                   Code.compile_string("""
+                   defmodule Hawk.ResourceTest.PartialFormWriter.Reader do
+                     def one(opts), do: {:one, opts}
+                     def one!(opts), do: {:one!, opts}
+                     def all(opts), do: {:all, opts}
+                   end
+
+                   defmodule Hawk.ResourceTest.PartialFormWriter.Policy do
+                     def read_filter(_authority), do: :all
+                   end
+
+                   defmodule Hawk.ResourceTest.PartialFormWriter.Writer do
+                     def create(attrs, authority), do: {:create, attrs, authority}
+                     def update(model, attrs, authority), do: {:update, model, attrs, authority}
+                     def delete(model, authority), do: {:delete, model, authority}
+                     def change_create(attrs, authority), do: {:change_create, attrs, authority}
+                   end
+
+                   defmodule Hawk.ResourceTest.PartialFormWriter.JsonApi do
+                     def __hawk_json_api__, do: %{type: "courses"}
+                   end
+
+                   defmodule Hawk.ResourceTest.PartialFormWriter.LiveView do
+                     def __hawk_live_view__, do: %{}
+                   end
+
+                   defmodule Hawk.ResourceTest.PartialFormWriter do
+                     use Hawk.Resource, model: Hawk.ResourceTest.Course
+                   end
+                   """)
+                 end
+  end
+
+  test "live_view searches must be declared reader filters" do
+    assert_raise ArgumentError,
+                 ~r/Hawk resource live_view module Hawk.ResourceTest.BadLiveSearch.LiveView index filter :title must be declared by reader Hawk.ResourceTest.BadLiveSearch.Reader/,
+                 fn ->
+                   Code.compile_string("""
+                   defmodule Hawk.ResourceTest.BadLiveSearch.Reader do
+                     def one(opts), do: {:one, opts}
+                     def one!(opts), do: {:one!, opts}
+                     def all(opts), do: {:all, opts}
+                     def filter_keys, do: MapSet.new([:teacher_id])
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveSearch.Policy do
+                     def read_filter(_authority), do: :all
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveSearch.Writer do
+                     def create(attrs, authority), do: {:create, attrs, authority}
+                     def update(model, attrs, authority), do: {:update, model, attrs, authority}
+                     def delete(model, authority), do: {:delete, model, authority}
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveSearch.JsonApi do
+                     def __hawk_json_api__, do: %{type: "courses"}
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveSearch.LiveView do
+                     use Hawk.LiveView.Resource
+
+                     index do
+                       search(:title, operator: :ilike)
+                     end
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveSearch do
+                     use Hawk.Resource, model: Hawk.ResourceTest.Course
+                   end
+                   """)
+                 end
+  end
+
+  test "live_view sorts must be declared reader sorts" do
+    assert_raise ArgumentError,
+                 ~r/Hawk resource live_view module Hawk.ResourceTest.BadLiveSort.LiveView index sort :title must be declared by reader Hawk.ResourceTest.BadLiveSort.Reader/,
+                 fn ->
+                   Code.compile_string("""
+                   defmodule Hawk.ResourceTest.BadLiveSort.Reader do
+                     def one(opts), do: {:one, opts}
+                     def one!(opts), do: {:one!, opts}
+                     def all(opts), do: {:all, opts}
+                     def sort_keys, do: MapSet.new([:id])
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveSort.Policy do
+                     def read_filter(_authority), do: :all
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveSort.Writer do
+                     def create(attrs, authority), do: {:create, attrs, authority}
+                     def update(model, attrs, authority), do: {:update, model, attrs, authority}
+                     def delete(model, authority), do: {:delete, model, authority}
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveSort.JsonApi do
+                     def __hawk_json_api__, do: %{type: "courses"}
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveSort.LiveView do
+                     use Hawk.LiveView.Resource
+
+                     index do
+                       sort(:title)
+                     end
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveSort do
+                     use Hawk.Resource, model: Hawk.ResourceTest.Course
+                   end
+                   """)
+                 end
+  end
+
   test "live_view filters must be declared reader filters" do
     assert_raise ArgumentError,
                  ~r/Hawk resource live_view module Hawk.ResourceTest.BadLiveFilter.LiveView index filter :teacher_id must be declared by reader Hawk.ResourceTest.BadLiveFilter.Reader/,

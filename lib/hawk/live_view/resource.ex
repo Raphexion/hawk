@@ -72,8 +72,13 @@ defmodule Hawk.LiveView.Resource do
   defp parse_index(block, caller) do
     block
     |> expressions()
-    |> Enum.reduce(%{filters: []}, &parse_index_expression(&1, &2, caller))
+    |> Enum.reduce(
+      %{filters: [], searches: [], sorts: []},
+      &parse_index_expression(&1, &2, caller)
+    )
     |> drop_empty(:filters)
+    |> drop_empty(:searches)
+    |> drop_empty(:sorts)
   end
 
   defp parse_show(block, caller) do
@@ -89,6 +94,23 @@ defmodule Hawk.LiveView.Resource do
 
   defp parse_index_expression({:filter, _meta, [name]}, acc, caller) do
     Map.update!(acc, :filters, &[literal!(name, caller) | &1])
+  end
+
+  defp parse_index_expression({:search, _meta, [name]}, acc, caller) do
+    Map.update!(acc, :searches, &[%{name: literal!(name, caller), operator: :ilike} | &1])
+  end
+
+  defp parse_index_expression({:search, _meta, [name, opts]}, acc, caller) when is_list(opts) do
+    metadata = %{
+      name: literal!(name, caller),
+      operator: literal!(Keyword.get(opts, :operator, :ilike), caller)
+    }
+
+    Map.update!(acc, :searches, &[metadata | &1])
+  end
+
+  defp parse_index_expression({:sort, _meta, [name]}, acc, caller) do
+    Map.update!(acc, :sorts, &[literal!(name, caller) | &1])
   end
 
   defp parse_index_expression({:table, _meta, [[do: block]]}, acc, caller) do

@@ -14,6 +14,19 @@ defmodule Hawk.Writer do
           | {:error, atom(), String.t(), keyword()}
 
   @doc """
+  Extracts a changeset from a mutation context for non-persisting form validation.
+
+  The default `:validate` action follows Phoenix LiveView conventions: invalid
+  changesets render errors while the form is being edited, without crossing the
+  repository boundary.
+  """
+  @spec changeset(MutationContext.t(), atom()) :: Changeset.t()
+  def changeset(%MutationContext{changeset: %Changeset{} = changeset}, action \\ :validate)
+      when is_atom(action) do
+    %{changeset | action: action}
+  end
+
+  @doc """
   Adds default attrs with put-if-missing semantics.
 
   Zero-arity function defaults are evaluated only when the default is applied.

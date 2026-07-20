@@ -10,6 +10,9 @@ defmodule Videdal.Courses.LiveView do
 
   index do
     filter(:teacher_id)
+    search(:title, operator: :ilike)
+    sort(:id)
+    sort(:title)
 
     table do
       column(:title, label: "Course")

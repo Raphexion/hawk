@@ -10,6 +10,7 @@ defmodule Videdal.Courses.Reader do
   filter(:id)
   filter(:school_id)
   filter(:teacher_id)
+  filter(:title)
 
   sort(:id)
   sort(:title)

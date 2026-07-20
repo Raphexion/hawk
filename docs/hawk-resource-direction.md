@@ -56,14 +56,15 @@ LiveView helpers should establish a consistent lifecycle for:
 - assigning index/show data
 - pagination, sorting, filters, and params
 - create/update form validation
+- live changeset errors while users type
 - submit handling
 - delete handling
 - action handling
 - policy-aware errors
 
-Developers should focus on UI markup while Hawk makes the data, authorization, validation, and event pattern hard to get wrong.
+Developers should focus on UI markup while Hawk makes the data, authorization, validation, and event pattern hard to get wrong. Live validation should use the same writer pipeline as persistence without crossing the repository boundary: `Hawk.Writer.Resource` generates non-persisting changeset helpers from declared writer pipelines, while hand-written writers can expose `change_create/2` and `change_update/3` beside `create/2` and `update/3` when they need custom pipelines.
 
-LiveView should not define a second visibility system. Different authorities see different rows through the same policy-aware Reader path used by JSON:API. LiveView filters are UX narrowing only: they must use declared Reader filters and can never widen policy.
+LiveView should not define a second visibility system. Different authorities see different rows through the same policy-aware Reader path used by JSON:API. LiveView filters and searches are UX narrowing only: they must use declared Reader filters and can never widen policy. LiveView sort controls must be declared in the adapter and backed by Reader sort keys. Index state is normalized before reading so search/sort changes reset to page 1, page changes keep the current query, and stream-backed UIs can replace the current page window instead of accumulating rows in socket memory.
 
 ## Read invariant
 
