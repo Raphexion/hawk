@@ -12,7 +12,7 @@ defmodule Hawk.Writer.Resource do
     policy = Keyword.fetch!(opts, :policy)
 
     quote do
-      import Hawk.Writer.Resource, only: [create: 1]
+      import Hawk.Writer.Resource, only: [create: 1, update: 1]
 
       @hawk_writer_model unquote(model)
       @hawk_writer_repo unquote(repo)
@@ -28,13 +28,21 @@ defmodule Hawk.Writer.Resource do
     end
   end
 
+  defmacro update(do: block) do
+    quote do
+      @hawk_writer_update unquote(Macro.escape(block))
+    end
+  end
+
   defmacro __before_compile__(env) do
     create_block = Module.get_attribute(env.module, :hawk_writer_create)
+    update_block = Module.get_attribute(env.module, :hawk_writer_update)
     model = Module.get_attribute(env.module, :hawk_writer_model)
     repo = Module.get_attribute(env.module, :hawk_writer_repo)
     policy = Module.get_attribute(env.module, :hawk_writer_policy)
 
     create_context = quote_context_pipeline(:create, create_block, model, policy)
+    update_functions = quote_update_functions(update_block, repo, policy)
 
     quote do
       def change_create(attrs, authority) do
@@ -52,6 +60,32 @@ defmodule Hawk.Writer.Resource do
       defp create_context(attrs, authority) do
         unquote(create_context)
       end
+
+      unquote(update_functions)
+    end
+  end
+
+  defp quote_update_functions(nil, _repo, _policy), do: []
+
+  defp quote_update_functions(update_block, repo, policy) do
+    update_context = quote_context_pipeline(:update, update_block, nil, policy)
+
+    quote do
+      def change_update(model, attrs, authority) do
+        model
+        |> update_context(attrs, authority)
+        |> Hawk.Writer.changeset()
+      end
+
+      def update(model, attrs, authority) do
+        model
+        |> update_context(attrs, authority)
+        |> Hawk.RepositoryBoundary.update(unquote(repo))
+      end
+
+      defp update_context(model, attrs, authority) do
+        unquote(update_context)
+      end
     end
   end
 
@@ -60,20 +94,32 @@ defmodule Hawk.Writer.Resource do
   end
 
   defp quote_context_pipeline(:create, block, model, policy) do
-    steps = expressions(block)
-
-    Enum.reduce(
-      steps,
-      quote(do: Hawk.MutationContext.create(%unquote(model){}, attrs, authority)),
-      fn step, acc ->
-        quote_step(step, acc)
-      end
-    )
+    block
+    |> expressions()
+    |> quote_pipeline(quote(do: Hawk.MutationContext.create(%unquote(model){}, attrs, authority)))
     |> then(fn acc ->
       quote do
         unquote(acc)
         |> Hawk.MutationContext.validate_policy(&unquote(policy).create?/1)
       end
+    end)
+  end
+
+  defp quote_context_pipeline(:update, block, _model, policy) do
+    block
+    |> expressions()
+    |> quote_pipeline(quote(do: Hawk.MutationContext.update(model, attrs, authority)))
+    |> then(fn acc ->
+      quote do
+        unquote(acc)
+        |> Hawk.MutationContext.validate_policy(&unquote(policy).update?/1)
+      end
+    end)
+  end
+
+  defp quote_pipeline(steps, initial) do
+    Enum.reduce(steps, initial, fn step, acc ->
+      quote_step(step, acc)
     end)
   end
 
@@ -98,8 +144,22 @@ defmodule Hawk.Writer.Resource do
     end
   end
 
+  defp quote_step({:validate, _meta, [validator]}, acc) do
+    quote do
+      unquote(acc)
+      |> Hawk.Writer.validate(unquote(validator))
+    end
+  end
+
+  defp quote_step({:validate_changeset, _meta, [validator]}, acc) do
+    quote do
+      unquote(acc)
+      |> Hawk.Writer.validate_changeset(unquote(validator))
+    end
+  end
+
   defp quote_step(unsupported, _acc) do
-    raise ArgumentError, "unsupported Hawk writer create step #{Macro.to_string(unsupported)}"
+    raise ArgumentError, "unsupported Hawk writer step #{Macro.to_string(unsupported)}"
   end
 
   defp expressions({:__block__, _meta, expressions}), do: expressions

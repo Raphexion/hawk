@@ -248,16 +248,32 @@ defmodule MyApp.Courses.Writer do
   create do
     cast([:title, :teacher_id])
     validate_required([:title, :teacher_id])
+    validate(&reject_reserved_title/1)
+  end
+
+  update do
+    cast([:title, :teacher_id])
+    validate(&reject_reserved_title/1)
+  end
+
+  defp reject_reserved_title(context) do
+    case Ecto.Changeset.get_change(context.changeset, :title) do
+      "Forbidden" -> {:error, :title, "is reserved"}
+      _title -> :ok
+    end
   end
 end
 ```
 
-`Hawk.Writer.Resource` generates `change_create/2` and `create/2` from the same
-pipeline. `change_create/2` returns a non-persisting changeset with
-`action: :validate`, which is the boundary LiveView form helpers use for live
-validation errors. `create/2` keeps owning persistence through the repository
-boundary. Hand-written writers can expose the same form boundary with
-`change_create/2` and `change_update/3` when they need custom pipelines.
+`Hawk.Writer.Resource` generates `change_create/2` / `create/2` and
+`change_update/3` / `update/3` from the same pipelines. `change_*` functions
+return non-persisting changesets with `action: :validate`, which is the boundary
+LiveView form helpers use for live validation errors. `create/2` and `update/3`
+keep owning persistence through the repository boundary. Custom `validate/1`
+functions can be reused in create and update pipelines when domain validation is
+not just standard Ecto changeset validation. Hand-written writers can expose the
+same form boundary with `change_create/2` and `change_update/3` when they need
+custom pipelines.
 
 ### Actions
 
