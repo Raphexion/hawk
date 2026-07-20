@@ -14,11 +14,20 @@ defmodule Hawk.LiveViewTest.CourseShowLive do
     as: :course
 end
 
+defmodule Hawk.LiveViewTest.CourseManualEventsLive do
+  @moduledoc false
+
+  use Hawk.LiveView,
+    resource: Videdal.Courses,
+    as: :course,
+    events: false
+end
+
 defmodule Hawk.LiveViewTest do
   use ExUnit.Case, async: true
 
   alias Hawk.Authority
-  alias Hawk.LiveViewTest.{CourseIndexLive, CourseShowLive}
+  alias Hawk.LiveViewTest.{CourseIndexLive, CourseManualEventsLive, CourseShowLive}
   alias Videdal.Course
 
   @course_id Videdal.course_id()
@@ -192,6 +201,16 @@ defmodule Hawk.LiveViewTest do
     refute_received {:videdal_repo, :update, _changeset}
   end
 
+  test "generated hawk_validate helper updates the create form with live errors" do
+    socket = CourseIndexLive.assign_new_form(socket(), Authority.system())
+
+    {:noreply, socket} = CourseIndexLive.hawk_validate(%{"course" => %{"title" => ""}}, socket)
+
+    assert %Ecto.Changeset{action: :validate, valid?: false} = socket.assigns.course_form
+    assert errors_on(socket.assigns.course_form).title == ["can't be blank"]
+    refute_received {:videdal_repo, :insert, _changeset}
+  end
+
   test "validate event updates the create form with live errors" do
     socket = CourseIndexLive.assign_new_form(socket(), Authority.system())
 
@@ -223,6 +242,39 @@ defmodule Hawk.LiveViewTest do
     assert %Ecto.Changeset{action: :validate, valid?: false} = socket.assigns.course_form
     assert errors_on(socket.assigns.course_form).title == ["is reserved"]
     refute_received {:videdal_repo, :update, _changeset}
+  end
+
+  test "generated hawk_save helper supports custom success behavior" do
+    socket = CourseIndexLive.assign_new_form(socket(), Authority.system())
+
+    {:noreply, socket} =
+      CourseIndexLive.hawk_save(
+        %{
+          "course" => %{
+            "title" => "History",
+            "school_id" => @school_id,
+            "teacher_id" => @teacher_id
+          }
+        },
+        socket,
+        on_success: fn socket, course ->
+          socket
+          |> Map.put(:patched_to, "/courses/#{course.title}")
+        end
+      )
+
+    assert socket.patched_to == "/courses/History"
+    assert %Course{title: "History"} = socket.assigns.course
+  end
+
+  test "events false still generates helpers but not default form or delete handlers" do
+    socket = CourseManualEventsLive.assign_new_form(socket(), Authority.system())
+
+    {:noreply, socket} =
+      CourseManualEventsLive.hawk_validate(%{"course" => %{"title" => ""}}, socket)
+
+    assert errors_on(socket.assigns.course_form).title == ["can't be blank"]
+    refute function_exported?(CourseManualEventsLive, :handle_event, 3)
   end
 
   test "save event creates, assigns the saved model, and switches form state to edit" do

@@ -145,15 +145,18 @@ socket = CourseLive.assign_edit_form(socket, course, authority)
 ```
 
 These assign `:course_form` by default and track form state under
-`:hawk_form_states`. `handle_event("hawk:validate", %{"course" => params}, socket)`
+`:hawk_form_states`. Hawk also generates `hawk_validate/2` and `hawk_save/2,3`.
+Default `handle_event("hawk:validate", ...)` and `handle_event("hawk:save", ...)`
+clauses call those helpers unless `events: false` is set. `hawk_validate/2`
 rebuilds a non-persisting validation changeset through `change_create/2` or
 `change_update/3`, then assigns a Phoenix `to_form(changeset, as: :course)` when
-Phoenix is available. `handle_event("hawk:save", %{"course" => params}, socket)`
-uses the same state to call `create/2` or `update/3`; validation failures keep
-the keyed form assigned with `action: :insert` or `:update`, authorization
-failures assign `:hawk_error`, and successful saves assign the saved model under
-`:course`. The fallback form assign is the raw changeset, which keeps tests and
-non-Phoenix boundaries simple.
+Phoenix is available. `hawk_save/2` uses the same state to call `create/2` or
+`update/3`; validation failures keep the keyed form assigned with
+`action: :insert` or `:update`, authorization failures assign `:hawk_error`, and
+successful saves assign the saved model under `:course`. Use `hawk_save/3` with
+`on_success: fn socket, course -> ... end` when the app needs post-save behavior
+such as navigation while still reusing Hawk's save plumbing. The fallback form
+assign is the raw changeset, which keeps tests and non-Phoenix boundaries simple.
 
 ### Model
 
@@ -530,9 +533,59 @@ end
 
 When `resource:` is a `Hawk.Resource` facade, Hawk infers the singular/plural assign names from the model. Older hand-written facades can still pass `as:` explicitly.
 
-This provides helpers such as `assign_index/3`, `assign_show/4`, and a default
-`"hawk:delete"` event handler that routes mutations through the writer and maps
-errors into LiveView-friendly assigns.
+This provides helpers such as `assign_index/3`, `assign_show/4`, keyed form
+helpers such as `assign_new_form/2`, and default `"hawk:validate"`,
+`"hawk:save"`, and `"hawk:delete"` event handlers. The form handlers route live
+validation and persistence through the writer boundary and map errors into
+LiveView-friendly assigns.
+
+A boring generated form can stay almost empty:
+
+```elixir
+defmodule MyAppWeb.CourseLive do
+  use MyAppWeb, :live_view
+
+  use Hawk.LiveView,
+    resource: MyApp.Courses
+
+  def mount(_params, _session, socket) do
+    {:ok, assign_new_form(socket, current_authority(socket))}
+  end
+end
+```
+
+```heex
+<.form for={@course_form} phx-change="hawk:validate" phx-submit="hawk:save">
+  <.input field={@course_form[:title]} />
+  <.button>Save</.button>
+</.form>
+```
+
+When the app needs custom flow, keep Hawk's helpers and own the events:
+
+```elixir
+defmodule MyAppWeb.CourseLive do
+  use MyAppWeb, :live_view
+
+  use Hawk.LiveView,
+    resource: MyApp.Courses,
+    events: false
+
+  def mount(_params, _session, socket) do
+    {:ok, assign_new_form(socket, current_authority(socket))}
+  end
+
+  def handle_event("hawk:validate", params, socket), do: hawk_validate(params, socket)
+
+  def handle_event("hawk:save", params, socket) do
+    hawk_save(params, socket,
+      on_success: fn socket, course ->
+        push_patch(socket, to: ~p"/courses/#{course.id}")
+      end
+    )
+  end
+end
+```
 
 For richer workspace pages that coordinate related resources:
 
