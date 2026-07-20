@@ -246,7 +246,8 @@ defmodule MyApp.Courses.Writer do
     policy: MyApp.Courses.Policy
 
   create do
-    cast([:title, :teacher_id])
+    defaults(registration_state: "draft")
+    cast([:title, :teacher_id, :registration_state])
     validate_required([:title, :teacher_id])
     validate(&reject_reserved_title/1)
   end
@@ -269,11 +270,11 @@ end
 `change_update/3` / `update/3` from the same pipelines. `change_*` functions
 return non-persisting changesets with `action: :validate`, which is the boundary
 LiveView form helpers use for live validation errors. `create/2` and `update/3`
-keep owning persistence through the repository boundary. Custom `validate/1`
-functions can be reused in create and update pipelines when domain validation is
-not just standard Ecto changeset validation. Hand-written writers can expose the
-same form boundary with `change_create/2` and `change_update/3` when they need
-custom pipelines.
+keep owning persistence through the repository boundary. Supported DSL steps are `defaults/1`, `cast/1`, `validate_required/1,2`,
+`validate/1`, and `validate_changeset/1`. Custom `validate/1` functions can be
+reused in create and update pipelines when domain validation is not just standard
+Ecto changeset validation. Hand-written writers can expose the same form boundary
+with `change_create/2` and `change_update/3` when they need custom pipelines.
 
 ### Actions
 

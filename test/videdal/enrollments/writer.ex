@@ -5,23 +5,21 @@ defmodule Videdal.Enrollments.Writer do
 
   alias Hawk.MutationContext
   alias Hawk.RepositoryBoundary
-  alias Hawk.Writer
   alias Videdal.{Enrollment, Repo}
   alias Videdal.Enrollments.Policy
 
-  def create(attrs, authority) do
-    MutationContext.create(%Enrollment{}, attrs, authority)
-    |> Writer.cast([:school_id, :student_id, :course_id, :enrolled_on])
-    |> Writer.validate_required([:school_id, :student_id, :course_id])
-    |> MutationContext.validate_policy(&Policy.create?/1)
-    |> RepositoryBoundary.insert(Repo)
+  use Hawk.Writer.Resource,
+    model: Videdal.Enrollment,
+    repo: Videdal.Repo,
+    policy: Videdal.Enrollments.Policy
+
+  create do
+    cast([:school_id, :student_id, :course_id, :enrolled_on])
+    validate_required([:school_id, :student_id, :course_id])
   end
 
-  def update(%Enrollment{} = enrollment, attrs, authority) do
-    MutationContext.update(enrollment, attrs, authority)
-    |> Writer.cast([:school_id, :student_id, :course_id, :enrolled_on])
-    |> MutationContext.validate_policy(&Policy.update?/1)
-    |> RepositoryBoundary.update(Repo)
+  update do
+    cast([:school_id, :student_id, :course_id, :enrolled_on])
   end
 
   def delete(%Enrollment{} = enrollment, authority) do

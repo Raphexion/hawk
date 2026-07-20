@@ -130,6 +130,13 @@ defmodule Hawk.Writer.Resource do
     end
   end
 
+  defp quote_step({:defaults, _meta, [defaults]}, acc) do
+    quote do
+      unquote(acc)
+      |> Hawk.Writer.defaults(unquote(defaults))
+    end
+  end
+
   defp quote_step({:validate_required, _meta, [fields]}, acc) do
     quote do
       unquote(acc)

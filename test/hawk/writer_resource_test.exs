@@ -5,7 +5,8 @@ defmodule Hawk.WriterResourceTest.CourseWriter do
     policy: Videdal.Courses.Policy
 
   create do
-    cast([:title, :school_id, :teacher_id])
+    defaults(seat_count: 12)
+    cast([:title, :school_id, :teacher_id, :seat_count])
     validate_required([:title, :school_id, :teacher_id])
     validate(&reject_reserved_title/1)
   end
@@ -106,6 +107,7 @@ defmodule Hawk.WriterResourceTest do
     assert_received {:videdal_repo, :insert, %Changeset{} = changeset}
     assert changeset.valid?
     assert Changeset.get_change(changeset, :title) == "History"
+    assert Changeset.get_change(changeset, :seat_count) == 12
   end
 
   defp errors_on(changeset) do

@@ -154,7 +154,22 @@ defmodule Hawk.Writer do
   end
 
   defp put_default(attrs, key, _value) when is_map_key(attrs, key), do: attrs
-  defp put_default(attrs, key, value), do: Map.put(attrs, key, resolve_default(value))
+
+  defp put_default(attrs, key, value) do
+    Map.put(attrs, default_key(attrs, key), resolve_default(value))
+  end
+
+  defp default_key(attrs, key) when is_atom(key) do
+    string_key = Atom.to_string(key)
+
+    if Enum.any?(attrs, fn {existing_key, _value} -> is_binary(existing_key) end) do
+      string_key
+    else
+      key
+    end
+  end
+
+  defp default_key(_attrs, key), do: key
 
   defp normalize_change(changeset, field, normalizer) do
     case Changeset.fetch_change(changeset, field) do

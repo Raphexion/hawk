@@ -3,30 +3,28 @@ defmodule Videdal.Students.Writer do
   Writer pipeline module for the Videdal `Students` resource.
 
   This is intentionally small, but it demonstrates the intended Hawk shape:
-  build a mutation context, run guarded helpers, validate policy, then persist
-  through the repository boundary.
+  declare the guarded create/update pipelines once, then let Hawk generate both
+  persistence functions and non-persisting form changeset helpers.
   """
 
   alias Hawk.MutationContext
   alias Hawk.RepositoryBoundary
-  alias Hawk.Writer
   alias Videdal.{Repo, Student}
   alias Videdal.Students.Policy
 
-  def create(attrs, authority) do
-    MutationContext.create(%Student{}, attrs, authority)
-    |> Writer.defaults(active: true)
-    |> Writer.cast([:name, :active, :school_id])
-    |> Writer.validate_required([:name, :school_id])
-    |> MutationContext.validate_policy(&Policy.create?/1)
-    |> RepositoryBoundary.insert(Repo)
+  use Hawk.Writer.Resource,
+    model: Videdal.Student,
+    repo: Videdal.Repo,
+    policy: Videdal.Students.Policy
+
+  create do
+    defaults(active: true)
+    cast([:name, :active, :school_id])
+    validate_required([:name, :school_id])
   end
 
-  def update(%Student{} = student, attrs, authority) do
-    MutationContext.update(student, attrs, authority)
-    |> Writer.cast([:name, :active, :school_id])
-    |> MutationContext.validate_policy(&Policy.update?/1)
-    |> RepositoryBoundary.update(Repo)
+  update do
+    cast([:name, :active, :school_id])
   end
 
   def delete(%Student{} = student, authority) do

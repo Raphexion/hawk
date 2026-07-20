@@ -5,23 +5,21 @@ defmodule Videdal.Teachers.Writer do
 
   alias Hawk.MutationContext
   alias Hawk.RepositoryBoundary
-  alias Hawk.Writer
   alias Videdal.{Repo, Teacher}
   alias Videdal.Teachers.Policy
 
-  def create(attrs, authority) do
-    MutationContext.create(%Teacher{}, attrs, authority)
-    |> Writer.cast([:name, :school_id])
-    |> Writer.validate_required([:name, :school_id])
-    |> MutationContext.validate_policy(&Policy.create?/1)
-    |> RepositoryBoundary.insert(Repo)
+  use Hawk.Writer.Resource,
+    model: Videdal.Teacher,
+    repo: Videdal.Repo,
+    policy: Videdal.Teachers.Policy
+
+  create do
+    cast([:name, :school_id])
+    validate_required([:name, :school_id])
   end
 
-  def update(%Teacher{} = teacher, attrs, authority) do
-    MutationContext.update(teacher, attrs, authority)
-    |> Writer.cast([:name, :school_id])
-    |> MutationContext.validate_policy(&Policy.update?/1)
-    |> RepositoryBoundary.update(Repo)
+  update do
+    cast([:name, :school_id])
   end
 
   def delete(%Teacher{} = teacher, authority) do
