@@ -19,6 +19,7 @@ defmodule Hawk.LiveView do
     capabilities = live_view_capabilities(resource)
     live_view = live_view_metadata(resource)
     events? = Keyword.get(opts, :events, true)
+    label_resolver = opts |> Keyword.get(:label_resolver) |> expand_optional_module(env)
 
     quote do
       def assign_index(socket, authority, opts \\ []) do
@@ -45,10 +46,17 @@ defmodule Hawk.LiveView do
         )
       end
 
-      unquote(quote_form_helpers(resource, as, capabilities, events?))
+      def hawk_field_label(field) do
+        LiveView.field_label(field, label_resolver: unquote(Macro.escape(label_resolver)))
+      end
+
+      unquote(quote_form_helpers(resource, as, capabilities, events?, live_view))
       unquote(quote_delete_handler(resource, as, plural_as, capabilities, live_view, events?))
     end
   end
+
+  defp expand_optional_module(nil, _env), do: nil
+  defp expand_optional_module(module, env), do: Macro.expand(module, env)
 
   defp live_view_capabilities(resource) do
     if Code.ensure_compiled(resource) == {:module, resource} and
@@ -59,14 +67,21 @@ defmodule Hawk.LiveView do
     end
   end
 
-  defp quote_form_helpers(_resource, _as, %{writer: false}, _events?), do: []
+  defp quote_form_helpers(_resource, _as, %{writer: false}, _events?, _live_view), do: []
 
-  defp quote_form_helpers(resource, as, _capabilities, events?) do
+  defp quote_form_helpers(resource, as, _capabilities, events?, live_view) do
     if function_exported?(resource, :change_create, 2) and
          function_exported?(resource, :change_update, 3) do
       quote do
         def assign_new_form(socket, authority, attrs \\ %{}) do
-          LiveView.assign_new_form(socket, unquote(resource), unquote(as), authority, attrs)
+          LiveView.assign_new_form(
+            socket,
+            unquote(resource),
+            unquote(as),
+            authority,
+            attrs,
+            unquote(Macro.escape(live_view))
+          )
         end
 
         def assign_edit_form(socket, model, authority, attrs \\ %{}) do
@@ -76,7 +91,8 @@ defmodule Hawk.LiveView do
             unquote(as),
             model,
             authority,
-            attrs
+            attrs,
+            unquote(Macro.escape(live_view))
           )
         end
 
@@ -227,24 +243,44 @@ defmodule Hawk.LiveView do
   end
 
   def assign_new_form(socket, resource, as, authority, attrs \\ %{}) do
+    assign_new_form(socket, resource, as, authority, attrs, %{})
+  end
+
+  def assign_new_form(socket, resource, as, authority, opts, live_view) do
+    opts = normalize_form_options(opts)
+    attrs = merge_forced_attrs(opts.attrs, opts.forced_attrs)
     changeset = resource.change_create(attrs, authority)
 
     socket
-    |> put_form_state(as, %{mode: :create, authority: authority})
+    |> put_form_state(as, %{mode: :create, authority: authority, forced_attrs: opts.forced_attrs})
     |> assign(form_assign(as), form_value(changeset, as))
+    |> assign(form_fields_assign(as), form_fields(live_view, :create_form, opts.hidden))
   end
 
   def assign_edit_form(socket, resource, as, model, authority, attrs \\ %{}) do
+    assign_edit_form(socket, resource, as, model, authority, attrs, %{})
+  end
+
+  def assign_edit_form(socket, resource, as, model, authority, opts, live_view) do
+    opts = normalize_form_options(opts)
+    attrs = merge_forced_attrs(opts.attrs, opts.forced_attrs)
     changeset = resource.change_update(model, attrs, authority)
 
     socket
-    |> put_form_state(as, %{mode: :update, model: model, authority: authority})
+    |> put_form_state(as, %{
+      mode: :update,
+      model: model,
+      authority: authority,
+      forced_attrs: opts.forced_attrs
+    })
     |> assign(form_assign(as), form_value(changeset, as))
+    |> assign(form_fields_assign(as), form_fields(live_view, :update_form, opts.hidden))
   end
 
   def handle_validate(socket, resource, as, params) do
     form_params = Map.get(params, to_string(as), %{})
     state = socket.assigns.hawk_form_states[as]
+    form_params = merge_forced_attrs(form_params, Map.get(state, :forced_attrs, %{}))
 
     changeset =
       case state.mode do
@@ -258,6 +294,7 @@ defmodule Hawk.LiveView do
   def handle_save(socket, resource, as, params, opts \\ []) do
     form_params = Map.get(params, to_string(as), %{})
     state = socket.assigns.hawk_form_states[as]
+    form_params = merge_forced_attrs(form_params, Map.get(state, :forced_attrs, %{}))
 
     result =
       case state.mode do
@@ -355,6 +392,38 @@ defmodule Hawk.LiveView do
     Keyword.update(opts, :page, page, &Map.merge(&1, page))
   end
 
+  def field_label(field, opts \\ []) do
+    field
+    |> Map.get(:label, {:humanize, Map.fetch!(field, :name)})
+    |> resolve_label(Keyword.get(opts, :label_resolver))
+  end
+
+  defp resolve_label({:gettext, msgid} = label, resolver),
+    do: resolve_with_app(label, resolver, msgid)
+
+  defp resolve_label({:dgettext, _domain, msgid} = label, resolver),
+    do: resolve_with_app(label, resolver, msgid)
+
+  defp resolve_label({:humanize, name}, _resolver), do: humanize(name)
+  defp resolve_label(label, _resolver) when is_binary(label), do: label
+
+  defp resolve_with_app(_label, nil, fallback), do: fallback
+
+  defp resolve_with_app(label, resolver, fallback) when is_atom(resolver) do
+    if function_exported?(resolver, :field_label, 1) do
+      resolver.field_label(label)
+    else
+      fallback
+    end
+  end
+
+  defp humanize(name) do
+    name
+    |> to_string()
+    |> String.replace("_", " ")
+    |> String.capitalize()
+  end
+
   defp live_view_table(live_view), do: live_view |> Map.get(:index, %{}) |> Map.get(:table, [])
   defp live_view_fields(live_view), do: live_view |> Map.get(:show, %{}) |> Map.get(:fields, [])
 
@@ -363,7 +432,40 @@ defmodule Hawk.LiveView do
     assign(socket, :hawk_form_states, states)
   end
 
+  defp normalize_form_options(opts) when is_list(opts) do
+    %{
+      attrs: Keyword.get(opts, :attrs, %{}),
+      forced_attrs: Keyword.get(opts, :forced_attrs, %{}),
+      hidden: Keyword.get(opts, :hidden, [])
+    }
+  end
+
+  defp normalize_form_options(attrs) when is_map(attrs) do
+    %{attrs: attrs, forced_attrs: %{}, hidden: []}
+  end
+
+  defp merge_forced_attrs(attrs, forced_attrs),
+    do: Map.merge(attrs, stringify_forced_attrs(attrs, forced_attrs))
+
+  defp stringify_forced_attrs(attrs, forced_attrs) do
+    if Enum.any?(attrs, fn {key, _value} -> is_binary(key) end) do
+      Map.new(forced_attrs, fn {key, value} -> {to_string(key), value} end)
+    else
+      forced_attrs
+    end
+  end
+
   defp form_assign(as), do: :"#{as}_form"
+  defp form_fields_assign(as), do: :"#{as}_form_fields"
+
+  defp form_fields(live_view, key, hidden) do
+    hidden = MapSet.new(hidden)
+
+    live_view
+    |> Map.get(key, %{})
+    |> Map.get(:fields, [])
+    |> Enum.reject(&MapSet.member?(hidden, &1.name))
+  end
 
   defp form_value(changeset, as) do
     phoenix_component = Module.concat([Phoenix, Component])

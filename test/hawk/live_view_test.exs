@@ -23,11 +23,34 @@ defmodule Hawk.LiveViewTest.CourseManualEventsLive do
     events: false
 end
 
+defmodule Hawk.LiveViewTest.Labels do
+  @moduledoc false
+
+  def field_label({:gettext, msgid}), do: "translated:#{msgid}"
+  def field_label({:dgettext, domain, msgid}), do: "translated:#{domain}:#{msgid}"
+end
+
+defmodule Hawk.LiveViewTest.CourseTranslatedLive do
+  @moduledoc false
+
+  use Hawk.LiveView,
+    resource: Videdal.Courses,
+    as: :course,
+    label_resolver: Hawk.LiveViewTest.Labels
+end
+
 defmodule Hawk.LiveViewTest do
   use ExUnit.Case, async: true
 
   alias Hawk.Authority
-  alias Hawk.LiveViewTest.{CourseIndexLive, CourseManualEventsLive, CourseShowLive}
+
+  alias Hawk.LiveViewTest.{
+    CourseIndexLive,
+    CourseManualEventsLive,
+    CourseShowLive,
+    CourseTranslatedLive
+  }
+
   alias Videdal.Course
 
   @course_id Videdal.course_id()
@@ -175,16 +198,59 @@ defmodule Hawk.LiveViewTest do
     assert inspected =~ "c0.id == ^\"#{@course_id}\""
   end
 
-  test "assign_new_form assigns a keyed validation form without persisting" do
+  test "assign_new_form assigns a keyed validation form and create fields without persisting" do
     socket = CourseIndexLive.assign_new_form(socket(), Authority.system())
 
     assert %Ecto.Changeset{action: :validate, valid?: false} = socket.assigns.course_form
     assert errors_on(socket.assigns.course_form).title == ["can't be blank"]
+
+    assert socket.assigns.course_form_fields == [
+             %{name: :title, label: "Course"},
+             %{name: :school_id, label: "School"},
+             %{name: :teacher_id, label: "Teacher"}
+           ]
+
     assert socket.assigns.hawk_form_states.course.mode == :create
     refute_received {:videdal_repo, :insert, _changeset}
   end
 
-  test "assign_edit_form assigns a keyed validation form for an existing model" do
+  test "generated hawk_field_label resolves labels through an optional app resolver" do
+    assert CourseTranslatedLive.hawk_field_label(%{name: :title, label: {:gettext, "Course"}}) ==
+             "translated:Course"
+
+    assert CourseTranslatedLive.hawk_field_label(%{
+             name: :teacher_id,
+             label: {:dgettext, "courses", "Teacher"}
+           }) ==
+             "translated:courses:Teacher"
+
+    assert CourseTranslatedLive.hawk_field_label(%{name: :registration_state}) ==
+             "Registration state"
+
+    assert CourseIndexLive.hawk_field_label(%{name: :title, label: {:gettext, "Course"}}) ==
+             "Course"
+  end
+
+  test "assign_new_form applies forced attrs to validation without rendering them" do
+    socket =
+      CourseIndexLive.assign_new_form(socket(), Authority.system(),
+        forced_attrs: %{school_id: @school_id, teacher_id: @teacher_id},
+        hidden: [:school_id, :teacher_id]
+      )
+
+    assert %Ecto.Changeset{action: :validate, valid?: false} = socket.assigns.course_form
+    assert errors_on(socket.assigns.course_form).title == ["can't be blank"]
+    refute Map.has_key?(errors_on(socket.assigns.course_form), :school_id)
+    refute Map.has_key?(errors_on(socket.assigns.course_form), :teacher_id)
+    assert socket.assigns.course_form_fields == [%{name: :title, label: "Course"}]
+
+    assert socket.assigns.hawk_form_states.course.forced_attrs == %{
+             school_id: @school_id,
+             teacher_id: @teacher_id
+           }
+  end
+
+  test "assign_edit_form assigns a keyed validation form and update fields for an existing model" do
     course = %Course{
       id: @course_id,
       title: "Math",
@@ -196,6 +262,7 @@ defmodule Hawk.LiveViewTest do
 
     assert %Ecto.Changeset{action: :validate, valid?: true} = socket.assigns.course_form
     assert socket.assigns.course_form.data == course
+    assert socket.assigns.course_form_fields == [%{name: :title, label: "Course"}]
     assert socket.assigns.hawk_form_states.course.mode == :update
     assert socket.assigns.hawk_form_states.course.model == course
     refute_received {:videdal_repo, :update, _changeset}
@@ -275,6 +342,33 @@ defmodule Hawk.LiveViewTest do
 
     assert errors_on(socket.assigns.course_form).title == ["can't be blank"]
     refute function_exported?(CourseManualEventsLive, :handle_event, 3)
+  end
+
+  test "save event merges forced attrs after client params when creating" do
+    socket =
+      CourseIndexLive.assign_new_form(socket(), Authority.system(),
+        forced_attrs: %{school_id: @school_id, teacher_id: @teacher_id}
+      )
+
+    {:noreply, socket} =
+      CourseIndexLive.handle_event(
+        "hawk:save",
+        %{
+          "course" => %{
+            "title" => "History",
+            "school_id" => @other_course_id,
+            "teacher_id" => @other_course_id
+          }
+        },
+        socket
+      )
+
+    assert %Course{title: "History", school_id: @school_id, teacher_id: @teacher_id} =
+             socket.assigns.course
+
+    assert_received {:videdal_repo, :insert, %Ecto.Changeset{} = changeset}
+    assert Ecto.Changeset.get_change(changeset, :school_id) == @school_id
+    assert Ecto.Changeset.get_change(changeset, :teacher_id) == @teacher_id
   end
 
   test "save event creates, assigns the saved model, and switches form state to edit" do

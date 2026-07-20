@@ -344,6 +344,46 @@ defmodule Hawk.ResourceTest do
                  end
   end
 
+  test "live_view form fields must reference model fields" do
+    assert_raise ArgumentError,
+                 ~r/Hawk resource live_view module Hawk.ResourceTest.BadLiveFormField.LiveView create_form field :headline source :missing_title must reference a field on Hawk.ResourceTest.Course/,
+                 fn ->
+                   Code.compile_string("""
+                   defmodule Hawk.ResourceTest.BadLiveFormField.Reader do
+                     def one(opts), do: {:one, opts}
+                     def one!(opts), do: {:one!, opts}
+                     def all(opts), do: {:all, opts}
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveFormField.Policy do
+                     def read_filter(_authority), do: :all
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveFormField.Writer do
+                     def create(attrs, authority), do: {:create, attrs, authority}
+                     def update(model, attrs, authority), do: {:update, model, attrs, authority}
+                     def delete(model, authority), do: {:delete, model, authority}
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveFormField.JsonApi do
+                     def __hawk_json_api__, do: %{type: "courses"}
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveFormField.LiveView do
+                     use Hawk.LiveView.Resource
+
+                     create_form do
+                       field(:headline, source: :missing_title)
+                     end
+                   end
+
+                   defmodule Hawk.ResourceTest.BadLiveFormField do
+                     use Hawk.Resource, model: Hawk.ResourceTest.Course
+                   end
+                   """)
+                 end
+  end
+
   test "writer form helpers must be declared as a pair" do
     assert_raise ArgumentError,
                  ~r"Hawk resource writer module Hawk.ResourceTest.PartialFormWriter.Writer must define change_update/3 when change_create/2 is defined",

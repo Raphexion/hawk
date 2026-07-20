@@ -28,4 +28,14 @@ defmodule Videdal.Courses.LiveView do
     field(:seat_count, label: "Seats")
     field(:waitlist_count, label: "Waitlist")
   end
+
+  create_form do
+    field(:title, label: "Course")
+    field(:school_id, label: "School")
+    field(:teacher_id, label: "Teacher")
+  end
+
+  update_form do
+    field(:title, label: "Course")
+  end
 end

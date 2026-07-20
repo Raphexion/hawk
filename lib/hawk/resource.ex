@@ -194,6 +194,20 @@ defmodule Hawk.Resource do
       :show,
       Map.get(live_view[:show] || %{}, :fields, [])
     )
+
+    validate_live_view_fields!(
+      model,
+      live_view_module,
+      :create_form,
+      Map.get(live_view[:create_form] || %{}, :fields, [])
+    )
+
+    validate_live_view_fields!(
+      model,
+      live_view_module,
+      :update_form,
+      Map.get(live_view[:update_form] || %{}, :fields, [])
+    )
   end
 
   defp validate_live_view_filters!(_live_view_module, _reader, []), do: :ok

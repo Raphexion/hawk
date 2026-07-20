@@ -13,13 +13,22 @@ defmodule Hawk.LiveView.Resource do
         only: [
           as: 1,
           plural_as: 1,
+          create_form: 1,
+          dgettext: 2,
+          gettext: 1,
           index: 1,
-          show: 1
+          show: 1,
+          update_form: 1
         ]
 
       @before_compile Hawk.LiveView.Resource
     end
   end
+
+  def gettext(msgid) when is_binary(msgid), do: {:gettext, msgid}
+
+  def dgettext(domain, msgid) when is_binary(domain) and is_binary(msgid),
+    do: {:dgettext, domain, msgid}
 
   defmacro as(name) when is_atom(name) do
     quote do
@@ -49,10 +58,28 @@ defmodule Hawk.LiveView.Resource do
     end
   end
 
+  defmacro create_form(do: block) do
+    contract = parse_form(block, __CALLER__)
+
+    quote do
+      @hawk_live_view_create_form unquote(Macro.escape(contract))
+    end
+  end
+
+  defmacro update_form(do: block) do
+    contract = parse_form(block, __CALLER__)
+
+    quote do
+      @hawk_live_view_update_form unquote(Macro.escape(contract))
+    end
+  end
+
   defmacro __before_compile__(env) do
     metadata = %{
       index: Module.get_attribute(env.module, :hawk_live_view_index) || %{},
-      show: Module.get_attribute(env.module, :hawk_live_view_show) || %{}
+      show: Module.get_attribute(env.module, :hawk_live_view_show) || %{},
+      create_form: Module.get_attribute(env.module, :hawk_live_view_create_form) || %{},
+      update_form: Module.get_attribute(env.module, :hawk_live_view_update_form) || %{}
     }
 
     metadata = put_optional(metadata, :as, Module.get_attribute(env.module, :hawk_live_view_as))
@@ -85,6 +112,13 @@ defmodule Hawk.LiveView.Resource do
     block
     |> expressions()
     |> Enum.reduce(%{fields: []}, &parse_show_expression(&1, &2, caller))
+    |> drop_empty(:fields)
+  end
+
+  defp parse_form(block, caller) do
+    block
+    |> expressions()
+    |> Enum.reduce(%{fields: []}, &parse_form_expression(&1, &2, caller))
     |> drop_empty(:fields)
   end
 
@@ -122,6 +156,14 @@ defmodule Hawk.LiveView.Resource do
   end
 
   defp parse_show_expression({:field, _meta, [name, opts]}, acc, caller) when is_list(opts) do
+    Map.update!(acc, :fields, &[field_metadata(name, opts, caller) | &1])
+  end
+
+  defp parse_form_expression({:field, _meta, [name]}, acc, caller) do
+    Map.update!(acc, :fields, &[field_metadata(name, [], caller) | &1])
+  end
+
+  defp parse_form_expression({:field, _meta, [name, opts]}, acc, caller) when is_list(opts) do
     Map.update!(acc, :fields, &[field_metadata(name, opts, caller) | &1])
   end
 

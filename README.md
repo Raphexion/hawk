@@ -120,6 +120,15 @@ defmodule MyApp.Courses.LiveView do
     field(:title)
     field(:registration_state, label: "State")
   end
+
+  create_form do
+    field(:title, label: gettext("Course"))
+    field(:teacher_id, label: dgettext("courses", "Teacher"))
+  end
+
+  update_form do
+    field(:title, label: gettext("Course"))
+  end
 end
 ```
 
@@ -144,8 +153,32 @@ socket = CourseLive.assign_new_form(socket, authority)
 socket = CourseLive.assign_edit_form(socket, course, authority)
 ```
 
-These assign `:course_form` by default and track form state under
-`:hawk_form_states`. Hawk also generates `hawk_validate/2` and `hawk_save/2,3`.
+These assign `:course_form` and `:course_form_fields` by default and track form
+state under `:hawk_form_states`. `create_form` fields are assigned for new forms;
+`update_form` fields are assigned for edit forms. Label metadata can use
+`gettext("...")` or `dgettext("domain", "...")` descriptors without translating
+at compile time. Hawk does not own UI translation; by default `hawk_field_label/1`
+returns the descriptor's message id or a humanized field name. Apps that want a
+shared resolver can opt in with a small label module:
+
+```elixir
+defmodule MyAppWeb.HawkLabels do
+  import MyAppWeb.Gettext
+
+  def field_label({:gettext, msgid}), do: gettext(msgid)
+  def field_label({:dgettext, domain, msgid}), do: dgettext(domain, msgid)
+end
+
+use Hawk.LiveView,
+  resource: MyApp.Courses,
+  label_resolver: MyAppWeb.HawkLabels
+```
+
+```heex
+<.input field={@course_form[field.name]} label={hawk_field_label(field)} />
+```
+
+Hawk also generates `hawk_validate/2` and `hawk_save/2,3`.
 Default `handle_event("hawk:validate", ...)` and `handle_event("hawk:save", ...)`
 clauses call those helpers unless `events: false` is set. `hawk_validate/2`
 rebuilds a non-persisting validation changeset through `change_create/2` or
@@ -157,6 +190,22 @@ successful saves assign the saved model under `:course`. Use `hawk_save/3` with
 `on_success: fn socket, course -> ... end` when the app needs post-save behavior
 such as navigation while still reusing Hawk's save plumbing. The fallback form
 assign is the raw changeset, which keeps tests and non-Phoenix boundaries simple.
+
+Known server-side values can be forced into a form without trusting hidden client
+inputs:
+
+```elixir
+socket =
+  CourseLive.assign_new_form(socket, authority,
+    forced_attrs: %{teacher_id: current_teacher.id},
+    hidden: [:teacher_id]
+  )
+```
+
+`forced_attrs` are merged after client params during validation and save, so the
+server value wins even if the browser submits a different `teacher_id`. `hidden`
+removes fields from the assigned form-field metadata; the writer remains the
+final acceptance boundary.
 
 ### Model
 
