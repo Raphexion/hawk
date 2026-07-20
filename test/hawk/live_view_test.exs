@@ -166,6 +166,65 @@ defmodule Hawk.LiveViewTest do
     assert inspected =~ "c0.id == ^\"#{@course_id}\""
   end
 
+  test "assign_new_form assigns a keyed validation form without persisting" do
+    socket = CourseIndexLive.assign_new_form(socket(), Authority.system())
+
+    assert %Ecto.Changeset{action: :validate, valid?: false} = socket.assigns.course_form
+    assert errors_on(socket.assigns.course_form).title == ["can't be blank"]
+    assert socket.assigns.hawk_form_states.course.mode == :create
+    refute_received {:videdal_repo, :insert, _changeset}
+  end
+
+  test "assign_edit_form assigns a keyed validation form for an existing model" do
+    course = %Course{
+      id: @course_id,
+      title: "Math",
+      school_id: @school_id,
+      teacher_id: @teacher_id
+    }
+
+    socket = CourseIndexLive.assign_edit_form(socket(), course, Authority.system())
+
+    assert %Ecto.Changeset{action: :validate, valid?: true} = socket.assigns.course_form
+    assert socket.assigns.course_form.data == course
+    assert socket.assigns.hawk_form_states.course.mode == :update
+    assert socket.assigns.hawk_form_states.course.model == course
+    refute_received {:videdal_repo, :update, _changeset}
+  end
+
+  test "validate event updates the create form with live errors" do
+    socket = CourseIndexLive.assign_new_form(socket(), Authority.system())
+
+    {:noreply, socket} =
+      CourseIndexLive.handle_event("hawk:validate", %{"course" => %{"title" => ""}}, socket)
+
+    assert %Ecto.Changeset{action: :validate, valid?: false} = socket.assigns.course_form
+    assert errors_on(socket.assigns.course_form).title == ["can't be blank"]
+    refute_received {:videdal_repo, :insert, _changeset}
+  end
+
+  test "validate event updates the edit form with live custom validation errors" do
+    course = %Course{
+      id: @course_id,
+      title: "Math",
+      school_id: @school_id,
+      teacher_id: @teacher_id
+    }
+
+    socket = CourseIndexLive.assign_edit_form(socket(), course, Authority.system())
+
+    {:noreply, socket} =
+      CourseIndexLive.handle_event(
+        "hawk:validate",
+        %{"course" => %{"title" => "Forbidden"}},
+        socket
+      )
+
+    assert %Ecto.Changeset{action: :validate, valid?: false} = socket.assigns.course_form
+    assert errors_on(socket.assigns.course_form).title == ["is reserved"]
+    refute_received {:videdal_repo, :update, _changeset}
+  end
+
   test "delete event deletes the resource and refreshes the index assign" do
     course = %Course{id: @course_id, title: "Math"}
     Process.put({Videdal.Repo, :all_results}, [course])
@@ -217,6 +276,14 @@ defmodule Hawk.LiveViewTest do
 
   defp socket do
     %{assigns: %{}}
+  end
+
+  defp errors_on(changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->
+      Regex.replace(~r"%{(\w+)}", message, fn _, key ->
+        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
+      end)
+    end)
   end
 
   defp refute_existing_atom(value) do

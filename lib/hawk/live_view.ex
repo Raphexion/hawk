@@ -44,6 +44,7 @@ defmodule Hawk.LiveView do
         )
       end
 
+      unquote(quote_form_helpers(resource, as, capabilities))
       unquote(quote_delete_handler(resource, as, plural_as, capabilities, live_view))
     end
   end
@@ -54,6 +55,36 @@ defmodule Hawk.LiveView do
       resource.__hawk_resource__(:capabilities)
     else
       %{writer: true}
+    end
+  end
+
+  defp quote_form_helpers(_resource, _as, %{writer: false}), do: []
+
+  defp quote_form_helpers(resource, as, _capabilities) do
+    if function_exported?(resource, :change_create, 2) and
+         function_exported?(resource, :change_update, 3) do
+      quote do
+        def assign_new_form(socket, authority, attrs \\ %{}) do
+          LiveView.assign_new_form(socket, unquote(resource), unquote(as), authority, attrs)
+        end
+
+        def assign_edit_form(socket, model, authority, attrs \\ %{}) do
+          LiveView.assign_edit_form(
+            socket,
+            unquote(resource),
+            unquote(as),
+            model,
+            authority,
+            attrs
+          )
+        end
+
+        def handle_event("hawk:validate", params, socket) do
+          LiveView.handle_validate(socket, unquote(resource), unquote(as), params)
+        end
+      end
+    else
+      []
     end
   end
 
@@ -171,6 +202,35 @@ defmodule Hawk.LiveView do
     end
   end
 
+  def assign_new_form(socket, resource, as, authority, attrs \\ %{}) do
+    changeset = resource.change_create(attrs, authority)
+
+    socket
+    |> put_form_state(as, %{mode: :create, authority: authority})
+    |> assign(form_assign(as), form_value(changeset, as))
+  end
+
+  def assign_edit_form(socket, resource, as, model, authority, attrs \\ %{}) do
+    changeset = resource.change_update(model, attrs, authority)
+
+    socket
+    |> put_form_state(as, %{mode: :update, model: model, authority: authority})
+    |> assign(form_assign(as), form_value(changeset, as))
+  end
+
+  def handle_validate(socket, resource, as, params) do
+    form_params = Map.get(params, to_string(as), %{})
+    state = socket.assigns.hawk_form_states[as]
+
+    changeset =
+      case state.mode do
+        :create -> resource.change_create(form_params, state.authority)
+        :update -> resource.change_update(state.model, form_params, state.authority)
+      end
+
+    {:noreply, assign(socket, form_assign(as), form_value(changeset, as))}
+  end
+
   def handle_delete(socket, resource, as, plural_as, params) do
     handle_delete(socket, resource, as, plural_as, params, %{})
   end
@@ -214,6 +274,24 @@ defmodule Hawk.LiveView do
 
   defp live_view_table(live_view), do: live_view |> Map.get(:index, %{}) |> Map.get(:table, [])
   defp live_view_fields(live_view), do: live_view |> Map.get(:show, %{}) |> Map.get(:fields, [])
+
+  defp put_form_state(socket, as, state) do
+    states = socket.assigns |> Map.get(:hawk_form_states, %{}) |> Map.put(as, state)
+    assign(socket, :hawk_form_states, states)
+  end
+
+  defp form_assign(as), do: :"#{as}_form"
+
+  defp form_value(changeset, as) do
+    phoenix_component = Module.concat([Phoenix, Component])
+
+    if Code.ensure_loaded?(phoenix_component) and
+         function_exported?(phoenix_component, :to_form, 2) do
+      phoenix_component.to_form(changeset, as: as)
+    else
+      changeset
+    end
+  end
 
   defp live_error(result) do
     case Hawk.Errors.to_live_view(result) do

@@ -136,6 +136,21 @@ becomes `%{title: {:ilike, "%histo%"}}`. Sort and search changes reset the page
 number to `1`; page changes keep the current query state. Policies remain the
 security boundary and are shared with JSON:API reads.
 
+When the resource writer exposes form changeset helpers, `use Hawk.LiveView`
+also generates keyed form helpers:
+
+```elixir
+socket = CourseLive.assign_new_form(socket, authority)
+socket = CourseLive.assign_edit_form(socket, course, authority)
+```
+
+These assign `:course_form` by default and track form state under
+`:hawk_form_states`. `handle_event("hawk:validate", %{"course" => params}, socket)`
+rebuilds a non-persisting validation changeset through `change_create/2` or
+`change_update/3`, then assigns a Phoenix `to_form(changeset, as: :course)` when
+Phoenix is available. The fallback assign is the raw changeset, which keeps tests
+and non-Phoenix boundaries simple.
+
 ### Model
 
 ```elixir
