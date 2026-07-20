@@ -89,8 +89,13 @@ end
 `writable: true` means both creatable and updatable. Use `creatable:` and
 `updatable:` when create/update capabilities differ. `source:` maps the external
 JSON:API name to the internal model/writer attr for both rendering and request
-payloads. The older model-level `json_api do` block remains supported for
-compatibility and simple examples.
+payloads. Read-only relationships can expose normal Ecto associations, including
+`many_to_many` projections over internal join schemas. Writable relationships
+must be `belongs_to` associations because Hawk maps them to the owning foreign
+key passed into the writer. Mutating `has_many`, `has_one`, or `many_to_many`
+relationships should be modeled as explicit writer/action workflows. The older
+model-level `json_api do` block remains supported for compatibility and simple
+examples.
 
 ### LiveView adapter
 
@@ -436,7 +441,8 @@ hawk_json_api MyApp.Courses, MyAppWeb.CourseController,
 The macro validates that every emitted route points at an exported controller
 action, so capability drift fails while the router compiles.
 
-Controller errors use JSON:API documents:
+Controller errors use canonical `%Hawk.Error{}` structs internally and render
+JSON:API documents at the adapter boundary:
 
 - invalid include/filter/sort/page: `400`
 - invalid request document shape, resource type, attributes, or relationships: `400`

@@ -10,9 +10,13 @@ defmodule Videdal.Parent do
 
     belongs_to(:school, Videdal.School)
 
-    has_many(:parent_students, Videdal.ParentStudent,
-      policy: Videdal.Parents.Policy,
-      reader: Videdal.Parents.Reader
+    has_many(:parent_students, Videdal.ParentStudent)
+
+    many_to_many(:students, Videdal.Student,
+      join_through: Videdal.ParentStudent,
+      join_keys: [parent_id: :id, student_id: :id],
+      policy: Videdal.Students.Policy,
+      reader: Videdal.Students.Reader
     )
   end
 
@@ -30,9 +34,9 @@ defmodule Videdal.Parent do
       example: %{type: "schools", id: "7"}
     )
 
-    relationship(:parent_students,
-      doc: "Links from this parent to the students they can access.",
-      example: [%{type: "parent-students", id: "1"}]
+    relationship(:students,
+      doc: "Students this parent or guardian can access through internal links.",
+      example: [%{type: "students", id: "8"}]
     )
 
     creatable([:name, :school])

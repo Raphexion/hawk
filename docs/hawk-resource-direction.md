@@ -84,6 +84,8 @@ There are no hidden read bypasses. Even system reads should use `Authority.syste
 
 System writes should also validate policy explicitly; `system` can be allowed, but it should not bypass the policy-validation path.
 
+JSON:API relationship reads can expose projections over internal database shape, including `many_to_many` associations where the join schema is not itself part of the external API. JSON:API relationship writes are intentionally limited to `belongs_to` associations because those map cleanly to writer attrs through the owning foreign key. `has_many`, `has_one`, and `many_to_many` mutations need explicit writer/action workflows instead of being implied from JSON:API relationship linkage.
+
 Actions are resource-scoped workflows/commands. They may orchestrate across resources, use `Ecto.Multi`, send emails, enqueue jobs, and perform broader side effects. They remain declared, authorized, documented, telemetry-instrumented, and testable.
 
 Member actions first resolve the primary resource through the policy-aware Reader, then validate action permission:
@@ -95,7 +97,7 @@ Member actions first resolve the primary resource through the policy-aware Reade
 
 Hawk should move toward one canonical internal error representation used by readers, writers, actions, JSON:API, LiveView, and telemetry.
 
-Internally, errors should use atoms and structured fields:
+Internally, errors use atoms and structured fields:
 
 ```elixir
 %Hawk.Error{

@@ -142,6 +142,7 @@ defmodule Hawk.Resource do
 
     validate_json_api_capability!(json_api_module, json_api, :creatable)
     validate_json_api_capability!(json_api_module, json_api, :updatable)
+    validate_json_api_writable_relationships!(model, json_api_module, json_api)
   end
 
   defp validate_json_api_capability!(json_api_module, json_api, capability) do
@@ -160,6 +161,40 @@ defmodule Hawk.Resource do
               "Hawk resource json_api module #{inspect(json_api_module)} #{capability} field #{inspect(name)} must be declared as an attribute or relationship"
       end
     end)
+  end
+
+  defp validate_json_api_writable_relationships!(model, json_api_module, json_api) do
+    writable =
+      json_api
+      |> Map.get(:creatable, [])
+      |> Kernel.++(Map.get(json_api, :updatable, []))
+      |> Enum.uniq()
+      |> MapSet.new()
+
+    json_api
+    |> Map.get(:relationships, %{})
+    |> Enum.each(&validate_json_api_writable_relationship!(model, json_api_module, writable, &1))
+  end
+
+  defp validate_json_api_writable_relationship!(
+         model,
+         json_api_module,
+         writable,
+         {name, metadata}
+       ) do
+    if MapSet.member?(writable, name) do
+      validate_json_api_writable_relationship!(model, json_api_module, name, metadata)
+    end
+  end
+
+  defp validate_json_api_writable_relationship!(model, json_api_module, name, metadata) do
+    source = Map.get(metadata, :source, name)
+    association = model.__schema__(:association, source)
+
+    unless match?(%Ecto.Association.BelongsTo{}, association) do
+      raise ArgumentError,
+            "Hawk resource json_api module #{inspect(json_api_module)} relationship #{inspect(name)} is writable but references a #{inspect(association.cardinality)} association on #{inspect(model)}; only belongs_to relationships can be mapped to writer attrs"
+    end
   end
 
   defp validate_live_view_contract!(_model, _reader, false), do: :ok

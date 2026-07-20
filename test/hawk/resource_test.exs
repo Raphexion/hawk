@@ -304,6 +304,51 @@ defmodule Hawk.ResourceTest do
                  end
   end
 
+  test "json_api writable relationships must be belongs_to associations" do
+    assert_raise ArgumentError,
+                 ~r/Hawk resource json_api module Hawk.ResourceTest.BadWritableRelationship.JsonApi relationship :grades is writable but references a :many association on Videdal.Course; only belongs_to relationships can be mapped to writer attrs/,
+                 fn ->
+                   Code.compile_string("""
+                   defmodule Hawk.ResourceTest.BadWritableRelationship.Reader do
+                     def one(opts), do: {:one, opts}
+                     def one!(opts), do: {:one!, opts}
+                     def all(opts), do: {:all, opts}
+                   end
+
+                   defmodule Hawk.ResourceTest.BadWritableRelationship.Policy do
+                     def read_filter(_authority), do: :all
+                   end
+
+                   defmodule Hawk.ResourceTest.BadWritableRelationship.Writer do
+                     def create(attrs, authority), do: {:create, attrs, authority}
+                     def update(model, attrs, authority), do: {:update, model, attrs, authority}
+                     def delete(model, authority), do: {:delete, model, authority}
+                   end
+
+                   defmodule Hawk.ResourceTest.BadWritableRelationship.JsonApi do
+                     use Hawk.JsonApi.Resource
+
+                     type("courses")
+                     relationship(:grades, writable: true)
+                   end
+
+                   defmodule Hawk.ResourceTest.BadWritableRelationship.LiveView do
+                     def __hawk_live_view__, do: %{}
+                   end
+
+                   defmodule Hawk.ResourceTest.BadWritableRelationship do
+                     use Hawk.Resource,
+                       model: Videdal.Course,
+                       reader: Hawk.ResourceTest.BadWritableRelationship.Reader,
+                       policy: Hawk.ResourceTest.BadWritableRelationship.Policy,
+                       writer: Hawk.ResourceTest.BadWritableRelationship.Writer,
+                       json_api: Hawk.ResourceTest.BadWritableRelationship.JsonApi,
+                       live_view: Hawk.ResourceTest.BadWritableRelationship.LiveView
+                   end
+                   """)
+                 end
+  end
+
   test "live_view fields must reference model fields" do
     assert_raise ArgumentError,
                  ~r/Hawk resource live_view module Hawk.ResourceTest.BadLiveField.LiveView show field :headline source :missing_title must reference a field on Hawk.ResourceTest.Course/,

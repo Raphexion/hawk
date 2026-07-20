@@ -20,6 +20,7 @@ defmodule Hawk.ResourceContract do
     validate_json_api_attributes!(model, json_api)
     validate_json_api_relationships!(model, json_api)
     validate_write_fields!(json_api)
+    validate_writable_relationships!(model, json_api)
 
     json_api
   end
@@ -62,11 +63,32 @@ defmodule Hawk.ResourceContract do
       |> Kernel.++(Map.keys(json_api.relationships))
       |> MapSet.new()
 
-    [:creatable, :updatable]
-    |> Enum.flat_map(&Map.fetch!(json_api, &1))
-    |> Enum.uniq()
+    writable =
+      [:creatable, :updatable]
+      |> Enum.flat_map(&Map.fetch!(json_api, &1))
+      |> Enum.uniq()
+
+    writable
     |> Enum.reject(&MapSet.member?(exposed, &1))
     |> raise_if_any!("JSON:API writable fields must be declared attributes or relationships")
+  end
+
+  defp validate_writable_relationships!(model, json_api) do
+    writable =
+      [:creatable, :updatable]
+      |> Enum.flat_map(&Map.fetch!(json_api, &1))
+      |> Enum.uniq()
+      |> MapSet.new()
+
+    json_api.relationships
+    |> Enum.reject(fn {name, metadata} ->
+      source = Map.get(metadata, :source, name)
+
+      not MapSet.member?(writable, name) or
+        match?(%Ecto.Association.BelongsTo{}, model.__schema__(:association, source))
+    end)
+    |> Enum.map(fn {name, _metadata} -> name end)
+    |> raise_if_any!("JSON:API writable relationships must be belongs_to associations")
   end
 
   defp validate_reader_preloads!(reader, json_api) do

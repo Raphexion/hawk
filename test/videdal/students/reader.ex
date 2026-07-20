@@ -12,6 +12,7 @@ defmodule Videdal.Students.Reader do
   filter(:active)
 
   preload(:school)
+  preload(:parents)
 
   filter :student_id do
     fn {:eq, student_id} ->

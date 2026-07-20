@@ -509,11 +509,9 @@ defmodule Hawk.JsonApi.Controller do
   end
 
   defp bad_request(message) do
-    %{
-      errors: [
-        %{status: "400", code: "bad_request", title: "Bad request", detail: message}
-      ]
-    }
+    message
+    |> Hawk.Error.bad_request()
+    |> Hawk.Errors.to_json_api()
   end
 
   defp authority!(%{assigns: %{authority: authority}}, _public?), do: authority

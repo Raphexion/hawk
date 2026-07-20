@@ -15,7 +15,11 @@ defmodule Videdal.Student do
     belongs_to(:school, Videdal.School)
     has_many(:grades, Videdal.Grade)
 
-    has_many(:parent_students, Videdal.ParentStudent,
+    has_many(:parent_students, Videdal.ParentStudent)
+
+    many_to_many(:parents, Videdal.Parent,
+      join_through: Videdal.ParentStudent,
+      join_keys: [student_id: :id, parent_id: :id],
       policy: Videdal.Parents.Policy,
       reader: Videdal.Parents.Reader
     )
@@ -43,6 +47,11 @@ defmodule Videdal.Student do
     relationship(:grades,
       doc: "Grades awarded to this student, policy-filtered by the requesting authority.",
       example: [%{type: "grades", id: "1"}]
+    )
+
+    relationship(:parents,
+      doc: "Parents and guardians linked to this student through internal access links.",
+      example: [%{type: "parents", id: "4"}]
     )
 
     creatable([:name, :active, :school])

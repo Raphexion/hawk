@@ -106,12 +106,12 @@ defmodule Hawk.Model do
   end
 
   defp rewrite_expression({kind, meta, [name, schema]}, metadata, caller)
-       when kind in [:belongs_to, :has_many] do
+       when kind in [:belongs_to, :has_many, :many_to_many] do
     rewrite_association(kind, meta, name, schema, [], metadata, caller)
   end
 
   defp rewrite_expression({kind, meta, [name, schema, opts]}, metadata, caller)
-       when kind in [:belongs_to, :has_many] and is_list(opts) do
+       when kind in [:belongs_to, :has_many, :many_to_many] and is_list(opts) do
     rewrite_association(kind, meta, name, schema, opts, metadata, caller)
   end
 

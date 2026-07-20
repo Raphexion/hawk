@@ -10,6 +10,8 @@ defmodule Videdal.Parents.Reader do
   filter(:id)
   filter(:school_id)
 
+  preload(:students)
+
   filter :parent_id do
     fn {:eq, parent_id} ->
       dynamic([parent], parent.id == ^parent_id)

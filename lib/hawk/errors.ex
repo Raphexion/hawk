@@ -4,30 +4,24 @@ defmodule Hawk.Errors do
   """
 
   alias Ecto.Changeset
+  alias Hawk.Error
   alias Hawk.MutationContext
 
-  def to_json_api({:not_authorized, %MutationContext{} = context}) do
-    error = Map.fetch!(context.meta, :authorization_error)
-
-    %{
-      errors: [
-        %{
-          status: "403",
-          code: to_string(error.code),
-          title: error.title,
-          detail: error.detail
-        }
-      ]
-    }
+  def to_json_api(error_or_result) do
+    %{errors: Enum.map(to_errors(error_or_result), &json_api_error/1)}
   end
 
-  def to_json_api({:invalid, %MutationContext{} = context}) do
-    %{errors: Enum.map(context.changeset.errors, &validation_error/1)}
+  def to_errors(%Error{} = error), do: [error]
+
+  def to_errors({:not_authorized, %MutationContext{} = context}) do
+    [Map.fetch!(context.meta, :authorization_error)]
   end
 
-  def to_json_api({:error, message}) when is_binary(message) do
-    %{errors: [%{status: "500", code: "error", title: "Error", detail: message}]}
+  def to_errors({:invalid, %MutationContext{} = context}) do
+    Enum.map(context.changeset.errors, &validation_error/1)
   end
+
+  def to_errors({:error, message}) when is_binary(message), do: [Error.error(message)]
 
   def to_live_view({:invalid, %MutationContext{} = context}) do
     {:error, changeset_errors(context.changeset)}
@@ -40,15 +34,22 @@ defmodule Hawk.Errors do
 
   def to_live_view({:error, message}) when is_binary(message), do: {:error, %{base: [message]}}
 
-  defp validation_error({field, {message, opts}}) do
+  defp json_api_error(%Error{} = error) do
     %{
-      status: "422",
-      code: "invalid",
-      title: "Invalid attribute",
-      detail: interpolate(message, opts),
-      source: %{pointer: "/data/attributes/#{field}"}
+      status: to_string(error.status),
+      code: to_string(error.code),
+      title: error.title,
+      detail: error.detail
     }
+    |> put_optional(:source, error.source)
   end
+
+  defp validation_error({field, {message, opts}}) do
+    Error.invalid_attribute(field, interpolate(message, opts))
+  end
+
+  defp put_optional(map, _key, nil), do: map
+  defp put_optional(map, key, value), do: Map.put(map, key, value)
 
   defp changeset_errors(%Changeset{} = changeset) do
     Map.new(changeset.errors, fn {field, {message, opts}} ->

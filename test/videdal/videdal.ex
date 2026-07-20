@@ -20,4 +20,5 @@ defmodule Videdal do
   def grade_id, do: "00000000-0000-0000-0000-000000000005"
   def enrollment_id, do: "00000000-0000-0000-0000-000000000006"
   def parent_id, do: "00000000-0000-0000-0000-000000000014"
+  def other_parent_id, do: "00000000-0000-0000-0000-<PHONE_NUMBER_16>"
 end

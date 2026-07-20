@@ -36,7 +36,6 @@ defmodule Hawk.JsonApiTest do
       Videdal.Teacher,
       Videdal.Enrollment,
       Videdal.Parent,
-      Videdal.ParentStudent,
       Videdal.Grade,
       Videdal.CourseGradeSummary
     ]
@@ -81,6 +80,32 @@ defmodule Hawk.JsonApiTest do
     assert_raise ArgumentError, ~r/unsupported filter operator "starts_with"/, fn ->
       Hawk.JsonApi.request_options(%{"filter" => %{"name" => %{"starts_with" => "math"}}})
     end
+  end
+
+  test "JSON:API documents can expose many-to-many relationships without exposing the join schema" do
+    student = %Videdal.Student{
+      id: Videdal.student_id(),
+      name: "Alma",
+      active: true,
+      school_id: Videdal.school_id(),
+      parents: [
+        %Videdal.Parent{id: Videdal.parent_id(), name: "Anna", school_id: Videdal.school_id()},
+        %Videdal.Parent{
+          id: Videdal.other_parent_id(),
+          name: "Marcus",
+          school_id: Videdal.school_id()
+        }
+      ]
+    }
+
+    document = Hawk.JsonApi.document(student, preloads: [:parents])
+
+    assert document.data.relationships.parents.data == [
+             %{type: "parents", id: Videdal.parent_id()},
+             %{type: "parents", id: Videdal.other_parent_id()}
+           ]
+
+    refute Map.has_key?(document.data.relationships, :parent_students)
   end
 
   test "JSON:API attribute extraction supports nil relationships and ignores undeclared ones" do

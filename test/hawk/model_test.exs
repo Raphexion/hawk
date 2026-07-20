@@ -31,10 +31,10 @@ defmodule Hawk.ModelTest do
   end
 
   test "models allow explicit association policy and reader overrides" do
-    assert Videdal.Student.__hawk_association_policy__(:parent_students) ==
+    assert Videdal.Student.__hawk_association_policy__(:parents) ==
              {:ok, Videdal.Parents.Policy}
 
-    assert Videdal.Student.__hawk_association_reader__(:parent_students) ==
+    assert Videdal.Student.__hawk_association_reader__(:parents) ==
              {:ok, Videdal.Parents.Reader}
   end
 

@@ -13,7 +13,7 @@ defmodule Hawk.ErrorTest do
   @student_id Videdal.student_id()
   @teacher_id Videdal.teacher_id()
 
-  test "unauthorized writer results carry a useful operation-aware error" do
+  test "unauthorized writer results carry a canonical operation-aware error" do
     grade = %Grade{
       id: @grade_id,
       score: 10,
@@ -29,10 +29,12 @@ defmodule Hawk.ErrorTest do
 
     assert context.operation == :update
 
-    assert context.meta.authorization_error == %{
+    assert context.meta.authorization_error == %Hawk.Error{
+             status: 403,
              code: :not_authorized,
              title: "Not authorized",
-             detail: "You are not allowed to update this grade."
+             detail: "You are not allowed to update this grade.",
+             source: nil
            }
   end
 
@@ -101,5 +103,23 @@ defmodule Hawk.ErrorTest do
     assert %{errors: [%{detail: detail}]} = Errors.to_json_api({:invalid, context})
     assert detail =~ "is invalid for"
     assert detail =~ "Ecto.Enum"
+  end
+
+  test "errors expose canonical structs before adapter rendering" do
+    assert [error] = Errors.to_errors(Hawk.Error.bad_request("bad filter"))
+
+    assert error == %Hawk.Error{
+             status: 400,
+             code: :bad_request,
+             title: "Bad request",
+             detail: "bad filter",
+             source: nil
+           }
+
+    assert Errors.to_json_api(error) == %{
+             errors: [
+               %{status: "400", code: "bad_request", title: "Bad request", detail: "bad filter"}
+             ]
+           }
   end
 end

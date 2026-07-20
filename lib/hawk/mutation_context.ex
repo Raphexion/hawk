@@ -9,6 +9,7 @@ defmodule Hawk.MutationContext do
 
   alias Ecto.Changeset
   alias Hawk.Authority
+  alias Hawk.Error
 
   @type error :: :none | :invalid | :not_authorized
 
@@ -135,16 +136,18 @@ defmodule Hawk.MutationContext do
     %{context | error: error}
   end
 
-  defp put_authorization_error(%__MODULE__{} = context, error) do
+  defp put_authorization_error(%__MODULE__{} = context, %Error{} = error) do
     put_meta(context, :authorization_error, error)
   end
 
+  defp put_authorization_error(%__MODULE__{} = context, error) when is_map(error) do
+    put_meta(context, :authorization_error, struct(Error, error))
+  end
+
   defp default_authorization_error(%__MODULE__{} = context) do
-    %{
-      code: :not_authorized,
-      title: "Not authorized",
-      detail: "You are not allowed to #{context.operation} this #{resource_name(context.model)}."
-    }
+    Error.not_authorized(
+      "You are not allowed to #{context.operation} this #{resource_name(context.model)}."
+    )
   end
 
   defp resource_name(%module{}) do

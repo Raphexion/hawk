@@ -481,13 +481,26 @@ defmodule Hawk.JsonApi do
       case Map.fetch(allowed_by_name, name) do
         {:ok, key} ->
           source = relationship_source(json_api, key)
-          association = model.__schema__(:association, source)
+          association = writable_relationship_association!(model, source)
           Map.put(attrs, association.owner_key, relationship_id(relationship))
 
         :error ->
           attrs
       end
     end)
+  end
+
+  defp writable_relationship_association!(model, source) do
+    association = model.__schema__(:association, source)
+
+    case association do
+      %Ecto.Association.BelongsTo{} ->
+        association
+
+      _other ->
+        raise ArgumentError,
+              "relationship #{source} is not writable; only belongs_to relationships can be mapped to writer attrs"
+    end
   end
 
   defp relationship_id(%{"id" => id}), do: id
