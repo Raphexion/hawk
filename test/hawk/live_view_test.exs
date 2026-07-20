@@ -225,6 +225,105 @@ defmodule Hawk.LiveViewTest do
     refute_received {:videdal_repo, :update, _changeset}
   end
 
+  test "save event creates, assigns the saved model, and switches form state to edit" do
+    socket = CourseIndexLive.assign_new_form(socket(), Authority.system())
+
+    {:noreply, socket} =
+      CourseIndexLive.handle_event(
+        "hawk:save",
+        %{
+          "course" => %{
+            "title" => "History",
+            "school_id" => @school_id,
+            "teacher_id" => @teacher_id
+          }
+        },
+        socket
+      )
+
+    assert %Course{title: "History", school_id: @school_id, teacher_id: @teacher_id} =
+             socket.assigns.course
+
+    assert %Ecto.Changeset{action: :validate, valid?: true} = socket.assigns.course_form
+    assert socket.assigns.hawk_form_states.course.mode == :update
+    assert socket.assigns.hawk_form_states.course.model == socket.assigns.course
+    assert_received {:videdal_repo, :insert, %Ecto.Changeset{valid?: true}}
+  end
+
+  test "save event keeps create form with insert errors when create is invalid" do
+    socket = CourseIndexLive.assign_new_form(socket(), Authority.system())
+
+    {:noreply, socket} =
+      CourseIndexLive.handle_event("hawk:save", %{"course" => %{"title" => ""}}, socket)
+
+    assert %Ecto.Changeset{action: :insert, valid?: false} = socket.assigns.course_form
+    assert errors_on(socket.assigns.course_form).title == ["can't be blank"]
+    assert socket.assigns.hawk_form_states.course.mode == :create
+    refute_received {:videdal_repo, :insert, _changeset}
+  end
+
+  test "save event updates and assigns the saved model" do
+    course = %Course{
+      id: @course_id,
+      title: "Math",
+      school_id: @school_id,
+      teacher_id: @teacher_id
+    }
+
+    socket = CourseIndexLive.assign_edit_form(socket(), course, Authority.system())
+
+    {:noreply, socket} =
+      CourseIndexLive.handle_event("hawk:save", %{"course" => %{"title" => "History"}}, socket)
+
+    assert %Course{id: @course_id, title: "History"} = socket.assigns.course
+    assert socket.assigns.hawk_form_states.course.mode == :update
+    assert socket.assigns.hawk_form_states.course.model == socket.assigns.course
+    assert_received {:videdal_repo, :update, %Ecto.Changeset{valid?: true}}
+  end
+
+  test "save event keeps edit form with update errors when update is invalid" do
+    course = %Course{
+      id: @course_id,
+      title: "Math",
+      school_id: @school_id,
+      teacher_id: @teacher_id
+    }
+
+    socket = CourseIndexLive.assign_edit_form(socket(), course, Authority.system())
+
+    {:noreply, socket} =
+      CourseIndexLive.handle_event("hawk:save", %{"course" => %{"title" => "Forbidden"}}, socket)
+
+    assert %Ecto.Changeset{action: :update, valid?: false} = socket.assigns.course_form
+    assert errors_on(socket.assigns.course_form).title == ["is reserved"]
+    assert socket.assigns.hawk_form_states.course.mode == :update
+    refute_received {:videdal_repo, :update, _changeset}
+  end
+
+  test "save event stores LiveView-friendly authorization errors" do
+    socket =
+      CourseIndexLive.assign_new_form(
+        socket(),
+        Authority.new(:student, @student_id, scopes: %{school_id: @school_id})
+      )
+
+    {:noreply, socket} =
+      CourseIndexLive.handle_event(
+        "hawk:save",
+        %{
+          "course" => %{
+            "title" => "History",
+            "school_id" => @school_id,
+            "teacher_id" => @teacher_id
+          }
+        },
+        socket
+      )
+
+    assert socket.assigns.hawk_error == %{base: ["You are not allowed to create this course."]}
+    refute_received {:videdal_repo, :insert, _changeset}
+  end
+
   test "delete event deletes the resource and refreshes the index assign" do
     course = %Course{id: @course_id, title: "Math"}
     Process.put({Videdal.Repo, :all_results}, [course])

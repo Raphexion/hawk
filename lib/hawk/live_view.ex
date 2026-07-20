@@ -82,6 +82,10 @@ defmodule Hawk.LiveView do
         def handle_event("hawk:validate", params, socket) do
           LiveView.handle_validate(socket, unquote(resource), unquote(as), params)
         end
+
+        def handle_event("hawk:save", params, socket) do
+          LiveView.handle_save(socket, unquote(resource), unquote(as), params)
+        end
       end
     else
       []
@@ -229,6 +233,52 @@ defmodule Hawk.LiveView do
       end
 
     {:noreply, assign(socket, form_assign(as), form_value(changeset, as))}
+  end
+
+  def handle_save(socket, resource, as, params) do
+    form_params = Map.get(params, to_string(as), %{})
+    state = socket.assigns.hawk_form_states[as]
+
+    result =
+      case state.mode do
+        :create -> resource.create(form_params, state.authority)
+        :update -> resource.update(state.model, form_params, state.authority)
+      end
+
+    {:noreply, apply_save_result(socket, resource, as, state, result)}
+  end
+
+  defp apply_save_result(socket, _resource, as, _state, {:ok, model}) do
+    socket
+    |> assign(as, model)
+    |> assign_edit_form_from_save(as, model)
+  end
+
+  defp apply_save_result(socket, _resource, as, %{mode: :create}, {:invalid, context}) do
+    assign(socket, form_assign(as), form_value(%{context.changeset | action: :insert}, as))
+  end
+
+  defp apply_save_result(socket, _resource, as, %{mode: :update}, {:invalid, context}) do
+    assign(socket, form_assign(as), form_value(%{context.changeset | action: :update}, as))
+  end
+
+  defp apply_save_result(socket, _resource, _as, _state, {:not_authorized, _context} = result) do
+    assign(socket, :hawk_error, live_error(result))
+  end
+
+  defp apply_save_result(socket, _resource, _as, _state, result) do
+    assign(socket, :hawk_error, live_error(result))
+  end
+
+  defp assign_edit_form_from_save(socket, as, model) do
+    state = socket.assigns.hawk_form_states[as]
+    authority = state.authority
+
+    changeset = %{Ecto.Changeset.change(model) | action: :validate}
+
+    socket
+    |> put_form_state(as, %{mode: :update, model: model, authority: authority})
+    |> assign(form_assign(as), form_value(changeset, as))
   end
 
   def handle_delete(socket, resource, as, plural_as, params) do

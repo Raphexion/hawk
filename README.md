@@ -148,8 +148,12 @@ These assign `:course_form` by default and track form state under
 `:hawk_form_states`. `handle_event("hawk:validate", %{"course" => params}, socket)`
 rebuilds a non-persisting validation changeset through `change_create/2` or
 `change_update/3`, then assigns a Phoenix `to_form(changeset, as: :course)` when
-Phoenix is available. The fallback assign is the raw changeset, which keeps tests
-and non-Phoenix boundaries simple.
+Phoenix is available. `handle_event("hawk:save", %{"course" => params}, socket)`
+uses the same state to call `create/2` or `update/3`; validation failures keep
+the keyed form assigned with `action: :insert` or `:update`, authorization
+failures assign `:hawk_error`, and successful saves assign the saved model under
+`:course`. The fallback form assign is the raw changeset, which keeps tests and
+non-Phoenix boundaries simple.
 
 ### Model
 
