@@ -14,13 +14,20 @@ defmodule Hawk.PolicyTest.ExamplePolicy do
   write(roles: [:principal, :teacher])
 end
 
+defmodule Hawk.PolicyTest.OwnedPolicy do
+  use Hawk.Policy
+
+  read(:all)
+  write(roles: [:teacher], owned_by: [teacher_id: :teacher_id])
+end
+
 defmodule Hawk.PolicyTest do
   use ExUnit.Case, async: true
 
   alias Hawk.Authority
   alias Hawk.MutationContext
-  alias Hawk.PolicyTest.ExamplePolicy
-  alias Videdal.Grade
+  alias Hawk.PolicyTest.{ExamplePolicy, OwnedPolicy}
+  alias Videdal.{Course, Grade}
 
   test "read role declarations return all for unrestricted roles" do
     assert ExamplePolicy.read_filter(Authority.system()) == :all
@@ -59,6 +66,41 @@ defmodule Hawk.PolicyTest do
 
   test "read role declarations fail closed for unknown roles" do
     assert ExamplePolicy.read_filter(Authority.new(:parent, 4)) == :none
+  end
+
+  test "write ownership declarations require matching authority scopes" do
+    teacher_id = Videdal.teacher_id()
+    other_teacher_id = Videdal.other_teacher_id()
+    owned = %Course{teacher_id: teacher_id}
+
+    matching =
+      MutationContext.update(
+        owned,
+        %{},
+        Authority.new(:teacher, teacher_id, scopes: %{teacher_id: teacher_id})
+      )
+
+    changed =
+      owned
+      |> MutationContext.update(
+        %{teacher_id: other_teacher_id},
+        Authority.new(:teacher, teacher_id, scopes: %{teacher_id: other_teacher_id})
+      )
+      |> Hawk.Writer.cast([:teacher_id])
+
+    missing_scope = MutationContext.update(owned, %{}, Authority.new(:teacher, teacher_id))
+
+    other =
+      MutationContext.update(
+        owned,
+        %{},
+        Authority.new(:teacher, other_teacher_id, scopes: %{teacher_id: other_teacher_id})
+      )
+
+    assert OwnedPolicy.update?(matching)
+    assert OwnedPolicy.update?(changed)
+    refute OwnedPolicy.update?(missing_scope)
+    refute OwnedPolicy.update?(other)
   end
 
   test "write declarations allow configured roles and deny readonly authorities" do

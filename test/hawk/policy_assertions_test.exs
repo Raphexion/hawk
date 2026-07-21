@@ -1,10 +1,19 @@
+defmodule Hawk.PolicyAssertionsTest.ExamplePolicy do
+  use Hawk.Policy
+
+  read do
+    role(:system, :all)
+    role(:teacher, scopes: [:school_id, :teacher_id])
+  end
+end
+
 defmodule Hawk.PolicyAssertionsTest do
   use ExUnit.Case, async: true
 
   import Hawk.Policy.Assertions
 
   alias Hawk.Authority
-  alias Hawk.PolicyTest.ExamplePolicy
+  alias Hawk.PolicyAssertionsTest.ExamplePolicy
 
   test "assert_read_matrix checks exact policy filters" do
     assert_read_matrix(ExamplePolicy, [

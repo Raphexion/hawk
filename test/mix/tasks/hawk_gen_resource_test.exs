@@ -56,6 +56,35 @@ defmodule Mix.Tasks.Hawk.Gen.ResourceTest do
     assert_file(tmp, "lib/my_app/students/live_view.ex", "column(:grade_level")
   end
 
+  test "generates Phoenix surface when web module is provided", %{tmp: tmp} do
+    File.cd!(tmp, fn ->
+      Resource.run([
+        "MyApp.Courses",
+        "MyApp.Course",
+        "--repo",
+        "MyApp.Repo",
+        "--attributes",
+        "title,code",
+        "--relationships",
+        "school,teacher",
+        "--web",
+        "MyAppWeb"
+      ])
+    end)
+
+    assert_file(
+      tmp,
+      "lib/my_app_web/controllers/api/course_controller.ex",
+      "resource: MyApp.Courses"
+    )
+
+    assert_file(tmp, "lib/my_app_web/live/course_live/index.ex", "authority_or_public(session)")
+    assert_file(tmp, "lib/my_app_web/live/course_live/index.html.heex", "navigate={~p\"/courses/")
+    assert_file(tmp, "lib/my_app_web/live/course_live/show.ex", "assign_show(socket")
+    assert_file(tmp, "lib/my_app_web/live/course_live/show.html.heex", "Back to courses")
+    assert_file(tmp, "lib/my_app_web/hawk_courses_routes.exs", "hawk_json_api(MyApp.Courses")
+  end
+
   test "generates writer skeleton by default", %{tmp: tmp} do
     File.cd!(tmp, fn ->
       Resource.run([

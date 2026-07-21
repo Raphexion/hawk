@@ -45,6 +45,23 @@ defmodule Hawk.ResourceContractCaseTest.MismatchedPolicy do
   end
 end
 
+defmodule Hawk.ResourceContractCaseTest.MissingRelationshipPreloadResource.Reader do
+  use Hawk.Reader.Resource,
+    repo: Videdal.Repo,
+    schema: Videdal.Course,
+    policy: Videdal.Courses.Policy
+
+  filter(:id)
+end
+
+defmodule Hawk.ResourceContractCaseTest.MissingRelationshipPreloadResource do
+  alias Hawk.ResourceContractCaseTest.MissingRelationshipPreloadResource.Reader
+
+  def __hawk_resource__(:reader), do: Reader
+  def __hawk_resource__(:policy), do: Videdal.Courses.Policy
+  def __hawk_resource__(:json_api), do: Videdal.Courses.JsonApi
+end
+
 defmodule Hawk.ResourceContractCaseTest.MismatchedPolicyResource.Reader do
   use Hawk.Reader.Resource,
     repo: Videdal.Repo,
@@ -74,6 +91,18 @@ defmodule Hawk.ResourceContractCaseTest do
         Hawk.ResourceContractCaseTest.BadModel
       )
     end
+  end
+
+  test "contract validation can require JSON:API relationships to be reader preloads" do
+    assert_raise ArgumentError,
+                 ~r/JSON:API relationships must be declared reader preloads/,
+                 fn ->
+                   Hawk.ResourceContract.validate!(
+                     Hawk.ResourceContractCaseTest.MissingRelationshipPreloadResource,
+                     Videdal.Course,
+                     require_relationship_preloads: true
+                   )
+                 end
   end
 
   test "contract validation catches policy filters missing from the reader" do

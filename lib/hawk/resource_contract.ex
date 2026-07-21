@@ -3,12 +3,13 @@ defmodule Hawk.ResourceContract do
   Validates that a Hawk resource's declarations agree with its Ecto model.
   """
 
-  def validate!(resource, model) when is_atom(resource) and is_atom(model) do
+  def validate!(resource, model, opts \\ []) when is_atom(resource) and is_atom(model) do
     json_api = validate_model!(model, json_api_metadata(resource, model))
     reader = resource_module(resource, :reader, Reader)
     policy = resource_module(resource, :policy, Policy)
 
     validate_reader_preloads!(reader, json_api)
+    maybe_validate_relationship_preloads!(reader, json_api, opts)
     validate_reader_sorts!(reader, model)
     validate_reader_filters!(reader, model)
     validate_policy_filters!(policy, reader)
@@ -113,6 +114,17 @@ defmodule Hawk.ResourceContract do
     |> reader_values(:preload_keys)
     |> Enum.reject(&MapSet.member?(relationships, &1))
     |> raise_if_any!("reader preloads must be declared JSON:API relationships")
+  end
+
+  defp maybe_validate_relationship_preloads!(reader, json_api, opts) do
+    if Keyword.get(opts, :require_relationship_preloads, false) do
+      preloads = reader |> reader_values(:preload_keys) |> MapSet.new()
+
+      json_api.relationships
+      |> Map.keys()
+      |> Enum.reject(&MapSet.member?(preloads, &1))
+      |> raise_if_any!("JSON:API relationships must be declared reader preloads")
+    end
   end
 
   defp validate_reader_sorts!(reader, model) do

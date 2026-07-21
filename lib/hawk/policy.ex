@@ -53,21 +53,48 @@ defmodule Hawk.Policy do
 
   defmacro write(opts) when is_list(opts) do
     roles = Keyword.fetch!(opts, :roles)
+    owned_by = Keyword.get(opts, :owned_by, [])
 
     quote do
-      def create?(%Hawk.MutationContext{} = context), do: write_allowed?(context.authority)
-      def update?(%Hawk.MutationContext{} = context), do: write_allowed?(context.authority)
-      def delete?(%Hawk.MutationContext{} = context), do: write_allowed?(context.authority)
+      def create?(%Hawk.MutationContext{} = context),
+        do: write_allowed?(context, unquote(owned_by))
 
-      defp write_allowed?(%Hawk.Authority{} = authority) do
+      def update?(%Hawk.MutationContext{} = context),
+        do: write_allowed?(context, unquote(owned_by))
+
+      def delete?(%Hawk.MutationContext{} = context),
+        do: write_allowed?(context, unquote(owned_by))
+
+      defp write_allowed?(%Hawk.MutationContext{} = context, ownership) do
+        authority = context.authority
+
         cond do
           Hawk.Authority.system?(authority) -> true
           Hawk.Authority.readonly?(authority) -> false
-          authority.role in unquote(roles) -> true
+          authority.role in unquote(roles) -> Hawk.Policy.owned_by?(context, ownership)
           true -> false
         end
       end
     end
+  end
+
+  def owned_by?(_context, []), do: true
+
+  def owned_by?(%Hawk.MutationContext{} = context, ownership) when is_list(ownership) do
+    Enum.all?(ownership, fn {field, scope} ->
+      with {:ok, scope_value} <- Hawk.Authority.fetch_scope(context.authority, scope),
+           {:ok, field_value} <- mutation_field(context, field) do
+        field_value == scope_value
+      else
+        _missing -> false
+      end
+    end)
+  end
+
+  defp mutation_field(%Hawk.MutationContext{} = context, field) when is_atom(field) do
+    value = Ecto.Changeset.get_field(context.changeset, field)
+
+    if is_nil(value), do: Map.fetch(context.model, field), else: {:ok, value}
   end
 
   defp literal_option!(value, _caller) when is_map(value), do: value

@@ -72,9 +72,13 @@ mix hawk.gen.resource MyApp.Courses MyApp.Course \
 
 This creates the facade, policy, reader, JSON:API adapter, LiveView adapter, and
 writer skeleton. Pass `--read-only` to generate `writer: false` and omit the
-writer. The generator is intentionally conservative: it gives you the standard
-Hawk shape, then you tighten policy, filters, labels, docs, and writer rules by
-hand.
+writer. Pass `--web MyAppWeb` to also generate a Phoenix JSON:API controller,
+clickable LiveView index/show modules and templates, and a router snippet file
+beside the generated web files. The generated LiveViews use
+`Hawk.Authority.Session.authority_or_public/1`, so they work for public demos and
+can later pick up a session-backed authority. The generator is intentionally
+conservative: it gives you the standard Hawk shape, then you tighten policy,
+filters, labels, docs, and writer rules by hand.
 
 ### JSON:API adapter
 
@@ -301,7 +305,12 @@ end
 `public` is anonymous readonly access. It is not system access and still goes
 through the resource policy. Policies expose their read declarations for
 contract validation, so `ResourceContract` can catch scoped policy filters that
-are not declared by the reader.
+are not declared by the reader. For simple ownership-based writes, pass
+`owned_by:` to require model/changeset fields to match authority scopes:
+
+```elixir
+write(roles: [:teacher], owned_by: [teacher_id: :teacher_id])
+```
 
 Policy matrix tests can use `Hawk.Policy.Assertions` to keep role coverage
 compact:
@@ -380,6 +389,25 @@ defmodule MyApp.Courses.Writer do
   end
 end
 ```
+
+### Authority conventions
+
+Hawk does not authenticate users itself. Apps can use the small session/assign
+convention helpers to carry an already-resolved authority through controllers and
+LiveViews:
+
+```elixir
+authority = MyAppWeb.Auth.authority_for(conn)
+conn = Hawk.Authority.Plug.call(conn, resolver: fn _conn -> authority end)
+
+session_authority = Hawk.Authority.Session.dump(authority)
+authority = Hawk.Authority.Session.authority_or_public(session)
+```
+
+`Hawk.Authority.Plug` assigns `:hawk_authority` on the conn, while
+`Hawk.LiveView.AuthorityHook` can assign the same key from a dumped session value
+with LiveView `on_mount`. Missing authority falls back to readonly public access,
+not system access.
 
 `Hawk.Writer.Resource` generates `change_create/2` / `create/2` and
 `change_update/3` / `update/3` from the same pipelines. `change_*` functions
@@ -721,8 +749,10 @@ end
 ```
 
 The contract test checks that JSON:API attributes, relationships,
-creatable/updatable fields, reader preloads, sorts, and filters agree with the
-model and reader declarations.
+creatable/updatable fields, reader preloads, sorts, filters, and scoped policy
+filters agree with the model, reader, and policy declarations. For resources
+where every exposed relationship is expected to be include/preloadable, call
+`Hawk.ResourceContract.validate!/3` with `require_relationship_preloads: true`.
 
 ### JSON:API controller contract test
 
