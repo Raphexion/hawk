@@ -28,7 +28,7 @@ defmodule Hawk.JsonApi do
   def metadata(module, opts) when is_atom(module) do
     opts
     |> Keyword.get(:json_api_by_model, %{})
-    |> Map.get(module, module.__hawk_json_api__())
+    |> Map.get(module, discovered_metadata(module))
     |> normalize_metadata()
   end
 
@@ -150,7 +150,7 @@ defmodule Hawk.JsonApi do
   end
 
   def openapi_schema(model) when is_atom(model) do
-    json_api = model.__hawk_json_api__()
+    json_api = metadata(model)
 
     %{
       "type" => "object",
@@ -169,6 +169,20 @@ defmodule Hawk.JsonApi do
       relationships: resource_relationships(model, json_api, opts)
     }
     |> put_resource_links(model, json_api, opts)
+  end
+
+  defp discovered_metadata(module) do
+    with true <- function_exported?(module, :__hawk_resource__, 0),
+         resource <- module.__hawk_resource__(),
+         {:module, ^resource} <- Code.ensure_compiled(resource),
+         true <- function_exported?(resource, :__hawk_resource__, 1),
+         json_api when json_api not in [false, nil] <- resource.__hawk_resource__(:json_api),
+         {:module, ^json_api} <- Code.ensure_compiled(json_api),
+         true <- function_exported?(json_api, :__hawk_json_api__, 0) do
+      json_api.__hawk_json_api__()
+    else
+      _other -> module.__hawk_json_api__()
+    end
   end
 
   defp normalize_metadata(metadata) do

@@ -7,6 +7,7 @@ Hawk is a resource-oriented Phoenix backend framework. JSON:API and LiveView are
 - Hawk Resources are the product: Reader, Writer, Policy, Actions, and adapter contracts define how a domain resource is read, mutated, authorized, documented, and exposed.
 - Resources model domain resources, not necessarily database tables. Table-backed schemas, views, projections, summaries, and computed resources should all fit.
 - JSON:API and LiveView should feel native and work well together while consuming the same resource capability model.
+- Related resource rendering should discover adapter metadata through resource facades instead of forcing duplicate model-level JSON:API declarations.
 
 ## Convention with explicit absence
 
@@ -45,7 +46,7 @@ JSON:API and LiveView should have separate adapter modules and DSLs:
 - `MyApp.Courses.JsonApi` owns external API shape: type, attributes, relationships, renamed fields, cached/computed values, docs, examples, writable request mapping, OpenAPI metadata.
 - `MyApp.Courses.LiveView` owns LiveView presentation and event contracts: tables, forms, actions, params, filters, assigns, and event plumbing.
 
-The current `json_api do` block on models is a compatibility stepping stone. The long-term direction is explicit adapter contracts beside the resource.
+The current `json_api do` block on models is a compatibility stepping stone. Explicit adapter contracts beside the resource are the preferred shape, and Hawk discovers those adapters when rendering included/related resources.
 
 ## LiveView direction
 
