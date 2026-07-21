@@ -1,6 +1,10 @@
 # Hawk Resource Direction
 
-Hawk is a resource-oriented Phoenix backend framework. JSON:API and LiveView are first-class adapters over Hawk Resources, not the core abstraction themselves.
+Hawk is a resource-oriented Phoenix backend framework for systems that repeatedly need both an internal admin interface and a backend API over the same domain resources. It is intentionally opinionated: Reader, Writer, Policy, Actions, and adapter contracts form one resource boundary that JSON:API and LiveView consume.
+
+The goal is not to replace Phoenix, Ecto, or application-specific authentication. The goal is to provide a solid, reusable foundation for the recurring backend/admin shape: policy-safe reads and writes, consistent API/admin exposure, contract validation, and useful generators with clear escape hatches.
+
+JSON:API and LiveView are first-class adapters over Hawk Resources, not the core abstraction themselves.
 
 ## Core shape
 
