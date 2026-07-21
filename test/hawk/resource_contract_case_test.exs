@@ -37,6 +37,33 @@ defmodule Hawk.ResourceContractCaseTest.BadResource do
   def all(opts), do: Reader.all(opts)
 end
 
+defmodule Hawk.ResourceContractCaseTest.MismatchedPolicy do
+  use Hawk.Policy
+
+  read do
+    role(:school_admin, scopes: [:school_id])
+  end
+end
+
+defmodule Hawk.ResourceContractCaseTest.MismatchedPolicyResource.Reader do
+  use Hawk.Reader.Resource,
+    repo: Videdal.Repo,
+    schema: Videdal.Course,
+    policy: Hawk.ResourceContractCaseTest.MismatchedPolicy
+
+  filter(:id)
+end
+
+defmodule Hawk.ResourceContractCaseTest.MismatchedPolicyResource do
+  alias Hawk.ResourceContractCaseTest.MismatchedPolicyResource.Reader
+
+  def __hawk_resource__(:reader), do: Reader
+  def __hawk_resource__(:policy), do: Hawk.ResourceContractCaseTest.MismatchedPolicy
+  def __hawk_resource__(:json_api), do: Videdal.Courses.JsonApi
+
+  def all(opts), do: Reader.all(opts)
+end
+
 defmodule Hawk.ResourceContractCaseTest do
   use ExUnit.Case, async: true
 
@@ -47,5 +74,16 @@ defmodule Hawk.ResourceContractCaseTest do
         Hawk.ResourceContractCaseTest.BadModel
       )
     end
+  end
+
+  test "contract validation catches policy filters missing from the reader" do
+    assert_raise ArgumentError,
+                 ~r/policy read filters must be declared reader filters: :school_id/,
+                 fn ->
+                   Hawk.ResourceContract.validate!(
+                     Hawk.ResourceContractCaseTest.MismatchedPolicyResource,
+                     Videdal.Course
+                   )
+                 end
   end
 end

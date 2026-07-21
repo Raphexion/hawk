@@ -5,11 +5,13 @@ defmodule Hawk.ResourceContract do
 
   def validate!(resource, model) when is_atom(resource) and is_atom(model) do
     json_api = validate_model!(model, json_api_metadata(resource, model))
-    reader = Module.concat(resource, Reader)
+    reader = resource_module(resource, :reader, Reader)
+    policy = resource_module(resource, :policy, Policy)
 
     validate_reader_preloads!(reader, json_api)
     validate_reader_sorts!(reader, model)
     validate_reader_filters!(reader, model)
+    validate_policy_filters!(policy, reader)
 
     :ok
   end
@@ -130,6 +132,50 @@ defmodule Hawk.ResourceContract do
     |> reader_values(:filter_keys)
     |> Enum.reject(&(MapSet.member?(schema_fields, &1) or MapSet.member?(handlers, &1)))
     |> raise_if_any!("reader filters must be schema fields or custom filter handlers")
+  end
+
+  defp validate_policy_filters!(policy, reader) do
+    declared_reader_filters =
+      reader
+      |> reader_values(:filter_keys)
+      |> MapSet.new()
+      |> MapSet.union(reader_values(reader, :filter_handlers) |> Map.keys() |> MapSet.new())
+
+    policy
+    |> policy_read_filters()
+    |> Enum.reject(&MapSet.member?(declared_reader_filters, &1))
+    |> raise_if_any!("policy read filters must be declared reader filters")
+  end
+
+  defp policy_read_filters(policy) do
+    if Code.ensure_loaded?(policy) and function_exported?(policy, :__hawk_policy__, 0) do
+      policy.__hawk_policy__()
+      |> Map.fetch!(:read)
+      |> Enum.flat_map(&policy_role_filter_keys/1)
+      |> Enum.uniq()
+    else
+      []
+    end
+  end
+
+  defp policy_role_filter_keys({_role, :all}), do: []
+
+  defp policy_role_filter_keys({_role, {:scoped, scopes, filter}}) do
+    Enum.map(scopes, &policy_scope_filter_key/1) ++ Map.keys(filter)
+  end
+
+  defp policy_scope_filter_key({filter_key, _scope_key}), do: filter_key
+  defp policy_scope_filter_key(scope_key) when is_atom(scope_key), do: scope_key
+
+  defp resource_module(resource, key, suffix) do
+    if Code.ensure_loaded?(resource) and function_exported?(resource, :__hawk_resource__, 1) do
+      case resource.__hawk_resource__(key) do
+        false -> Module.concat(resource, suffix)
+        module -> module
+      end
+    else
+      Module.concat(resource, suffix)
+    end
   end
 
   defp reader_values(reader, function) do

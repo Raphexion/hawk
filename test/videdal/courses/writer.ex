@@ -3,11 +3,6 @@ defmodule Videdal.Courses.Writer do
   Writer pipeline module for the Videdal `Courses` resource.
   """
 
-  alias Hawk.MutationContext
-  alias Hawk.RepositoryBoundary
-  alias Videdal.{Course, Repo}
-  alias Videdal.Courses.Policy
-
   use Hawk.Writer.Resource,
     model: Videdal.Course,
     repo: Videdal.Repo,
@@ -31,9 +26,5 @@ defmodule Videdal.Courses.Writer do
     end
   end
 
-  def delete(%Course{} = course, authority) do
-    MutationContext.delete(course, authority)
-    |> MutationContext.validate_policy(&Policy.delete?/1)
-    |> RepositoryBoundary.delete(Repo)
-  end
+  delete(:default)
 end

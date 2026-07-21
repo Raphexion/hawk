@@ -77,6 +77,8 @@ policy_filter AND caller_filter AND resource_forced_filter
 
 Policy is the security boundary. Adapter filters from JSON:API, LiveView params, or internal callers are additional narrowing only. Unknown filters fail closed. Preloads use the related resource's own Reader and Policy.
 
+Policy declarations are introspectable so resource contracts can validate the seam between Policy and Reader: every scoped policy filter key must be declared as a reader filter or custom filter handler. Role matrices should be tested with Hawk's policy assertion helpers rather than repeated hand-written `read_filter/1` assertions.
+
 There are no hidden read bypasses. Even system reads should use `Authority.system()` and flow through the same machinery.
 
 ## Write/action invariant
@@ -85,7 +87,7 @@ There are no hidden read bypasses. Even system reads should use `Authority.syste
 
 System writes should also validate policy explicitly; `system` can be allowed, but it should not bypass the policy-validation path.
 
-JSON:API relationship reads can expose projections over internal database shape, including `many_to_many` associations where the join schema is not itself part of the external API. JSON:API relationship writes are intentionally limited to `belongs_to` associations because those map cleanly to writer attrs through the owning foreign key. `has_many`, `has_one`, and `many_to_many` mutations need explicit writer/action workflows instead of being implied from JSON:API relationship linkage.
+JSON:API relationship reads can expose projections over internal database shape, including `many_to_many` associations where the join schema is not itself part of the external API. JSON:API relationship writes are intentionally limited to `belongs_to` associations because those map cleanly to writer attrs through the owning foreign key. `has_many`, `has_one`, and `many_to_many` mutations need explicit writer/action workflows instead of being implied from JSON:API relationship linkage. Plain CRUD deletion can use the writer DSL's `delete(:default)` helper; ownership-specific or cascading deletes should remain explicit writer/action workflows.
 
 Actions are resource-scoped workflows/commands. They may orchestrate across resources, use `Ecto.Multi`, send emails, enqueue jobs, and perform broader side effects. They remain declared, authorized, documented, telemetry-instrumented, and testable.
 

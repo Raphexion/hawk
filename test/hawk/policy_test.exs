@@ -45,6 +45,18 @@ defmodule Hawk.PolicyTest do
     assert ExamplePolicy.read_filter(authority) == :none
   end
 
+  test "policy exposes introspection metadata" do
+    assert ExamplePolicy.__hawk_policy__() == %{
+             read: [
+               {:system, :all},
+               {:principal, :all},
+               {:school_admin, {:scoped, [:school_id], %{}}},
+               {:teacher, {:scoped, [:school_id, :teacher_id], %{}}},
+               {:student, {:scoped, [:school_id, :student_id], %{active: true}}}
+             ]
+           }
+  end
+
   test "read role declarations fail closed for unknown roles" do
     assert ExamplePolicy.read_filter(Authority.new(:parent, 4)) == :none
   end

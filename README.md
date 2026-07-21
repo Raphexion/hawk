@@ -299,7 +299,23 @@ end
 ```
 
 `public` is anonymous readonly access. It is not system access and still goes
-through the resource policy.
+through the resource policy. Policies expose their read declarations for
+contract validation, so `ResourceContract` can catch scoped policy filters that
+are not declared by the reader.
+
+Policy matrix tests can use `Hawk.Policy.Assertions` to keep role coverage
+compact:
+
+```elixir
+import Hawk.Policy.Assertions
+
+assert_read_matrix(MyApp.Courses.Policy, [
+  {Hawk.Authority.system(), :all},
+  {Hawk.Authority.new(:teacher, 12, scopes: %{school_id: 7, teacher_id: 12}),
+   %{school_id: 7, teacher_id: 12}},
+  {Hawk.Authority.new(:teacher, 12, scopes: %{school_id: 7}), :none}
+])
+```
 
 ### Reader
 
@@ -354,6 +370,8 @@ defmodule MyApp.Courses.Writer do
     validate(&reject_reserved_title/1)
   end
 
+  delete(:default)
+
   defp reject_reserved_title(context) do
     case Ecto.Changeset.get_change(context.changeset, :title) do
       "Forbidden" -> {:error, :title, "is reserved"}
@@ -367,7 +385,9 @@ end
 `change_update/3` / `update/3` from the same pipelines. `change_*` functions
 return non-persisting changesets with `action: :validate`, which is the boundary
 LiveView form helpers use for live validation errors. `create/2` and `update/3`
-keep owning persistence through the repository boundary. Supported DSL steps are `defaults/1`, `cast/1`, `validate_required/1,2`,
+keep owning persistence through the repository boundary. `delete(:default)`
+generates a policy-checked `delete/2` that crosses the same repository boundary.
+Supported create/update DSL steps are `defaults/1`, `cast/1`, `validate_required/1,2`,
 `validate/1`, and `validate_changeset/1`. Custom `validate/1` functions can be
 reused in create and update pipelines when domain validation is not just standard
 Ecto changeset validation. Hand-written writers can expose the same form boundary

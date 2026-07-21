@@ -247,12 +247,7 @@ defmodule Mix.Tasks.Hawk.Gen.Resource do
         cast(#{cast_fields})
       end
 
-      def delete(%#{config.model}{} = model, authority) do
-        model
-        |> Hawk.MutationContext.delete(authority)
-        |> Hawk.MutationContext.validate_policy(&#{config.resource}.Policy.delete?/1)
-        |> Hawk.RepositoryBoundary.delete(#{config.repo})
-      end
+      delete(:default)
     end
     """)
   end

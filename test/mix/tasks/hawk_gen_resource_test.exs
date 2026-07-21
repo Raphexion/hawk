@@ -80,11 +80,7 @@ defmodule Mix.Tasks.Hawk.Gen.ResourceTest do
       "cast([:title, :code, :school_id, :teacher_id])"
     )
 
-    assert_file(
-      tmp,
-      "lib/my_app/courses/writer.ex",
-      "def delete(%MyApp.Course{} = model, authority) do"
-    )
+    assert_file(tmp, "lib/my_app/courses/writer.ex", "delete(:default)")
 
     assert_file(tmp, "lib/my_app/courses/json_api.ex", "relationship(:teacher, writable: true")
   end

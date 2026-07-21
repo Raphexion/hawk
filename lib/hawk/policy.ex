@@ -87,6 +87,10 @@ defmodule Hawk.Policy do
       def read_filter(%Hawk.Authority{} = authority) do
         Hawk.Policy.read_filter(authority, unquote(Macro.escape(read_roles)))
       end
+
+      def __hawk_policy__ do
+        %{read: unquote(Macro.escape(read_roles))}
+      end
     end
   end
 

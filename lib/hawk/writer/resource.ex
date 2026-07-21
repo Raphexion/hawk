@@ -12,7 +12,7 @@ defmodule Hawk.Writer.Resource do
     policy = Keyword.fetch!(opts, :policy)
 
     quote do
-      import Hawk.Writer.Resource, only: [create: 1, update: 1]
+      import Hawk.Writer.Resource, only: [create: 1, delete: 1, update: 1]
 
       @hawk_writer_model unquote(model)
       @hawk_writer_repo unquote(repo)
@@ -34,15 +34,23 @@ defmodule Hawk.Writer.Resource do
     end
   end
 
+  defmacro delete(:default) do
+    quote do
+      @hawk_writer_delete :default
+    end
+  end
+
   defmacro __before_compile__(env) do
     create_block = Module.get_attribute(env.module, :hawk_writer_create)
     update_block = Module.get_attribute(env.module, :hawk_writer_update)
     model = Module.get_attribute(env.module, :hawk_writer_model)
     repo = Module.get_attribute(env.module, :hawk_writer_repo)
     policy = Module.get_attribute(env.module, :hawk_writer_policy)
+    delete_mode = Module.get_attribute(env.module, :hawk_writer_delete)
 
     create_context = quote_context_pipeline(:create, create_block, model, policy)
     update_functions = quote_update_functions(update_block, repo, policy)
+    delete_functions = quote_delete_functions(delete_mode, repo, policy)
 
     quote do
       def change_create(attrs, authority) do
@@ -62,6 +70,7 @@ defmodule Hawk.Writer.Resource do
       end
 
       unquote(update_functions)
+      unquote(delete_functions)
     end
   end
 
@@ -85,6 +94,19 @@ defmodule Hawk.Writer.Resource do
 
       defp update_context(model, attrs, authority) do
         unquote(update_context)
+      end
+    end
+  end
+
+  defp quote_delete_functions(nil, _repo, _policy), do: []
+
+  defp quote_delete_functions(:default, repo, policy) do
+    quote do
+      def delete(model, authority) do
+        model
+        |> Hawk.MutationContext.delete(authority)
+        |> Hawk.MutationContext.validate_policy(&unquote(policy).delete?/1)
+        |> Hawk.RepositoryBoundary.delete(unquote(repo))
       end
     end
   end
