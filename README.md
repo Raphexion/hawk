@@ -55,6 +55,25 @@ A Hawk resource has four small modules plus Phoenix-facing helpers:
 - `Actions` is optional and declares imperative JSON:API custom actions under `/-actions/`.
 - JSON:API, OpenAPI, and LiveView helpers are generated from those declarations.
 
+### Resource generator
+
+For a quick skeleton around an existing Ecto schema, use:
+
+```bash
+mix hawk.gen.resource MyApp.Courses MyApp.Course \
+  --repo MyApp.Repo \
+  --attributes title,code \
+  --relationships school,teacher \
+  --filters school_id,teacher_id \
+  --preloads school,teacher
+```
+
+This creates the facade, policy, reader, JSON:API adapter, LiveView adapter, and
+writer skeleton. Pass `--read-only` to generate `writer: false` and omit the
+writer. The generator is intentionally conservative: it gives you the standard
+Hawk shape, then you tighten policy, filters, labels, docs, and writer rules by
+hand.
+
 ### JSON:API adapter
 
 New resources should keep JSON:API exposure in a sibling adapter module:
