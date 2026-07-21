@@ -404,10 +404,15 @@ session_authority = Hawk.Authority.Session.dump(authority)
 authority = Hawk.Authority.Session.authority_or_public(session)
 ```
 
-`Hawk.Authority.Plug` assigns `:hawk_authority` on the conn, while
-`Hawk.LiveView.AuthorityHook` can assign the same key from a dumped session value
-with LiveView `on_mount`. Missing authority falls back to readonly public access,
-not system access.
+`Hawk.PhoenixAuth` is the phx.gen.auth-specific bridge. In Plug pipelines it can
+read an existing `current_scope` or a URL-safe Base64 Bearer session token,
+convert that scope to a Hawk authority, and assign both `:hawk_authority` and
+`:authority` for JSON:API controllers. In LiveView `on_mount`, use it after the
+generated `UserAuth` hook has assigned `current_scope`.
+
+`Hawk.Authority.Plug` / `Hawk.Authority.Session` are lower-level generic helpers
+for apps that are not using the phx.gen.auth scope shape. Missing authority falls
+back to readonly public access, not system access.
 
 `Hawk.Writer.Resource` generates `change_create/2` / `create/2` and
 `change_update/3` / `update/3` from the same pipelines. `change_*` functions
