@@ -54,9 +54,7 @@ defmodule Hawk.ModelPluralizationTest.CustomParent do
   use Hawk.Model
 
   model "custom_parents" do
-    has_many(:children, Hawk.ModelPluralizationTest.CustomChild,
-      resource: Hawk.ModelPluralizationTest.CustomChildren
-    )
+    has_many(:children, Hawk.ModelPluralizationTest.CustomChild, resource: Hawk.ModelPluralizationTest.CustomChildren)
   end
 end
 

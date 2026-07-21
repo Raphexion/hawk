@@ -55,8 +55,7 @@ defmodule Hawk.PublicAuthorityTest do
 
     assert conn.status == 200
 
-    assert_received {:videdal_repo, :preload, ^courses,
-                     [grades: {grade_query, [student: student_query]}]}
+    assert_received {:videdal_repo, :preload, ^courses, [grades: {grade_query, [student: student_query]}]}
 
     assert inspect(grade_query) =~ "where: false"
     assert inspect(student_query) =~ "where: false"
@@ -74,8 +73,7 @@ defmodule Hawk.PublicAuthorityTest do
 
     assert conn.status == 200
 
-    assert_received {:videdal_repo, :preload, ^courses,
-                     [grades: {grade_query, [student: student_query]}]}
+    assert_received {:videdal_repo, :preload, ^courses, [grades: {grade_query, [student: student_query]}]}
 
     assert inspect(grade_query) =~ "c1.teacher_id == ^12"
     assert inspect(student_query) =~ "s0.school_id == ^7"
@@ -94,8 +92,7 @@ defmodule Hawk.PublicAuthorityTest do
     assert conn.status == 200
     assert_received {:videdal_repo, :all, course_query}
 
-    assert_received {:videdal_repo, :preload, ^courses,
-                     [grades: {grade_query, [student: student_query]}]}
+    assert_received {:videdal_repo, :preload, ^courses, [grades: {grade_query, [student: student_query]}]}
 
     assert inspect(course_query) =~ "c0.school_id == ^7"
     assert inspect(grade_query) =~ "where: false"

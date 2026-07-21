@@ -20,9 +20,7 @@ defmodule Videdal.Integration.GradesReaderTest.Reader do
   end
 
   attach :parent_student, when_filter: [:parent_id] do
-    join(query, :inner, [student: student], parent_student in assoc(student, :parent_students),
-      as: :parent_student
-    )
+    join(query, :inner, [student: student], parent_student in assoc(student, :parent_students), as: :parent_student)
   end
 
   attach :course, when_filter: [:course_title, :teacher_id] do
@@ -62,9 +60,7 @@ defmodule Videdal.Integration.GradesReaderTest do
 
   test "teachers query all grades for their courses with batched preloads", data do
     authority =
-      Authority.new(:teacher, data.teacher.id,
-        scopes: %{school_id: data.school.id, teacher_id: data.teacher.id}
-      )
+      Authority.new(:teacher, data.teacher.id, scopes: %{school_id: data.school.id, teacher_id: data.teacher.id})
 
     {grades, query_count} =
       count_queries(fn ->
@@ -81,9 +77,7 @@ defmodule Videdal.Integration.GradesReaderTest do
 
   test "students can only query their own grades", data do
     authority =
-      Authority.new(:student, data.ada.id,
-        scopes: %{school_id: data.school.id, student_id: data.ada.id}
-      )
+      Authority.new(:student, data.ada.id, scopes: %{school_id: data.school.id, student_id: data.ada.id})
 
     grades =
       Reader.all(authority: authority)
@@ -95,9 +89,7 @@ defmodule Videdal.Integration.GradesReaderTest do
 
   test "parents query grades through linked students only", data do
     authority =
-      Authority.new(:parent, data.parent.id,
-        scopes: %{school_id: data.school.id, parent_id: data.parent.id}
-      )
+      Authority.new(:parent, data.parent.id, scopes: %{school_id: data.school.id, parent_id: data.parent.id})
 
     {grades, query_count} =
       count_queries(fn ->

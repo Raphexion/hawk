@@ -287,9 +287,7 @@ defmodule Videdal.ResourceFacadeTest do
 
   test "grade facade delegates reads and CRUD mutations through sibling modules" do
     authority =
-      Authority.new(:teacher, @teacher_id,
-        scopes: %{school_id: @school_id, teacher_id: @teacher_id}
-      )
+      Authority.new(:teacher, @teacher_id, scopes: %{school_id: @school_id, teacher_id: @teacher_id})
 
     grade = %Grade{
       id: @grade_id,

@@ -145,9 +145,7 @@ defmodule Hawk.MutationContext do
   end
 
   defp default_authorization_error(%__MODULE__{} = context) do
-    Error.not_authorized(
-      "You are not allowed to #{context.operation} this #{resource_name(context.model)}."
-    )
+    Error.not_authorized("You are not allowed to #{context.operation} this #{resource_name(context.model)}.")
   end
 
   defp resource_name(%module{}) do

@@ -43,8 +43,7 @@ defmodule Videdal.Courses.ReaderTest do
 
     assert_received {:videdal_repo, :all, _query}
 
-    assert_received {:videdal_repo, :preload, ^results,
-                     [school: %Ecto.Query{}, teacher: %Ecto.Query{}]}
+    assert_received {:videdal_repo, :preload, ^results, [school: %Ecto.Query{}, teacher: %Ecto.Query{}]}
 
     refute_received {:videdal_repo, :preload, _other_results, _preloads}
   end

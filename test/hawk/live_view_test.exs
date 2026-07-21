@@ -65,9 +65,7 @@ defmodule Hawk.LiveViewTest do
     Process.put({Videdal.Repo, :all_results}, courses)
 
     socket =
-      CourseIndexLive.assign_index(socket(), Authority.system(),
-        page: %{column: :title, dir: :asc, size: 10}
-      )
+      CourseIndexLive.assign_index(socket(), Authority.system(), page: %{column: :title, dir: :asc, size: 10})
 
     assert socket.assigns.courses == courses
     assert socket.assigns.hawk_resource == :course
@@ -89,9 +87,7 @@ defmodule Hawk.LiveViewTest do
     Process.put({Videdal.Repo, :all_results}, courses)
 
     socket =
-      CourseIndexLive.assign_index(socket(), Authority.system(),
-        params: %{"filter" => %{"teacher_id" => @teacher_id}}
-      )
+      CourseIndexLive.assign_index(socket(), Authority.system(), params: %{"filter" => %{"teacher_id" => @teacher_id}})
 
     assert socket.assigns.courses == courses
     assert_received {:videdal_repo, :all, query}
@@ -146,9 +142,7 @@ defmodule Hawk.LiveViewTest do
     hostile = "hawk_hostile_live_filter_#{System.unique_integer([:positive])}"
 
     assert_raise ArgumentError, "unknown LiveView filter #{inspect(hostile)}", fn ->
-      CourseIndexLive.assign_index(socket(), Authority.system(),
-        params: %{"filter" => %{hostile => "boom"}}
-      )
+      CourseIndexLive.assign_index(socket(), Authority.system(), params: %{"filter" => %{hostile => "boom"}})
     end
 
     refute_existing_atom(hostile)
@@ -187,9 +181,7 @@ defmodule Hawk.LiveViewTest do
     Process.put({Videdal.Repo, :all_results}, [course])
 
     socket =
-      CourseShowLive.assign_show(socket(), Authority.system(), @course_id,
-        filter: %{school_id: @school_id}
-      )
+      CourseShowLive.assign_show(socket(), Authority.system(), @course_id, filter: %{school_id: @school_id})
 
     assert socket.assigns.course == course
     assert_received {:videdal_repo, :all, query}
@@ -479,8 +471,7 @@ defmodule Hawk.LiveViewTest do
         "hawk:delete",
         %{
           "id" => @course_id,
-          "authority" =>
-            Authority.new(:school_admin, @school_admin_id, scopes: %{school_id: @school_id})
+          "authority" => Authority.new(:school_admin, @school_admin_id, scopes: %{school_id: @school_id})
         },
         socket()
       )

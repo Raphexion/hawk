@@ -52,8 +52,8 @@ defmodule Hawk.TelemetryTest do
 
     assert conn.status == 200
 
-    assert_received {:hawk_telemetry, [:hawk, :json_api, :controller, :show, :start],
-                     start_measurements, start_metadata}
+    assert_received {:hawk_telemetry, [:hawk, :json_api, :controller, :show, :start], start_measurements,
+                     start_metadata}
 
     assert is_integer(start_measurements.system_time)
     assert start_metadata.action == :show
@@ -62,8 +62,7 @@ defmodule Hawk.TelemetryTest do
     assert start_metadata.id_kind == :uuid
     refute Map.has_key?(start_metadata, :id)
 
-    assert_received {:hawk_telemetry, [:hawk, :json_api, :controller, :show, :stop],
-                     stop_measurements, stop_metadata}
+    assert_received {:hawk_telemetry, [:hawk, :json_api, :controller, :show, :stop], stop_measurements, stop_metadata}
 
     assert is_integer(stop_measurements.duration)
     assert stop_metadata.status == 200
@@ -86,8 +85,7 @@ defmodule Hawk.TelemetryTest do
 
     assert conn.status == 200
 
-    assert_received {:hawk_telemetry, [:hawk, :json_api, :controller, :show, :start],
-                     _measurements, metadata}
+    assert_received {:hawk_telemetry, [:hawk, :json_api, :controller, :show, :start], _measurements, metadata}
 
     assert metadata.id_kind == :short_id
     refute Map.has_key?(metadata, :id)
@@ -99,8 +97,7 @@ defmodule Hawk.TelemetryTest do
 
     assert conn.status == 400
 
-    assert_received {:hawk_telemetry, [:hawk, :json_api, :controller, :show, :stop],
-                     _measurements, metadata}
+    assert_received {:hawk_telemetry, [:hawk, :json_api, :controller, :show, :stop], _measurements, metadata}
 
     assert metadata.status == 400
     assert metadata.result == :bad_request
@@ -112,12 +109,11 @@ defmodule Hawk.TelemetryTest do
 
     assert conn.status == 200
 
-    assert_received {:hawk_telemetry, [:hawk, :json_api, :controller, :index, :start],
-                     _measurements,
+    assert_received {:hawk_telemetry, [:hawk, :json_api, :controller, :index, :start], _measurements,
                      %{action: :index, resource: Videdal.Courses, model: Videdal.Course}}
 
-    assert_received {:hawk_telemetry, [:hawk, :json_api, :controller, :index, :stop],
-                     _measurements, %{action: :index, status: 200, result: :ok}}
+    assert_received {:hawk_telemetry, [:hawk, :json_api, :controller, :index, :stop], _measurements,
+                     %{action: :index, status: 200, result: :ok}}
   end
 
   def handle_telemetry(event, measurements, metadata, %{test_pid: test_pid}) do

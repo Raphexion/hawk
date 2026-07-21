@@ -18,8 +18,7 @@ defmodule Hawk.PolicyAssertionsTest do
   test "assert_read_matrix checks exact policy filters" do
     assert_read_matrix(ExamplePolicy, [
       {Authority.system(), :all},
-      {Authority.new(:teacher, 12, scopes: %{school_id: 7, teacher_id: 12}),
-       %{school_id: 7, teacher_id: 12}},
+      {Authority.new(:teacher, 12, scopes: %{school_id: 7, teacher_id: 12}), %{school_id: 7, teacher_id: 12}},
       {Authority.new(:teacher, 12, scopes: %{school_id: 7}), :none}
     ])
   end

@@ -25,9 +25,7 @@ defmodule Hawk.LiveViewPageTest do
 
   test "assign_page composes one resource and related collections into one LiveView socket" do
     authority =
-      Authority.new(:teacher, @teacher_id,
-        scopes: %{school_id: @school_id, teacher_id: @teacher_id}
-      )
+      Authority.new(:teacher, @teacher_id, scopes: %{school_id: @school_id, teacher_id: @teacher_id})
 
     course = %Course{
       id: @course_id,
@@ -108,9 +106,7 @@ defmodule Hawk.LiveViewPageTest do
     Process.put({Videdal.Repo, :all_results, Videdal.Grade}, [grade])
 
     socket =
-      CourseWorkspaceLive.assign_page(socket(), authority,
-        grades: {:all, filter: %{course_id: @course_id}}
-      )
+      CourseWorkspaceLive.assign_page(socket(), authority, grades: {:all, filter: %{course_id: @course_id}})
 
     {:noreply, socket} =
       CourseWorkspaceLive.handle_event(
@@ -131,9 +127,7 @@ defmodule Hawk.LiveViewPageTest do
     authority = Authority.system()
 
     socket =
-      CourseWorkspaceLive.assign_page(socket(), authority,
-        course: {:one, filter: %{id: Videdal.other_course_id()}}
-      )
+      CourseWorkspaceLive.assign_page(socket(), authority, course: {:one, filter: %{id: Videdal.other_course_id()}})
 
     assert_raise ArgumentError, ~r/resource :grades is not active/, fn ->
       CourseWorkspaceLive.handle_event(

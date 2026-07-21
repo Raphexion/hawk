@@ -38,8 +38,7 @@ defmodule Hawk.Policy do
     filter = opts |> Keyword.get(:filter, %{}) |> literal_option!(__CALLER__)
 
     quote do
-      @hawk_policy_read_roles {unquote(role),
-                               {:scoped, unquote(scopes), unquote(Macro.escape(filter))}}
+      @hawk_policy_read_roles {unquote(role), {:scoped, unquote(scopes), unquote(Macro.escape(filter))}}
     end
   end
 

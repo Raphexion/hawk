@@ -497,9 +497,7 @@ defmodule Hawk.JsonApiControllerCase do
         :ok
 
       {:error, changeset} ->
-        ExUnit.Assertions.flunk(
-          "failed to insert JSON:API controller sample: #{inspect(changeset)}"
-        )
+        ExUnit.Assertions.flunk("failed to insert JSON:API controller sample: #{inspect(changeset)}")
     end
   end
 

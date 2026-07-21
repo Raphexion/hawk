@@ -36,9 +36,7 @@ defmodule Hawk.JsonApiRouterTest.ReadOnlyRouter do
   use Hawk.JsonApiRouterTest.FakeRouter
   import Hawk.JsonApi.Router
 
-  hawk_json_api(Videdal.CourseCatalog, Videdal.Controllers.CourseCatalogController,
-    path_prefix: "/api/v1"
-  )
+  hawk_json_api(Videdal.CourseCatalog, Videdal.Controllers.CourseCatalogController, path_prefix: "/api/v1")
 end
 
 defmodule Hawk.JsonApiRouterTest.HiddenRouter do
@@ -60,25 +58,20 @@ defmodule Hawk.JsonApiRouterTest do
              {:get, "/courses/:id", Videdal.Controllers.CourseRoutesController, :show},
              {:patch, "/courses/:id", Videdal.Controllers.CourseRoutesController, :update},
              {:delete, "/courses/:id", Videdal.Controllers.CourseRoutesController, :delete},
-             {:post, "/courses/:id/-actions/:action", Videdal.Controllers.CourseRoutesController,
-              :action},
-             {:get, "/courses/:id/relationships/:relationship",
-              Videdal.Controllers.CourseRoutesController, :relationship},
-             {:get, "/courses/:id/:relationship", Videdal.Controllers.CourseRoutesController,
-              :related}
+             {:post, "/courses/:id/-actions/:action", Videdal.Controllers.CourseRoutesController, :action},
+             {:get, "/courses/:id/relationships/:relationship", Videdal.Controllers.CourseRoutesController,
+              :relationship},
+             {:get, "/courses/:id/:relationship", Videdal.Controllers.CourseRoutesController, :related}
            ]
   end
 
   test "router macro omits unsupported read-only routes and applies prefixes" do
     assert ReadOnlyRouter.__fake_routes__() == [
-             {:get, "/api/v1/course-catalog", Videdal.Controllers.CourseCatalogController,
-              :index},
-             {:get, "/api/v1/course-catalog/:id", Videdal.Controllers.CourseCatalogController,
-              :show},
+             {:get, "/api/v1/course-catalog", Videdal.Controllers.CourseCatalogController, :index},
+             {:get, "/api/v1/course-catalog/:id", Videdal.Controllers.CourseCatalogController, :show},
              {:get, "/api/v1/course-catalog/:id/relationships/:relationship",
               Videdal.Controllers.CourseCatalogController, :relationship},
-             {:get, "/api/v1/course-catalog/:id/:relationship",
-              Videdal.Controllers.CourseCatalogController, :related}
+             {:get, "/api/v1/course-catalog/:id/:relationship", Videdal.Controllers.CourseCatalogController, :related}
            ]
   end
 

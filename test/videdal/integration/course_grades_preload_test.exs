@@ -27,9 +27,7 @@ defmodule Videdal.Integration.CourseGradesPreloadTest do
 
   test "student course preloads include only that student's grades without N+1", data do
     authority =
-      Authority.new(:student, data.ada.id,
-        scopes: %{school_id: data.school.id, student_id: data.ada.id}
-      )
+      Authority.new(:student, data.ada.id, scopes: %{school_id: data.school.id, student_id: data.ada.id})
 
     {courses, query_count} =
       count_queries(fn ->
@@ -50,9 +48,7 @@ defmodule Videdal.Integration.CourseGradesPreloadTest do
 
   test "teacher course preloads include all grades for that teacher's courses", data do
     authority =
-      Authority.new(:teacher, data.teacher.id,
-        scopes: %{school_id: data.school.id, teacher_id: data.teacher.id}
-      )
+      Authority.new(:teacher, data.teacher.id, scopes: %{school_id: data.school.id, teacher_id: data.teacher.id})
 
     {courses, query_count} =
       count_queries(fn ->

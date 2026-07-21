@@ -25,9 +25,7 @@ defmodule Videdal.Students.Reader do
   end
 
   attach :parent_student, when_filter: [:parent_id] do
-    join(query, :inner, [root: student], parent_student in assoc(student, :parent_students),
-      as: :parent_student
-    )
+    join(query, :inner, [root: student], parent_student in assoc(student, :parent_students), as: :parent_student)
   end
 
   filter :parent_id do

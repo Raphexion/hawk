@@ -25,9 +25,7 @@ defmodule Hawk.JsonApiControllerCaseTest do
     %{
       principal: Hawk.Authority.new(:principal, Videdal.principal_id()),
       school_admin:
-        Hawk.Authority.new(:school_admin, Videdal.school_admin_id(),
-          scopes: %{school_id: Videdal.school_id()}
-        ),
+        Hawk.Authority.new(:school_admin, Videdal.school_admin_id(), scopes: %{school_id: Videdal.school_id()}),
       teacher:
         Hawk.Authority.new(:teacher, Videdal.teacher_id(),
           scopes: %{school_id: Videdal.school_id(), teacher_id: Videdal.teacher_id()}

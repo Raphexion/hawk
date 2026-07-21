@@ -158,8 +158,7 @@ defmodule Hawk.ControllerBoundaryPathsTest do
                  status: "404",
                  code: "action_not_found",
                  title: "Not found",
-                 detail:
-                   "open-registration is not a supported action for missing_handler_resource"
+                 detail: "open-registration is not a supported action for missing_handler_resource"
                }
              ]
            }
@@ -168,10 +167,7 @@ defmodule Hawk.ControllerBoundaryPathsTest do
   defp conn do
     %{
       assigns: %{
-        authority:
-          Hawk.Authority.new(:school_admin, Videdal.school_admin_id(),
-            scopes: %{school_id: @school_id}
-          )
+        authority: Hawk.Authority.new(:school_admin, Videdal.school_admin_id(), scopes: %{school_id: @school_id})
       },
       status: nil,
       resp_body: nil

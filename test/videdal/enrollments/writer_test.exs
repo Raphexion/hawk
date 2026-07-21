@@ -15,8 +15,7 @@ defmodule Videdal.Enrollments.WriterTest do
     authority =
       Authority.new(:school_admin, Videdal.school_admin_id(), scopes: %{school_id: @school_id})
 
-    assert {:ok,
-            %Enrollment{school_id: @school_id, student_id: @student_id, course_id: @course_id}} =
+    assert {:ok, %Enrollment{school_id: @school_id, student_id: @student_id, course_id: @course_id}} =
              Enrollments.create(
                %{school_id: @school_id, student_id: @student_id, course_id: @course_id},
                authority
@@ -76,9 +75,7 @@ defmodule Videdal.Enrollments.WriterTest do
     }
 
     authority =
-      Authority.new(:student, @student_id,
-        scopes: %{school_id: @school_id, student_id: @student_id}
-      )
+      Authority.new(:student, @student_id, scopes: %{school_id: @school_id, student_id: @student_id})
 
     assert {:not_authorized, _context} = Enrollments.delete(enrollment, authority)
     refute_received {:videdal_repo, :delete, _enrollment}

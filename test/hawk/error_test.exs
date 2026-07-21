@@ -66,9 +66,7 @@ defmodule Hawk.ErrorTest do
 
   test "invalid results convert to JSON:API source pointers" do
     authority =
-      Authority.new(:teacher, @teacher_id,
-        scopes: %{school_id: @school_id, teacher_id: @teacher_id}
-      )
+      Authority.new(:teacher, @teacher_id, scopes: %{school_id: @school_id, teacher_id: @teacher_id})
 
     result =
       Grades.create(%{score: 12, school_id: @school_id, student_id: @student_id}, authority)
@@ -82,9 +80,7 @@ defmodule Hawk.ErrorTest do
 
   test "invalid results convert to LiveView-friendly errors" do
     authority =
-      Authority.new(:teacher, @teacher_id,
-        scopes: %{school_id: @school_id, teacher_id: @teacher_id}
-      )
+      Authority.new(:teacher, @teacher_id, scopes: %{school_id: @school_id, teacher_id: @teacher_id})
 
     result =
       Grades.create(%{score: 12, school_id: @school_id, student_id: @student_id}, authority)

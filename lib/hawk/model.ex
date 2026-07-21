@@ -95,8 +95,7 @@ defmodule Hawk.Model do
   end
 
   defp rewrite_expressions(expressions, caller) do
-    Enum.map_reduce(expressions, %{policies: [], readers: [], json_api: nil}, fn expression,
-                                                                                 metadata ->
+    Enum.map_reduce(expressions, %{policies: [], readers: [], json_api: nil}, fn expression, metadata ->
       rewrite_expression(expression, metadata, caller)
     end)
   end

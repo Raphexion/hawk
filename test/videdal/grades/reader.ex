@@ -21,9 +21,7 @@ defmodule Videdal.Grades.Reader do
   end
 
   attach :parent_student, when_filter: [:parent_id] do
-    join(query, :inner, [student: student], parent_student in assoc(student, :parent_students),
-      as: :parent_student
-    )
+    join(query, :inner, [student: student], parent_student in assoc(student, :parent_students), as: :parent_student)
   end
 
   attach :course, when_filter: [:course_title, :teacher_id] do

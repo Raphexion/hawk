@@ -17,9 +17,7 @@ defmodule Videdal.Integration.NestedIncludePolicyTest.StudentReader do
   end
 
   attach :parent_student, when_filter: [:parent_id] do
-    join(query, :inner, [root: student], parent_student in assoc(student, :parent_students),
-      as: :parent_student
-    )
+    join(query, :inner, [root: student], parent_student in assoc(student, :parent_students), as: :parent_student)
   end
 
   filter :parent_id do
@@ -53,9 +51,7 @@ defmodule Videdal.Integration.NestedIncludePolicyTest.GradeReader do
   end
 
   attach :parent_student, when_filter: [:parent_id] do
-    join(query, :inner, [student: student], parent_student in assoc(student, :parent_students),
-      as: :parent_student
-    )
+    join(query, :inner, [student: student], parent_student in assoc(student, :parent_students), as: :parent_student)
   end
 
   filter :teacher_id do
@@ -100,9 +96,7 @@ defmodule Videdal.Integration.NestedIncludePolicyTest do
 
   test "nested includes are constant-query and constrained by every resource policy", data do
     authority =
-      Authority.new(:teacher, data.teacher.id,
-        scopes: %{school_id: data.school.id, teacher_id: data.teacher.id}
-      )
+      Authority.new(:teacher, data.teacher.id, scopes: %{school_id: data.school.id, teacher_id: data.teacher.id})
 
     {courses, query_count} =
       count_queries(fn ->

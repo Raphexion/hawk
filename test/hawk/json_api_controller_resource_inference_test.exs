@@ -13,9 +13,7 @@ end
 
 defmodule Hawk.JsonApiControllerResourceInferenceTest.Courses.Reader do
   def one(opts),
-    do:
-      {:ok,
-       %Hawk.JsonApiControllerResourceInferenceTest.Course{id: opts[:filter].id, title: "Math"}}
+    do: {:ok, %Hawk.JsonApiControllerResourceInferenceTest.Course{id: opts[:filter].id, title: "Math"}}
 
   def one!(_opts), do: raise("not used")
 

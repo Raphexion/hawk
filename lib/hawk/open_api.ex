@@ -105,9 +105,7 @@ defmodule Hawk.OpenApi do
     do: write_operation(resource, :creatable, "Create #{resource_name(resource)}", 201)
 
   defp route_operation(resource, %{action: :update}) do
-    write_operation(resource, :updatable, "Update #{resource_name(resource)}", 200,
-      parameters: [id_parameter()]
-    )
+    write_operation(resource, :updatable, "Update #{resource_name(resource)}", 200, parameters: [id_parameter()])
   end
 
   defp route_operation(resource, %{action: :delete}), do: delete_operation(resource)
@@ -265,8 +263,7 @@ defmodule Hawk.OpenApi do
 
   defp responses(_resource, success_status, success_schema) do
     %{
-      Integer.to_string(success_status) =>
-        json_api_content(success_description(success_status), success_schema),
+      Integer.to_string(success_status) => json_api_content(success_description(success_status), success_schema),
       "400" => json_api_content("Invalid JSON:API query parameters", error_document_schema()),
       "403" => json_api_content("Forbidden by Hawk policy", error_document_schema()),
       "404" => json_api_content("Resource not found", error_document_schema()),

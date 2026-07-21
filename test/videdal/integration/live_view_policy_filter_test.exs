@@ -33,9 +33,7 @@ defmodule Videdal.Integration.LiveViewPolicyFilterTest do
 
   test "LiveView filter params narrow without widening policy visibility", data do
     authority =
-      Authority.new(:teacher, data.teacher.id,
-        scopes: %{school_id: data.school.id, teacher_id: data.teacher.id}
-      )
+      Authority.new(:teacher, data.teacher.id, scopes: %{school_id: data.school.id, teacher_id: data.teacher.id})
 
     socket =
       PolicyCheckedCoursesLive.assign_index(socket(), authority,
@@ -47,9 +45,7 @@ defmodule Videdal.Integration.LiveViewPolicyFilterTest do
 
   test "LiveView filter params still return visible rows when they match policy", data do
     authority =
-      Authority.new(:teacher, data.teacher.id,
-        scopes: %{school_id: data.school.id, teacher_id: data.teacher.id}
-      )
+      Authority.new(:teacher, data.teacher.id, scopes: %{school_id: data.school.id, teacher_id: data.teacher.id})
 
     socket =
       PolicyCheckedCoursesLive.assign_index(socket(), authority,

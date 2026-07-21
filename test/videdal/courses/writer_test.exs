@@ -58,9 +58,7 @@ defmodule Videdal.Courses.WriterTest do
     course = %Course{id: @course_id, school_id: @school_id, teacher_id: @teacher_id}
 
     authority =
-      Authority.new(:teacher, @teacher_id,
-        scopes: %{school_id: @school_id, teacher_id: @teacher_id}
-      )
+      Authority.new(:teacher, @teacher_id, scopes: %{school_id: @school_id, teacher_id: @teacher_id})
 
     assert {:not_authorized, _context} = Courses.delete(course, authority)
     refute_received {:videdal_repo, :delete, _course}

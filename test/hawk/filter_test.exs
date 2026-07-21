@@ -62,8 +62,7 @@ defmodule Hawk.FilterTest do
 
     test "preserves non-map boolean structure" do
       assert Filter.and({:or, %{teacher_id: 1}, %{teacher_id: 2}}, %{active: true}) ==
-               {:and, {:or, %{teacher_id: {:eq, 1}}, %{teacher_id: {:eq, 2}}},
-                %{active: {:eq, true}}}
+               {:and, {:or, %{teacher_id: {:eq, 1}}, %{teacher_id: {:eq, 2}}}, %{active: {:eq, true}}}
     end
   end
 
@@ -84,8 +83,7 @@ defmodule Hawk.FilterTest do
   describe "keys/1" do
     test "extracts keys recursively through boolean nodes" do
       filter =
-        {:and, %{school_id: 1, active: true},
-         {:or, %{teacher_id: 2}, {:and, %{course_id: 3}, :none}}}
+        {:and, %{school_id: 1, active: true}, {:or, %{teacher_id: 2}, {:and, %{course_id: 3}, :none}}}
 
       assert Filter.keys(filter) == MapSet.new([:school_id, :active, :teacher_id, :course_id])
     end

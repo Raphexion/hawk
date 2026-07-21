@@ -12,9 +12,7 @@ defmodule Videdal.Grades.WriterTest do
 
   test "teachers can create grades for their school" do
     authority =
-      Authority.new(:teacher, @teacher_id,
-        scopes: %{school_id: @school_id, teacher_id: @teacher_id}
-      )
+      Authority.new(:teacher, @teacher_id, scopes: %{school_id: @school_id, teacher_id: @teacher_id})
 
     assert {:ok,
             %Grade{
@@ -36,9 +34,7 @@ defmodule Videdal.Grades.WriterTest do
 
   test "students can read but cannot create grades" do
     authority =
-      Authority.new(:student, @student_id,
-        scopes: %{school_id: @school_id, student_id: @student_id}
-      )
+      Authority.new(:student, @student_id, scopes: %{school_id: @school_id, student_id: @student_id})
 
     assert {:not_authorized, context} =
              Grades.create(
@@ -77,9 +73,7 @@ defmodule Videdal.Grades.WriterTest do
 
   test "create rejects missing required fields before persistence" do
     authority =
-      Authority.new(:teacher, @teacher_id,
-        scopes: %{school_id: @school_id, teacher_id: @teacher_id}
-      )
+      Authority.new(:teacher, @teacher_id, scopes: %{school_id: @school_id, teacher_id: @teacher_id})
 
     assert {:invalid, context} =
              Grades.create(
@@ -101,9 +95,7 @@ defmodule Videdal.Grades.WriterTest do
     }
 
     authority =
-      Authority.new(:teacher, @teacher_id,
-        scopes: %{school_id: @school_id, teacher_id: @teacher_id}
-      )
+      Authority.new(:teacher, @teacher_id, scopes: %{school_id: @school_id, teacher_id: @teacher_id})
 
     assert {:ok, %Grade{id: @grade_id, score: 12}} = Grades.update(grade, %{score: 12}, authority)
 
@@ -121,9 +113,7 @@ defmodule Videdal.Grades.WriterTest do
     }
 
     authority =
-      Authority.new(:student, @student_id,
-        scopes: %{school_id: @school_id, student_id: @student_id}
-      )
+      Authority.new(:student, @student_id, scopes: %{school_id: @school_id, student_id: @student_id})
 
     assert {:not_authorized, _context} = Grades.update(grade, %{score: 12}, authority)
     refute_received {:videdal_repo, :update, _changeset}
@@ -139,9 +129,7 @@ defmodule Videdal.Grades.WriterTest do
     }
 
     authority =
-      Authority.new(:student, @student_id,
-        scopes: %{school_id: @school_id, student_id: @student_id}
-      )
+      Authority.new(:student, @student_id, scopes: %{school_id: @school_id, student_id: @student_id})
 
     assert {:not_authorized, _context} = Grades.delete(grade, authority)
     refute_received {:videdal_repo, :delete, _grade}

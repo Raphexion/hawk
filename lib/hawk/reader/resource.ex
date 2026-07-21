@@ -94,8 +94,7 @@ defmodule Hawk.Reader.Resource do
     rewritten_block = rewrite_query_var(block, query_var)
 
     quote do
-      @hawk_reader_join_rules {unquote(name), unquote(when_filter), unquote(when_sort),
-                               unquote(handler_name)}
+      @hawk_reader_join_rules {unquote(name), unquote(when_filter), unquote(when_sort), unquote(handler_name)}
 
       defp unquote(handler_name)(unquote(query_var)) do
         unquote(rewritten_block)

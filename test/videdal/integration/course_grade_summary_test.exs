@@ -24,9 +24,7 @@ defmodule Videdal.Integration.CourseGradeSummaryTest do
 
   test "course grade summaries are readable by everyone", data do
     student =
-      Authority.new(:student, data.student.id,
-        scopes: %{school_id: data.school.id, student_id: data.student.id}
-      )
+      Authority.new(:student, data.student.id, scopes: %{school_id: data.school.id, student_id: data.student.id})
 
     unknown = Authority.new(:unknown, 1)
 
