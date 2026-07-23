@@ -11,7 +11,16 @@ defmodule Hawk.Model do
   (`MyApp.Courses.JsonApi`), not on the model. `Hawk.Model` only generates the
   resource convention (`__hawk_resource__/0`) and association metadata used by
   `Hawk.JsonApi.Schema` to discover the adapter.
+
+  Association resource metadata (`:policy`, `:reader`, `:resource` opts on
+  `belongs_to`/`has_many`/`many_to_many`) is declared at the association site
+  so Hawk readers preload through the associated resource reader instead of
+  duplicating preload query logic in policies. When no override is given, the
+  resource module is inferred by `Hawk.Resource.Convention` from the schema
+  name.
   """
+
+  alias Hawk.Resource.Convention
 
   defmacro __using__(_opts) do
     quote do
@@ -121,60 +130,18 @@ defmodule Hawk.Model do
     {{kind, meta, [name, schema, opts]}, metadata}
   end
 
-  defp expand_resource(nil, schema, caller), do: convention_resource(schema, caller)
+  defp expand_resource(nil, schema, caller) do
+    schema
+    |> resolve_schema_module(caller)
+    |> Convention.resource_module()
+  end
 
   defp expand_resource(resource, _schema, caller), do: Macro.expand(resource, caller)
 
-  defp convention_resource({:__aliases__, _meta, parts}, caller) do
-    parts
-    |> Module.concat()
-    |> convention_resource(caller)
-  end
+  defp resolve_schema_module({:__aliases__, _meta, parts}, _caller), do: Module.concat(parts)
+  defp resolve_schema_module(module, caller), do: Macro.expand(module, caller)
 
-  defp convention_resource(module, caller) do
-    module
-    |> Macro.expand(caller)
-    |> convention_resource()
-  end
-
-  defp convention_resource(module) do
-    parts = Module.split(module)
-    resource = parts |> List.last() |> pluralize_resource_name()
-    namespace = Enum.drop(parts, -1)
-
-    if List.last(namespace) == resource do
-      Module.concat(namespace)
-    else
-      namespace
-      |> Kernel.++([resource])
-      |> Module.concat()
-    end
-  end
-
-  defp pluralize_resource_name(name) do
-    cond do
-      String.ends_with?(name, "sis") ->
-        String.replace_suffix(name, "sis", "ses")
-
-      String.ends_with?(name, "y") and not vowel_before_suffix?(name, "y") ->
-        String.replace_suffix(name, "y", "ies")
-
-      Regex.match?(~r/(s|x|z|ch|sh)$/, name) ->
-        name <> "es"
-
-      true ->
-        name <> "s"
-    end
-  end
-
-  defp vowel_before_suffix?(name, suffix) do
-    base = String.replace_suffix(name, suffix, "")
-
-    case String.last(base) do
-      nil -> false
-      char -> char in ["a", "e", "i", "o", "u"]
-    end
-  end
+  defp convention_resource(module), do: Convention.resource_module(module)
 
   defp put_module_metadata(metadata, field, kind, name, module, caller) do
     module = Macro.expand(module, caller)
