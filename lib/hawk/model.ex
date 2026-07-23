@@ -6,17 +6,21 @@ defmodule Hawk.Model do
   association resource metadata at the association site. Hawk readers can then
   preload through the associated resource reader instead of duplicating preload
   query logic in policies.
+
+  The external JSON:API shape of a resource lives in its sibling adapter
+  (`MyApp.Courses.JsonApi`), not on the model. `Hawk.Model` only generates the
+  resource convention (`__hawk_resource__/0`) and association metadata used by
+  `Hawk.JsonApi.Schema` to discover the adapter.
   """
 
   defmacro __using__(_opts) do
     quote do
       use Ecto.Schema
 
-      import Hawk.Model, only: [model: 2, json_api: 1]
+      import Hawk.Model, only: [model: 2]
 
       Module.register_attribute(__MODULE__, :hawk_association_policies, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_association_readers, accumulate: true)
-      Module.register_attribute(__MODULE__, :hawk_json_api, accumulate: false)
       @before_compile Hawk.Model
     end
   end
@@ -37,24 +41,14 @@ defmodule Hawk.Model do
     end
   end
 
-  defmacro json_api(do: block) do
-    metadata = parse_json_api(block, __CALLER__)
-
-    quote do
-      @hawk_json_api unquote(Macro.escape(metadata))
-    end
-  end
-
   defmacro __before_compile__(env) do
     policies = env.module |> Module.get_attribute(:hawk_association_policies) |> Enum.reverse()
     readers = env.module |> Module.get_attribute(:hawk_association_readers) |> Enum.reverse()
 
     resource = convention_resource(env.module)
-    json_api = Module.get_attribute(env.module, :hawk_json_api) || default_json_api(resource)
 
     quote do
       def __hawk_resource__, do: unquote(resource)
-      def __hawk_json_api__, do: unquote(Macro.escape(json_api))
 
       unquote(quote_fetch_function(:__hawk_association_policy__, policies))
       unquote(quote_fetch_function(:__hawk_association_reader__, readers))
@@ -95,13 +89,9 @@ defmodule Hawk.Model do
   end
 
   defp rewrite_expressions(expressions, caller) do
-    Enum.map_reduce(expressions, %{policies: [], readers: [], json_api: nil}, fn expression, metadata ->
+    Enum.map_reduce(expressions, %{policies: [], readers: []}, fn expression, metadata ->
       rewrite_expression(expression, metadata, caller)
     end)
-  end
-
-  defp rewrite_expression({:json_api, _meta, [[do: block]]}, metadata, caller) do
-    {nil, %{metadata | json_api: parse_json_api(block, caller)}}
   end
 
   defp rewrite_expression({kind, meta, [name, schema]}, metadata, caller)
@@ -129,87 +119,6 @@ defmodule Hawk.Model do
     metadata = put_module_metadata(metadata, :readers, kind, name, reader, caller)
 
     {{kind, meta, [name, schema, opts]}, metadata}
-  end
-
-  defp parse_json_api(block, caller) do
-    block
-    |> block_expressions()
-    |> Enum.reduce(
-      %{attributes: %{}, relationships: %{}, creatable: [], updatable: []},
-      fn expression, acc ->
-        parse_json_api_expression(expression, acc, caller)
-      end
-    )
-  end
-
-  defp block_expressions({:__block__, _meta, expressions}), do: expressions
-  defp block_expressions(expression), do: [expression]
-
-  defp parse_json_api_expression({:type, _meta, [type]}, acc, caller) do
-    Map.put(acc, :type, literal!(type, caller))
-  end
-
-  defp parse_json_api_expression({:doc, _meta, [doc]}, acc, caller) do
-    Map.put(acc, :doc, literal!(doc, caller))
-  end
-
-  defp parse_json_api_expression({:tag, _meta, [tag]}, acc, caller) do
-    Map.put(acc, :tag, literal!(tag, caller))
-  end
-
-  defp parse_json_api_expression({:group, _meta, [group]}, acc, caller) do
-    Map.put(acc, :group, literal!(group, caller))
-  end
-
-  defp parse_json_api_expression({:attribute, _meta, [name, opts]}, acc, caller)
-       when is_list(opts) do
-    put_in(acc, [:attributes, name], field_doc(opts, caller))
-  end
-
-  defp parse_json_api_expression({:relationship, _meta, [name, opts]}, acc, caller)
-       when is_list(opts) do
-    put_in(acc, [:relationships, name], field_doc(opts, caller))
-  end
-
-  defp parse_json_api_expression({:attributes, _meta, [names]}, acc, caller) do
-    names = literal!(names, caller)
-    attributes = Map.merge(Map.new(names, &{&1, %{}}), acc.attributes)
-    %{acc | attributes: attributes}
-  end
-
-  defp parse_json_api_expression({:relationships, _meta, [names]}, acc, caller) do
-    names = literal!(names, caller)
-    relationships = Map.merge(Map.new(names, &{&1, %{}}), acc.relationships)
-    %{acc | relationships: relationships}
-  end
-
-  defp parse_json_api_expression({:creatable, _meta, [fields]}, acc, caller) do
-    %{acc | creatable: literal!(fields, caller)}
-  end
-
-  defp parse_json_api_expression({:updatable, _meta, [fields]}, acc, caller) do
-    %{acc | updatable: literal!(fields, caller)}
-  end
-
-  defp field_doc(opts, caller) do
-    opts
-    |> Keyword.take([:doc, :example, :source, :resolver])
-    |> Map.new(fn {key, value} -> {key, literal!(value, caller)} end)
-  end
-
-  defp literal!(quoted, caller) do
-    {value, _binding} = Code.eval_quoted(quoted, [], caller)
-    value
-  end
-
-  defp default_json_api(resource) do
-    %{
-      type: resource |> Module.split() |> List.last() |> Macro.underscore(),
-      attributes: %{},
-      relationships: %{},
-      creatable: [],
-      updatable: []
-    }
   end
 
   defp expand_resource(nil, schema, caller), do: convention_resource(schema, caller)

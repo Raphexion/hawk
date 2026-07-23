@@ -5,18 +5,20 @@ defmodule Hawk.JsonApiAttributeTest.LocalizedPost do
     field(:slug, :string)
     field(:translations, :map)
   end
+end
 
-  json_api do
-    type("localized_posts")
+defmodule Hawk.JsonApiAttributeTest.LocalizedPosts.JsonApi do
+  use Hawk.JsonApi.Resource
 
-    attribute(:slug, doc: "Stable slug.")
-    attribute(:slug_copy, source: :slug, doc: "Source-backed copy of the slug.")
+  type("localized_posts")
 
-    attribute(:title,
-      resolver: &Hawk.JsonApiAttributeTest.localized_title/2,
-      doc: "Localized title."
-    )
-  end
+  attribute(:slug, doc: "Stable slug.")
+  attribute(:slug_copy, source: :slug, doc: "Source-backed copy of the slug.")
+
+  attribute(:title,
+    resolver: &Hawk.JsonApiAttributeTest.localized_title/2,
+    doc: "Localized title."
+  )
 end
 
 defmodule Hawk.JsonApiAttributeTest.LocalizedPosts do
@@ -73,7 +75,8 @@ defmodule Hawk.JsonApiAttributeTest do
   end
 
   test "resource contracts accept computed JSON:API attributes" do
-    assert Hawk.ResourceContract.validate_model!(Hawk.JsonApiAttributeTest.LocalizedPost)
+    assert Hawk.ResourceContract.validate_model!(Hawk.JsonApiAttributeTest.LocalizedPost) ==
+             Hawk.JsonApi.Schema.metadata(Hawk.JsonApiAttributeTest.LocalizedPost)
   end
 
   test "controllers pass request locale into JSON:API attribute resolvers" do

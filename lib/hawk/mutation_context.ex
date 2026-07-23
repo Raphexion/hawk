@@ -149,17 +149,10 @@ defmodule Hawk.MutationContext do
   end
 
   defp resource_name(%module{}) do
-    if function_exported?(module, :__hawk_json_api__, 0) do
-      module.__hawk_json_api__()
-      |> Map.fetch!(:type)
-      |> singular_resource_type()
-    else
-      module
-      |> Module.split()
-      |> List.last()
-      |> Macro.underscore()
-      |> String.replace("_", " ")
-    end
+    module
+    |> Hawk.JsonApi.Schema.metadata()
+    |> Map.fetch!(:type)
+    |> singular_resource_type()
   end
 
   defp singular_resource_type(type) do

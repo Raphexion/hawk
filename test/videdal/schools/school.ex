@@ -8,17 +8,4 @@ defmodule Videdal.School do
   model "schools" do
     field(:name, :string)
   end
-
-  json_api do
-    type("schools")
-    doc("A school in the Videdal example domain.")
-
-    attribute(:name,
-      doc: "Public school name shown to students, parents, and staff.",
-      example: "Videdal Skole"
-    )
-
-    creatable([:name])
-    updatable([:name])
-  end
 end

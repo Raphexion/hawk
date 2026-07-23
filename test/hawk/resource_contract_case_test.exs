@@ -10,14 +10,24 @@ defmodule Hawk.ResourceContractCaseTest.BadModel do
   model "bad_models" do
     field(:name, :string)
   end
+end
 
-  json_api do
-    type("bad-models")
-    attribute(:missing, doc: "This field does not exist.")
-    relationship(:ghost, doc: "This association does not exist.")
-    creatable([:name, :ghost])
-    updatable([:missing])
-  end
+defmodule Hawk.ResourceContractCaseTest.BadModels.JsonApi do
+  use Hawk.JsonApi.Resource
+
+  type("bad-models")
+
+  attribute(:missing,
+    updatable: true,
+    doc: "This field does not exist."
+  )
+
+  attribute(:name, creatable: true)
+
+  relationship(:ghost,
+    creatable: true,
+    doc: "This association does not exist."
+  )
 end
 
 defmodule Hawk.ResourceContractCaseTest.BadResource.Reader do

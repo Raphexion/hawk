@@ -5,15 +5,25 @@ defmodule Hawk.OpenApiCycleTest.Node do
     field(:name, :string)
     belongs_to(:parent, Hawk.OpenApiCycleTest.Node)
   end
+end
 
-  json_api do
-    type("nodes")
-    doc("A self-referential node.")
-    attribute(:name, doc: "Node name.", example: "root")
-    relationship(:parent, doc: "Parent node.", example: %{type: "nodes", id: "1"})
-    creatable([:name, :parent])
-    updatable([:name, :parent])
-  end
+defmodule Hawk.OpenApiCycleTest.Nodes.JsonApi do
+  use Hawk.JsonApi.Resource
+
+  type("nodes")
+  doc("A self-referential node.")
+
+  attribute(:name,
+    writable: true,
+    doc: "Node name.",
+    example: "root"
+  )
+
+  relationship(:parent,
+    writable: true,
+    doc: "Parent node.",
+    example: %{type: "nodes", id: "1"}
+  )
 end
 
 defmodule Hawk.OpenApiCycleTest.Nodes do

@@ -19,27 +19,4 @@ defmodule Videdal.Parent do
       reader: Videdal.Students.Reader
     )
   end
-
-  json_api do
-    type("parents")
-    doc("A parent or guardian linked to one or more students.")
-
-    attribute(:name,
-      doc: "Parent display name.",
-      example: "Ada Parent"
-    )
-
-    relationship(:school,
-      doc: "The school this parent belongs to.",
-      example: %{type: "schools", id: "7"}
-    )
-
-    relationship(:students,
-      doc: "Students this parent or guardian can access through internal links.",
-      example: [%{type: "students", id: "8"}]
-    )
-
-    creatable([:name, :school])
-    updatable([:name, :school])
-  end
 end

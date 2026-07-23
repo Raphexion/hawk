@@ -151,20 +151,6 @@ defmodule Hawk.JsonApi.Controller do
     end
   end
 
-  defp json_api_opts(resource, model),
-    do: [json_api_by_model: %{model => json_api_metadata(resource, model)}]
-
-  defp json_api_metadata(resource, model) do
-    if Code.ensure_loaded?(resource) and function_exported?(resource, :__hawk_resource__, 1) do
-      case resource.__hawk_resource__(:json_api) do
-        false -> model.__hawk_json_api__()
-        json_api -> json_api.__hawk_json_api__()
-      end
-    else
-      model.__hawk_json_api__()
-    end
-  end
-
   def index(conn, resource, model, params, public? \\ false) do
     telemetry_span(conn, resource, model, :index, %{}, fn ->
       with_error_boundary(conn, fn ->
@@ -182,8 +168,7 @@ defmodule Hawk.JsonApi.Controller do
           Document.document(resource.all(opts),
             preloads: Keyword.get(opts, :preloads, []),
             context: Keyword.get(opts, :context, %{}),
-            page: Keyword.get(opts, :page),
-            json_api_by_model: %{model => json_api_metadata(resource, model)}
+            page: Keyword.get(opts, :page)
           )
         )
       end)
@@ -196,19 +181,19 @@ defmodule Hawk.JsonApi.Controller do
     end)
   end
 
-  defp do_show(conn, resource, model, id, public?) do
+  defp do_show(conn, resource, _model, id, public?) do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
       context = request_context(conn)
 
       case Request.member_id!(id) do
-        {:uuid, uuid} -> show_by_uuid(conn, resource, model, authority, context, uuid)
-        {:short_id, prefix} -> show_by_short_id(conn, resource, model, authority, context, prefix)
+        {:uuid, uuid} -> show_by_uuid(conn, resource, authority, context, uuid)
+        {:short_id, prefix} -> show_by_short_id(conn, resource, authority, context, prefix)
       end
     end)
   end
 
-  defp show_by_uuid(conn, resource, root_model, authority, context, uuid) do
+  defp show_by_uuid(conn, resource, authority, context, uuid) do
     case resource.one(authority: authority, context: context, filter: %{id: uuid}) do
       {:ok, model} ->
         json(
@@ -216,8 +201,7 @@ defmodule Hawk.JsonApi.Controller do
           200,
           Document.document(model,
             context: request_context(conn),
-            links: true,
-            json_api_by_model: %{root_model => json_api_metadata(resource, root_model)}
+            links: true
           )
         )
 
@@ -226,7 +210,7 @@ defmodule Hawk.JsonApi.Controller do
     end
   end
 
-  defp show_by_short_id(conn, resource, root_model, authority, context, prefix) do
+  defp show_by_short_id(conn, resource, authority, context, prefix) do
     case resource.all(
            authority: authority,
            context: context,
@@ -239,8 +223,7 @@ defmodule Hawk.JsonApi.Controller do
           200,
           Document.document(model,
             context: request_context(conn),
-            links: true,
-            json_api_by_model: %{root_model => json_api_metadata(resource, root_model)}
+            links: true
           )
         )
 
@@ -259,11 +242,10 @@ defmodule Hawk.JsonApi.Controller do
       with_error_boundary(conn, fn ->
         authority = authority!(conn, public?)
 
-        json_api_opts = json_api_opts(resource, model)
-        Request.validate_document!(params, model, :creatable, json_api_opts)
+        Request.validate_document!(params, model, :creatable)
 
         params
-        |> Request.attributes(model, :creatable, json_api_opts)
+        |> Request.attributes(model, :creatable)
         |> resource.create(authority)
         |> respond(conn, resource, model, 201)
       end)
@@ -283,11 +265,10 @@ defmodule Hawk.JsonApi.Controller do
 
       case resource.one(authority: authority, context: context, filter: %{id: normalize_id(id)}) do
         {:ok, existing} ->
-          json_api_opts = json_api_opts(resource, model)
-          Request.validate_document!(params, model, :updatable, json_api_opts)
+            Request.validate_document!(params, model, :updatable)
 
           params
-          |> Request.attributes(model, :updatable, json_api_opts)
+          |> Request.attributes(model, :updatable)
           |> then(&resource.update(existing, &1, authority))
           |> respond(conn, resource, model, 200)
 
@@ -366,9 +347,8 @@ defmodule Hawk.JsonApi.Controller do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
       context = request_context(conn)
-      json_api_opts = json_api_opts(resource, model)
 
-      relationship = Schema.relationship_key!(model, relationship_name, json_api_opts)
+      relationship = Schema.relationship_key!(model, relationship_name)
       association = model.__schema__(:association, relationship)
       preloads = if match?(%{cardinality: :many}, association), do: [relationship], else: []
 
@@ -382,7 +362,7 @@ defmodule Hawk.JsonApi.Controller do
           json(
             conn,
             200,
-            Document.relationship_document(loaded, relationship_name, json_api_opts)
+            Document.relationship_document(loaded, relationship_name)
           )
 
         :not_found ->
@@ -409,8 +389,7 @@ defmodule Hawk.JsonApi.Controller do
       context = request_context(conn)
 
       relationship =
-        Schema.relationship_key!(model, relationship_name,
-          json_api_by_model: %{model => json_api_metadata(resource, model)}
+        Schema.relationship_key!(model, relationship_name
         )
 
       case resource.one(
@@ -423,10 +402,7 @@ defmodule Hawk.JsonApi.Controller do
           json(
             conn,
             200,
-            Document.related_document(model, relationship_name,
-              json_api_by_model: %{
-                model_module(model) => json_api_metadata(resource, model_module(model))
-              }
+            Document.related_document(model, relationship_name
             )
           )
 
@@ -488,13 +464,12 @@ defmodule Hawk.JsonApi.Controller do
     end
   end
 
-  defp respond({:ok, returned_model}, conn, resource, model, status) do
+  defp respond({:ok, returned_model}, conn, _resource, _model, status) do
     json(
       conn,
       status,
       Document.document(returned_model,
-        context: request_context(conn),
-        json_api_by_model: %{model => json_api_metadata(resource, model)}
+        context: request_context(conn)
       )
     )
   end

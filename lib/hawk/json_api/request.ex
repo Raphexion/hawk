@@ -69,10 +69,10 @@ defmodule Hawk.JsonApi.Request do
   @doc """
   Validates a create/update request document against the resource contract.
   """
-  def validate_document!(params, model, capability, opts \\ [])
+  def validate_document!(params, model, capability, _opts \\ [])
       when capability in [:creatable, :updatable] do
     data = request_data!(params)
-    json_api = Schema.metadata(model, opts)
+    json_api = Schema.metadata(model)
 
     validate_type!(data, json_api.type, capability)
     validate_attribute_members!(data, json_api, capability)
@@ -84,9 +84,9 @@ defmodule Hawk.JsonApi.Request do
   @doc """
   Extracts writer attrs from a create/update request document.
   """
-  def attributes(params, model, capability, opts \\ [])
+  def attributes(params, model, capability, _opts \\ [])
       when capability in [:creatable, :updatable] do
-    json_api = Schema.metadata(model, opts)
+    json_api = Schema.metadata(model)
     allowed = Map.fetch!(json_api, capability)
     data = Map.get(params, "data", %{})
 
@@ -183,7 +183,7 @@ defmodule Hawk.JsonApi.Request do
 
   defp validate_relationship_identifier!(model, name, %{"data" => data}) do
     association = model.__schema__(:association, name)
-    expected_type = association.related.__hawk_json_api__().type
+    expected_type = Schema.metadata(association.related).type
 
     case {association.cardinality, data} do
       {:one, nil} ->

@@ -15,7 +15,6 @@ defmodule Hawk.JsonApi.Document do
     * `:self` — overrides the collection `self` link.
     * `:context` — request context passed to attribute resolvers (e.g. locale).
     * `:page` — page map; when present, emits `meta.page`.
-    * `:json_api_by_model` — metadata override map forwarded to `Schema.metadata/2`.
   """
 
   alias Hawk.JsonApi.Schema
@@ -38,9 +37,9 @@ defmodule Hawk.JsonApi.Document do
   @doc """
   Renders a `GET /:id/relationships/:relationship` linkage document.
   """
-  def relationship_document(model, relationship, opts \\ [])
+  def relationship_document(model, relationship)
       when is_struct(model) and is_binary(relationship) do
-    json_api = Schema.metadata(model, opts)
+    json_api = Schema.metadata(model)
     {name, source} = Schema.relationship_mapping!(json_api, relationship)
     data = relationship_data(model, source, [source])
 
@@ -55,7 +54,7 @@ defmodule Hawk.JsonApi.Document do
   """
   def related_document(model, relationship, opts \\ [])
       when is_struct(model) and is_binary(relationship) do
-    {_name, source} = Schema.relationship_mapping!(Schema.metadata(model, opts), relationship)
+    {_name, source} = Schema.relationship_mapping!(Schema.metadata(model), relationship)
 
     case related_value(model, source) do
       models when is_list(models) ->
@@ -73,7 +72,7 @@ defmodule Hawk.JsonApi.Document do
   end
 
   defp resource_object(model, opts) do
-    json_api = Schema.metadata(model, opts)
+    json_api = Schema.metadata(model)
 
     %{
       type: json_api.type,

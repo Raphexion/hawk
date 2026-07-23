@@ -520,7 +520,7 @@ defmodule Hawk.JsonApiControllerCase do
   defp model_id(model), do: model |> Map.fetch!(:id) |> to_string()
 
   def mutation_params(model, capability) do
-    json_api = model.__hawk_json_api__()
+    json_api = Hawk.JsonApi.Schema.metadata(model)
     allowed = Map.fetch!(json_api, capability)
 
     %{

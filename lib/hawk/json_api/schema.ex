@@ -7,28 +7,25 @@ defmodule Hawk.JsonApi.Schema do
   resource look like from the outside?" — type, attributes, relationships, and
   writability — and maps external relationship names to schema associations.
 
-  Metadata is discovered from a `Hawk.Resource` facade's JSON:API adapter when
-  one exists, falling back to the model-level `__hawk_json_api__/0` declaration.
-  Callers may pass `json_api_by_model: %{model => metadata}` to avoid
-  re-resolving adapter metadata per record when rendering collections.
+  The sibling JSON:API adapter (`MyApp.Courses.JsonApi`) is the single source of
+  a resource's external shape. It is discovered by convention from the model's
+  resource: a generated `Hawk.Resource` facade exposes its adapter through
+  `__hawk_resource__(:json_api)`, and a hand-written facade resolves to the
+  conventional `Resource.JsonApi` module. When a resource has no JSON:API
+  surface (no adapter), a type-only default is returned so relationship type
+  resolution and error messages keep working.
   """
 
   @doc """
   Resolves JSON:API metadata for a model struct or module.
-
-  ## Options
-
-    * `:json_api_by_model` — a `%{model => metadata}` override map, used to
-      short-circuit adapter resolution when the caller has already resolved it.
   """
-  def metadata(source, opts \\ [])
+  def metadata(source)
 
-  def metadata(%module{}, opts), do: metadata(module, opts)
+  def metadata(%module{}), do: metadata(module)
 
-  def metadata(module, opts) when is_atom(module) do
-    opts
-    |> Keyword.get(:json_api_by_model, %{})
-    |> Map.get(module, discovered_metadata(module))
+  def metadata(module) when is_atom(module) do
+    module
+    |> discovered_metadata()
     |> normalize_metadata()
   end
 
@@ -78,29 +75,69 @@ defmodule Hawk.JsonApi.Schema do
   segment of a `GET /:id/:relationship` or `GET /:id/relationships/:relationship`
   request, returns the schema association to preload.
   """
-  def relationship_key!(model, relationship, opts \\ [])
+  def relationship_key!(model, relationship)
 
-  def relationship_key!(model, relationship, opts) when is_struct(model) do
-    relationship_key!(schema_module(model), relationship, opts)
+  def relationship_key!(model, relationship) when is_struct(model) do
+    relationship_key!(schema_module(model), relationship)
   end
 
-  def relationship_key!(model, relationship, opts) when is_atom(model) and is_binary(relationship) do
-    {_name, source} = relationship_mapping!(metadata(model, opts), relationship)
+  def relationship_key!(model, relationship) when is_atom(model) and is_binary(relationship) do
+    {_name, source} = relationship_mapping!(metadata(model), relationship)
     source
   end
 
   defp discovered_metadata(module) do
-    with true <- function_exported?(module, :__hawk_resource__, 0),
-         resource <- module.__hawk_resource__(),
-         {:module, ^resource} <- Code.ensure_compiled(resource),
-         true <- function_exported?(resource, :__hawk_resource__, 1),
-         json_api when json_api not in [false, nil] <- resource.__hawk_resource__(:json_api),
-         {:module, ^json_api} <- Code.ensure_compiled(json_api),
-         true <- function_exported?(json_api, :__hawk_json_api__, 0) do
-      json_api.__hawk_json_api__()
-    else
-      _other -> module.__hawk_json_api__()
+    Code.ensure_compiled(module)
+
+    cond do
+      function_exported?(module, :__hawk_json_api__, 0) ->
+        module.__hawk_json_api__()
+
+      function_exported?(module, :__hawk_resource__, 0) ->
+        resource = module.__hawk_resource__()
+        adapter = resolve_adapter(resource)
+
+        if adapter do
+          adapter.__hawk_json_api__()
+        else
+          default_metadata(resource)
+        end
+
+      true ->
+        default_metadata(module)
     end
+  end
+
+  defp resolve_adapter(resource) do
+    if function_exported?(resource, :__hawk_resource__, 1) do
+      case resource.__hawk_resource__(:json_api) do
+        false -> nil
+        adapter -> adapter
+      end
+    else
+      convention_adapter(resource)
+    end
+  end
+
+  defp convention_adapter(resource) do
+    adapter = Module.concat(resource, JsonApi)
+
+    if Code.ensure_compiled(adapter) == {:module, adapter} and
+         function_exported?(adapter, :__hawk_json_api__, 0) do
+      adapter
+    else
+      nil
+    end
+  end
+
+  defp default_metadata(resource) do
+    name =
+      resource
+      |> Module.split()
+      |> List.last()
+      |> Macro.underscore()
+
+    %{type: name, attributes: %{}, relationships: %{}, creatable: [], updatable: []}
   end
 
   defp normalize_metadata(metadata) do

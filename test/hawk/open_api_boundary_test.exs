@@ -4,14 +4,19 @@ defmodule Hawk.OpenApiBoundaryTest.BareWidget do
   model "bare_widgets" do
     field(:name, :string)
   end
+end
 
-  json_api do
-    type("bare_widgets")
-    doc("A minimal widget without reader or action modules.")
-    attribute(:name, doc: "Widget name.", example: "starter")
-    creatable([:name])
-    updatable([:name])
-  end
+defmodule Hawk.OpenApiBoundaryTest.BareWidgets.JsonApi do
+  use Hawk.JsonApi.Resource
+
+  type("bare_widgets")
+  doc("A minimal widget without reader or action modules.")
+
+  attribute(:name,
+    writable: true,
+    doc: "Widget name.",
+    example: "starter"
+  )
 end
 
 defmodule Hawk.OpenApiBoundaryTest do

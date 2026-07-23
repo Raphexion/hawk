@@ -4,7 +4,7 @@ defmodule Hawk.ResourceContract do
   """
 
   def validate!(resource, model, opts \\ []) when is_atom(resource) and is_atom(model) do
-    json_api = validate_model!(model, json_api_metadata(resource, model))
+    json_api = validate_model!(model, Hawk.JsonApi.Schema.metadata(model))
     reader = resource_module(resource, :reader, Reader)
     policy = resource_module(resource, :policy, Policy)
 
@@ -17,8 +17,15 @@ defmodule Hawk.ResourceContract do
     :ok
   end
 
+  @doc """
+  Validates a model's resolved JSON:API adapter against its schema, without
+  requiring reader or policy modules.
+
+  Useful for standalone models whose adapter is the only declared contract
+  surface (e.g. computed-attribute resources).
+  """
   def validate_model!(model) when is_atom(model) do
-    validate_model!(model, model.__hawk_json_api__())
+    validate_model!(model, Hawk.JsonApi.Schema.metadata(model))
   end
 
   defp validate_model!(model, json_api) when is_atom(model) do
@@ -28,17 +35,6 @@ defmodule Hawk.ResourceContract do
     validate_writable_relationships!(model, json_api)
 
     json_api
-  end
-
-  defp json_api_metadata(resource, model) do
-    if Code.ensure_loaded?(resource) and function_exported?(resource, :__hawk_resource__, 1) do
-      case resource.__hawk_resource__(:json_api) do
-        false -> model.__hawk_json_api__()
-        json_api -> json_api.__hawk_json_api__()
-      end
-    else
-      model.__hawk_json_api__()
-    end
   end
 
   defp validate_json_api_attributes!(model, json_api) do

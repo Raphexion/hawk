@@ -8,9 +8,4 @@ defmodule Videdal.ExternalTeacher do
   model "external_teachers" do
     field(:name, :string)
   end
-
-  json_api do
-    type("internal_teachers")
-    attributes([:name])
-  end
 end

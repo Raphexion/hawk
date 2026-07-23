@@ -46,9 +46,9 @@ end
 ```
 
 The facade generates public reader/writer/action delegations and exposes resource
-introspection through `__hawk_resource__/1`. JSON:API rendering discovers sibling
-adapter metadata from related models' resource facades, so included/preloaded
-resources do not need duplicate model-level `json_api` declarations. JSON:API controllers generated from
+introspection through `__hawk_resource__/1`. JSON:API rendering discovers
+sibling adapter metadata from related models' resource facades, so each resource
+has a single source of JSON:API truth. JSON:API controllers generated from
 a facade only expose actions supported by the resource capabilities: read actions
 are always available, create/update/delete require `writer`, and `/-actions/`
 requires `actions`. It also validates adapter contracts
@@ -126,9 +126,7 @@ payloads. Read-only relationships can expose normal Ecto associations, including
 `many_to_many` projections over internal join schemas. Writable relationships
 must be `belongs_to` associations because Hawk maps them to the owning foreign
 key passed into the writer. Mutating `has_many`, `has_one`, or `many_to_many`
-relationships should be modeled as explicit writer/action workflows. The older
-model-level `json_api do` block remains supported for compatibility and simple
-examples.
+relationships should be modeled as explicit writer/action workflows.
 
 ### LiveView adapter
 
@@ -248,6 +246,9 @@ final acceptance boundary.
 
 ### Model
 
+The model declares the Ecto schema and association resource metadata. The
+external JSON:API shape lives in the sibling adapter, not on the model.
+
 ```elixir
 defmodule MyApp.Course do
   use Hawk.Model
@@ -258,41 +259,13 @@ defmodule MyApp.Course do
     belongs_to(:teacher, MyApp.Teacher)
     has_many(:grades, MyApp.Grade)
   end
-
-  json_api do
-    type("courses")
-    doc("A course taught by a teacher at a school.")
-
-    attribute(:title,
-      doc: "Human-readable course title.",
-      example: "Math"
-    )
-
-    attribute(:localized_title,
-      source: :title,
-      doc: "Attributes may read from a different schema field."
-    )
-
-    attribute(:display_title,
-      resolver: &MyApp.CourseTitles.display_title/2,
-      doc: "Resolvers receive the model and JSON:API options, including request context."
-    )
-
-    relationship(:teacher,
-      doc: "The teacher responsible for the course.",
-      example: %{type: "teachers", id: "12"}
-    )
-
-    relationship(:grades,
-      doc: "Grades awarded in this course.",
-      example: [%{type: "grades", id: "1"}]
-    )
-
-    creatable([:title, :teacher])
-    updatable([:title, :teacher])
-  end
 end
 ```
+
+Association resource metadata (`:policy`, `:reader`, `:resource` opts on
+`belongs_to`/`has_many`/`many_to_many`) is still declared at the association
+site so Hawk readers preload through the associated resource reader instead
+of duplicating preload query logic.
 
 ### Policy
 
@@ -635,11 +608,13 @@ operations under paths such as `/api/v1/courses/{id}/-actions/open-registration`
 Their request bodies are documented as JSON:API documents with a `meta` object,
 and successful responses use the normal resource schema.
 
-Add `tag/1` and `group/1` inside `json_api` blocks to make Swagger UI easier to
-navigate:
+Add `tag/1` and `group/1` inside the JSON:API adapter to make Swagger UI
+ easier to navigate:
 
 ```elixir
-json_api do
+defmodule MyApp.Courses.JsonApi do
+  use Hawk.JsonApi.Resource
+
   type("courses")
   tag("Academics")
   group("Courses")

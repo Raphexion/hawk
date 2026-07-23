@@ -16,12 +16,6 @@ defmodule Hawk.JsonApi.SchemaTest do
     test "resolves metadata from a struct" do
       assert Schema.metadata(%Videdal.Course{}).type == "courses"
     end
-
-    test "honors the json_api_by_model override" do
-      override = %{type: "overridden", attributes: %{}, relationships: %{}, creatable: [], updatable: []}
-      assert Schema.metadata(Videdal.Course, json_api_by_model: %{Videdal.Course => override}).type ==
-               "overridden"
-    end
   end
 
   describe "schema_module/1" do

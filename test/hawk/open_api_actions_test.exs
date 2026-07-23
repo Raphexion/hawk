@@ -4,14 +4,19 @@ defmodule Hawk.OpenApiActionsTest.Switch do
   model "switches" do
     field(:state, :string)
   end
+end
 
-  json_api do
-    type("switches")
-    doc("A switch that supports custom actions.")
-    attribute(:state, doc: "Current state.", example: "off")
-    creatable([:state])
-    updatable([:state])
-  end
+defmodule Hawk.OpenApiActionsTest.Switches.JsonApi do
+  use Hawk.JsonApi.Resource
+
+  type("switches")
+  doc("A switch that supports custom actions.")
+
+  attribute(:state,
+    writable: true,
+    doc: "Current state.",
+    example: "off"
+  )
 end
 
 defmodule Hawk.OpenApiActionsTest.Switches do

@@ -4,11 +4,6 @@ defmodule Hawk.JsonApiControllerResourceInferenceTest.Course do
   model "json_api_controller_resource_inference_courses" do
     field(:title, :string)
   end
-
-  json_api do
-    type("courses")
-    attribute(:title, example: "Math")
-  end
 end
 
 defmodule Hawk.JsonApiControllerResourceInferenceTest.Courses.Reader do

@@ -11,7 +11,7 @@ JSON:API and LiveView are first-class adapters over Hawk Resources, not the core
 - Hawk Resources are the product: Reader, Writer, Policy, Actions, and adapter contracts define how a domain resource is read, mutated, authorized, documented, and exposed.
 - Resources model domain resources, not necessarily database tables. Table-backed schemas, views, projections, summaries, and computed resources should all fit.
 - JSON:API and LiveView should feel native and work well together while consuming the same resource capability model.
-- Related resource rendering should discover adapter metadata through resource facades instead of forcing duplicate model-level JSON:API declarations.
+- Related resource rendering discovers adapter metadata through the resource facade. The sibling JSON:API adapter is the single source of a resource's external shape; models no longer carry JSON:API declarations.
 
 ## Convention with explicit absence
 
@@ -50,7 +50,12 @@ JSON:API and LiveView should have separate adapter modules and DSLs:
 - `MyApp.Courses.JsonApi` owns external API shape: type, attributes, relationships, renamed fields, cached/computed values, docs, examples, writable request mapping, OpenAPI metadata.
 - `MyApp.Courses.LiveView` owns LiveView presentation and event contracts: tables, forms, actions, params, filters, assigns, and event plumbing.
 
-The current `json_api do` block on models is a compatibility stepping stone. Explicit adapter contracts beside the resource are the preferred shape, and Hawk discovers those adapters when rendering included/related resources.
+The sibling JSON:API adapter is the single source of a resource's external shape.
+`Hawk.JsonApi.Schema` discovers it from the model's resource convention (a
+generated `Hawk.Resource` facade exposes its adapter through
+`__hawk_resource__(:json_api)`; a hand-written facade resolves to the
+conventional `Resource.JsonApi` module). Models declare only the schema and
+association resource metadata.
 
 ## LiveView direction
 

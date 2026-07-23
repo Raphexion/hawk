@@ -1,11 +1,11 @@
 defmodule Hawk.JsonApi.SchemaMetadataTest do
   use ExUnit.Case, async: true
 
-  # These cover model-level `__hawk_json_api__/0` declarations and the
-  # "every Videdal resource is documented" invariant that Schema.metadata builds on.
+  # The sibling adapter is the single source of a resource's JSON:API shape.
+  # These cover the adapter declarations that Schema.metadata resolves.
 
-  test "models expose explicit JSON:API metadata with rich field docs" do
-    assert Videdal.Grade.__hawk_json_api__() == %{
+  test "the grades adapter exposes explicit JSON:API metadata with rich field docs" do
+    assert Hawk.JsonApi.Schema.metadata(Videdal.Grade) == %{
              type: "grades",
              tag: "Academics",
              group: "Grades",
@@ -44,7 +44,7 @@ defmodule Hawk.JsonApi.SchemaMetadataTest do
     ]
 
     for model <- models do
-      metadata = model.__hawk_json_api__()
+      metadata = Hawk.JsonApi.Schema.metadata(model)
 
       assert is_binary(metadata.type) and metadata.type != ""
       assert is_binary(metadata.doc) and metadata.doc != ""
