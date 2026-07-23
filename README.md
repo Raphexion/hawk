@@ -10,9 +10,10 @@ LiveView screens for internal administration. Hawk tries to make that repeated
 middle layer boring: resource contracts, policies, readers, writers, adapters,
 and tests follow one convention instead of being rebuilt per project.
 
-Hawk depends on Ecto, Ecto SQL, and Postgrex, but it does not define or supervise
-a concrete `Ecto.Repo`. Applications provide their own Repo modules, database
-configuration, migrations, authentication, and supervision tree.
+Hawk depends on Ecto, Ecto SQL, Postgrex, and Phoenix (with Phoenix LiveView
+and Phoenix Ecto). It does not define or supervise a concrete `Ecto.Repo`.
+Applications provide their own Repo modules, database configuration, migrations,
+authentication, and supervision tree.
 
 ## Direction
 
@@ -219,14 +220,15 @@ Hawk also generates `hawk_validate/2` and `hawk_save/2,3`.
 Default `handle_event("hawk:validate", ...)` and `handle_event("hawk:save", ...)`
 clauses call those helpers unless `events: false` is set. `hawk_validate/2`
 rebuilds a non-persisting validation changeset through `change_create/2` or
-`change_update/3`, then assigns a Phoenix `to_form(changeset, as: :course)` when
-Phoenix is available. `hawk_save/2` uses the same state to call `create/2` or
-`update/3`; validation failures keep the keyed form assigned with
+`change_update/3`, then assigns a Phoenix `to_form(changeset, as: :course)` on a
+real `Phoenix.LiveView.Socket`. `hawk_save/2` uses the same state to call
+`create/2` or `update/3`; validation failures keep the keyed form assigned with
 `action: :insert` or `:update`, authorization failures assign `:hawk_error`, and
 successful saves assign the saved model under `:course`. Use `hawk_save/3` with
 `on_success: fn socket, course -> ... end` when the app needs post-save behavior
-such as navigation while still reusing Hawk's save plumbing. The fallback form
-assign is the raw changeset, which keeps tests and non-Phoenix boundaries simple.
+such as navigation while still reusing Hawk's save plumbing. The lightweight
+plain-map test boundary assigns the raw changeset instead of a `to_form`, which
+keeps LiveView helper tests simple without a live socket.
 
 Known server-side values can be forced into a form without trusting hidden client
 inputs:

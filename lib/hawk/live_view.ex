@@ -2,9 +2,10 @@ defmodule Hawk.LiveView do
   @moduledoc """
   Small Phoenix LiveView helper DSL for Hawk resources.
 
-  Hawk is intended to run in Phoenix LiveViews. The generated helpers delegate to
-  `Phoenix.Component.assign/3` when available; plain map sockets remain supported
-  as a lightweight test boundary.
+  Hawk runs in Phoenix LiveViews and assigns through `Phoenix.Component.assign/3`
+  and `Phoenix.Component.to_form/2` on real `Phoenix.LiveView.Socket` structs. A
+  lightweight plain-map socket remains supported as a test boundary so helpers can
+  be exercised without a live socket.
   """
 
   alias Hawk.LiveView
@@ -253,7 +254,7 @@ defmodule Hawk.LiveView do
 
     socket
     |> put_form_state(as, %{mode: :create, authority: authority, forced_attrs: opts.forced_attrs})
-    |> assign(form_assign(as), form_value(changeset, as))
+    |> assign(form_assign(as), form_value(socket, changeset, as))
     |> assign(form_fields_assign(as), form_fields(live_view, :create_form, opts.hidden))
   end
 
@@ -273,7 +274,7 @@ defmodule Hawk.LiveView do
       authority: authority,
       forced_attrs: opts.forced_attrs
     })
-    |> assign(form_assign(as), form_value(changeset, as))
+    |> assign(form_assign(as), form_value(socket, changeset, as))
     |> assign(form_fields_assign(as), form_fields(live_view, :update_form, opts.hidden))
   end
 
@@ -288,7 +289,7 @@ defmodule Hawk.LiveView do
         :update -> resource.change_update(state.model, form_params, state.authority)
       end
 
-    {:noreply, assign(socket, form_assign(as), form_value(changeset, as))}
+    {:noreply, assign(socket, form_assign(as), form_value(socket, changeset, as))}
   end
 
   def handle_save(socket, resource, as, params, opts \\ []) do
@@ -318,11 +319,11 @@ defmodule Hawk.LiveView do
   end
 
   defp apply_save_result(socket, _resource, as, %{mode: :create}, {:invalid, context}, _opts) do
-    assign(socket, form_assign(as), form_value(%{context.changeset | action: :insert}, as))
+    assign(socket, form_assign(as), form_value(socket, %{context.changeset | action: :insert}, as))
   end
 
   defp apply_save_result(socket, _resource, as, %{mode: :update}, {:invalid, context}, _opts) do
-    assign(socket, form_assign(as), form_value(%{context.changeset | action: :update}, as))
+    assign(socket, form_assign(as), form_value(socket, %{context.changeset | action: :update}, as))
   end
 
   defp apply_save_result(
@@ -348,7 +349,7 @@ defmodule Hawk.LiveView do
 
     socket
     |> put_form_state(as, %{mode: :update, model: model, authority: authority})
-    |> assign(form_assign(as), form_value(changeset, as))
+    |> assign(form_assign(as), form_value(socket, changeset, as))
   end
 
   def handle_delete(socket, resource, as, plural_as, params) do
@@ -467,12 +468,9 @@ defmodule Hawk.LiveView do
     |> Enum.reject(&MapSet.member?(hidden, &1.name))
   end
 
-  defp form_value(changeset, as) do
-    phoenix_component = Module.concat([Phoenix, Component])
-
-    if Code.ensure_loaded?(phoenix_component) and
-         function_exported?(phoenix_component, :to_form, 2) do
-      phoenix_component.to_form(changeset, as: as)
+  defp form_value(socket, changeset, as) do
+    if is_struct(socket) do
+      Phoenix.Component.to_form(changeset, as: as)
     else
       changeset
     end
@@ -485,11 +483,8 @@ defmodule Hawk.LiveView do
   end
 
   defp assign(socket, key, value) do
-    phoenix_component = Module.concat([Phoenix, Component])
-
-    if Code.ensure_loaded?(phoenix_component) and
-         function_exported?(phoenix_component, :assign, 3) do
-      phoenix_component.assign(socket, key, value)
+    if is_struct(socket) do
+      Phoenix.Component.assign(socket, key, value)
     else
       assigns = Map.get(socket, :assigns, %{})
       Map.put(socket, :assigns, Map.put(assigns, key, value))

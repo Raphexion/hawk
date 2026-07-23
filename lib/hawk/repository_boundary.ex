@@ -89,11 +89,6 @@ defmodule Hawk.RepositoryBoundary do
     validate_policy_marker!(context)
   end
 
-  defp validate_policy_marker!(%MutationContext{authority: authority})
-       when authority.system? do
-    :ok
-  end
-
   defp validate_policy_marker!(%MutationContext{policy_validated?: true}), do: :ok
 
   defp validate_policy_marker!(%MutationContext{}) do

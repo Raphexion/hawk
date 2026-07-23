@@ -32,18 +32,15 @@ defmodule Hawk.OpenApi.Controller do
 
   def show(conn, spec), do: json(conn, 200, spec)
 
-  defp json(conn, status, body) do
-    phoenix_controller = Module.concat([Phoenix, Controller])
+  defp json(%Plug.Conn{} = conn, status, body) do
+    conn
+    |> Plug.Conn.put_resp_content_type("application/vnd.api+json")
+    |> Plug.Conn.send_resp(status, Jason.encode!(body))
+  end
 
-    if Code.ensure_loaded?(phoenix_controller) and
-         function_exported?(phoenix_controller, :json, 2) do
-      plug_conn = Module.concat([Plug, Conn])
-
-      conn
-      |> then(&plug_conn.put_status(&1, status))
-      |> then(&phoenix_controller.json(&1, body))
-    else
-      conn |> Map.put(:status, status) |> Map.put(:resp_body, body)
-    end
+  defp json(conn, status, body) when is_map(conn) do
+    conn
+    |> Map.put(:status, status)
+    |> Map.put(:resp_body, body)
   end
 end

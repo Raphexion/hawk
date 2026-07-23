@@ -42,6 +42,13 @@ defmodule Hawk.MixProject do
       {:ecto_sql, ">= 3.5.0 and < 4.0.0"},
       {:postgrex, ">= 0.15.0 and < 1.0.0"},
       {:telemetry, "~> 1.0"},
+      # Phoenix is a required dependency: Hawk generates JSON:API controllers and
+      # LiveView helpers that call Phoenix/Plug directly. Host applications still
+      # own their Repo, authentication, and supervision tree.
+      {:phoenix, "~> 1.7"},
+      {:phoenix_live_view, "~> 1.0"},
+      {:phoenix_ecto, "~> 4.0"},
+      {:jason, "~> 1.4"},
       # Code quality
       {:dialyxir, "~> 1.3", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false}

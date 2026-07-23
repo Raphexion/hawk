@@ -123,11 +123,8 @@ defmodule Hawk.LiveView.Page do
   end
 
   defp assign(socket, key, value) do
-    phoenix_component = Module.concat([Phoenix, Component])
-
-    if Code.ensure_loaded?(phoenix_component) and
-         function_exported?(phoenix_component, :assign, 3) do
-      phoenix_component.assign(socket, key, value)
+    if is_struct(socket) do
+      Phoenix.Component.assign(socket, key, value)
     else
       assigns = Map.get(socket, :assigns, %{})
       Map.put(socket, :assigns, Map.put(assigns, key, value))

@@ -153,7 +153,7 @@ defmodule Hawk.OpenApi do
     |> Map.merge(%{
       summary: "Delete #{resource_name(resource)}",
       parameters: [id_parameter()],
-      responses: responses(resource, 200, data_schema(resource))
+      responses: responses(resource, 204, nil)
     })
   end
 
@@ -258,6 +258,16 @@ defmodule Hawk.OpenApi do
           schema: action_document_schema(metadata)
         }
       }
+    }
+  end
+
+  defp responses(_resource, 204, nil) do
+    %{
+      "204" => %{description: "No content"},
+      "400" => json_api_content("Invalid JSON:API query parameters", error_document_schema()),
+      "403" => json_api_content("Forbidden by Hawk policy", error_document_schema()),
+      "404" => json_api_content("Resource not found", error_document_schema()),
+      "422" => json_api_content("Validation failed", error_document_schema())
     }
   end
 

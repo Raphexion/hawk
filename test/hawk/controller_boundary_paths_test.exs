@@ -82,11 +82,11 @@ defmodule Hawk.ControllerBoundaryPathsTest do
   @school_id Videdal.school_id()
   @teacher_id Videdal.teacher_id()
 
-  test "delete can return an empty JSON:API data document" do
+  test "delete returns 204 No Content with an empty body" do
     conn = OkDeleteController.delete(conn(), %{"id" => @course_id})
 
-    assert conn.status == 200
-    assert conn.resp_body == %{data: nil}
+    assert conn.status == 204
+    assert conn.resp_body == nil
   end
 
   test "delete returns not found through the controller boundary" do
