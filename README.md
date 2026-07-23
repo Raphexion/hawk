@@ -532,6 +532,7 @@ JSON:API documents at the adapter boundary:
 - authorization failure: `403`
 - missing record: `404`
 - validation failure: `422`
+- successful deletion: `204 No Content` with an empty body
 
 Controller member routes validate path IDs as UUIDs before querying the reader.
 Create requests must include `data.type` matching the resource type. Update

@@ -311,15 +311,18 @@ defmodule Hawk.JsonApi.Controller do
       context = request_context(conn)
 
       case resource.one(authority: authority, context: context, filter: %{id: normalize_id(id)}) do
-        {:ok, existing} ->
-          existing
-          |> resource.delete(authority)
-          |> respond(conn, resource, model_module(existing), 200)
-
-        :not_found ->
-          json(conn, 404, not_found(resource))
+        {:ok, existing} -> respond_delete(conn, resource, existing, authority)
+        :not_found -> json(conn, 404, not_found(resource))
       end
     end)
+  end
+
+  defp respond_delete(conn, resource, existing, authority) do
+    case resource.delete(existing, authority) do
+      {:ok, _deleted} -> no_content(conn)
+      :ok -> no_content(conn)
+      result -> respond(result, conn, resource, model_module(existing), 200)
+    end
   end
 
   def action(

@@ -349,7 +349,7 @@ defmodule Hawk.JsonApiControllerCase do
 
     expected_status =
       cond do
-        write? -> [200, 422]
+        write? -> [204, 422]
         read? -> [403, 422]
         true -> 404
       end
