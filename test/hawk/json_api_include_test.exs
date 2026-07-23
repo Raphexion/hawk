@@ -19,7 +19,7 @@ defmodule Hawk.JsonApiIncludeTest do
   @teacher_id Videdal.teacher_id()
 
   test "dotted include paths preserve order and merge nested paths" do
-    assert Hawk.JsonApi.request_options(%{"include" => "teacher,grades.student,grades.course"}) ==
+    assert Hawk.JsonApi.Request.request_options(%{"include" => "teacher,grades.student,grades.course"}) ==
              [
                preloads: [:teacher, grades: [:student, :course]]
              ]
@@ -34,9 +34,9 @@ defmodule Hawk.JsonApiIncludeTest do
       grades: [%Grade{id: @grade_id, score: 12}]
     }
 
-    assert Hawk.JsonApi.document(course).data.relationships.grades == %{data: []}
+    assert Hawk.JsonApi.Document.document(course).data.relationships.grades == %{data: []}
 
-    assert Hawk.JsonApi.document(course, preloads: [:grades]).data.relationships.grades == %{
+    assert Hawk.JsonApi.Document.document(course, preloads: [:grades]).data.relationships.grades == %{
              data: [%{type: "grades", id: @grade_id}]
            }
   end
@@ -50,7 +50,7 @@ defmodule Hawk.JsonApiIncludeTest do
       grades: [%Grade{id: @grade_id, score: 12, course_id: @course_id}]
     }
 
-    document = Hawk.JsonApi.document(course, preloads: [:grades])
+    document = Hawk.JsonApi.Document.document(course, preloads: [:grades])
 
     assert document.included == [
              %{

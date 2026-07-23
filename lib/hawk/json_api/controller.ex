@@ -6,8 +6,8 @@ defmodule Hawk.JsonApi.Controller do
   directly with the `application/vnd.api+json` content type.
   """
 
-  alias Hawk.JsonApi
   alias Hawk.JsonApi.Controller, as: JsonApiController
+  alias Hawk.JsonApi.{Document, Request, Schema}
 
   defmacro __using__(opts) do
     env = __CALLER__
@@ -172,14 +172,14 @@ defmodule Hawk.JsonApi.Controller do
 
         opts =
           params
-          |> JsonApi.request_options()
+          |> Request.request_options()
           |> Keyword.put(:authority, authority)
           |> Keyword.put(:context, request_context(conn))
 
         json(
           conn,
           200,
-          JsonApi.document(resource.all(opts),
+          Document.document(resource.all(opts),
             preloads: Keyword.get(opts, :preloads, []),
             context: Keyword.get(opts, :context, %{}),
             page: Keyword.get(opts, :page),
@@ -201,7 +201,7 @@ defmodule Hawk.JsonApi.Controller do
       authority = authority!(conn, public?)
       context = request_context(conn)
 
-      case JsonApi.member_id!(id) do
+      case Request.member_id!(id) do
         {:uuid, uuid} -> show_by_uuid(conn, resource, model, authority, context, uuid)
         {:short_id, prefix} -> show_by_short_id(conn, resource, model, authority, context, prefix)
       end
@@ -214,7 +214,7 @@ defmodule Hawk.JsonApi.Controller do
         json(
           conn,
           200,
-          JsonApi.document(model,
+          Document.document(model,
             context: request_context(conn),
             links: true,
             json_api_by_model: %{root_model => json_api_metadata(resource, root_model)}
@@ -230,14 +230,14 @@ defmodule Hawk.JsonApi.Controller do
     case resource.all(
            authority: authority,
            context: context,
-           filter: JsonApi.short_id_filter(prefix),
+           filter: Request.short_id_filter(prefix),
            page: %{size: 2}
          ) do
       [model] ->
         json(
           conn,
           200,
-          JsonApi.document(model,
+          Document.document(model,
             context: request_context(conn),
             links: true,
             json_api_by_model: %{root_model => json_api_metadata(resource, root_model)}
@@ -260,10 +260,10 @@ defmodule Hawk.JsonApi.Controller do
         authority = authority!(conn, public?)
 
         json_api_opts = json_api_opts(resource, model)
-        JsonApi.validate_document!(params, model, :creatable, json_api_opts)
+        Request.validate_document!(params, model, :creatable, json_api_opts)
 
         params
-        |> JsonApi.attributes(model, :creatable, json_api_opts)
+        |> Request.attributes(model, :creatable, json_api_opts)
         |> resource.create(authority)
         |> respond(conn, resource, model, 201)
       end)
@@ -284,10 +284,10 @@ defmodule Hawk.JsonApi.Controller do
       case resource.one(authority: authority, context: context, filter: %{id: normalize_id(id)}) do
         {:ok, existing} ->
           json_api_opts = json_api_opts(resource, model)
-          JsonApi.validate_document!(params, model, :updatable, json_api_opts)
+          Request.validate_document!(params, model, :updatable, json_api_opts)
 
           params
-          |> JsonApi.attributes(model, :updatable, json_api_opts)
+          |> Request.attributes(model, :updatable, json_api_opts)
           |> then(&resource.update(existing, &1, authority))
           |> respond(conn, resource, model, 200)
 
@@ -368,7 +368,7 @@ defmodule Hawk.JsonApi.Controller do
       context = request_context(conn)
       json_api_opts = json_api_opts(resource, model)
 
-      relationship = JsonApi.relationship_key!(model, relationship_name, json_api_opts)
+      relationship = Schema.relationship_key!(model, relationship_name, json_api_opts)
       association = model.__schema__(:association, relationship)
       preloads = if match?(%{cardinality: :many}, association), do: [relationship], else: []
 
@@ -382,7 +382,7 @@ defmodule Hawk.JsonApi.Controller do
           json(
             conn,
             200,
-            JsonApi.relationship_document(loaded, relationship_name, json_api_opts)
+            Document.relationship_document(loaded, relationship_name, json_api_opts)
           )
 
         :not_found ->
@@ -409,7 +409,7 @@ defmodule Hawk.JsonApi.Controller do
       context = request_context(conn)
 
       relationship =
-        JsonApi.relationship_key!(model, relationship_name,
+        Schema.relationship_key!(model, relationship_name,
           json_api_by_model: %{model => json_api_metadata(resource, model)}
         )
 
@@ -423,7 +423,7 @@ defmodule Hawk.JsonApi.Controller do
           json(
             conn,
             200,
-            JsonApi.related_document(model, relationship_name,
+            Document.related_document(model, relationship_name,
               json_api_by_model: %{
                 model_module(model) => json_api_metadata(resource, model_module(model))
               }
@@ -492,7 +492,7 @@ defmodule Hawk.JsonApi.Controller do
     json(
       conn,
       status,
-      JsonApi.document(returned_model,
+      Document.document(returned_model,
         context: request_context(conn),
         json_api_by_model: %{model => json_api_metadata(resource, model)}
       )
@@ -584,5 +584,5 @@ defmodule Hawk.JsonApi.Controller do
     }
   end
 
-  defp normalize_id(id), do: JsonApi.validate_uuid!(id)
+  defp normalize_id(id), do: Request.validate_uuid!(id)
 end

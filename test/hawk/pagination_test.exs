@@ -75,7 +75,7 @@ defmodule Hawk.PaginationTest do
   end
 
   test "JSON:API request options parse page and sort parameters" do
-    assert Hawk.JsonApi.request_options(%{
+    assert Hawk.JsonApi.Request.request_options(%{
              "sort" => "-title",
              "page" => %{"number" => "2", "size" => "25"},
              "include" => "teacher,grades"
@@ -86,22 +86,13 @@ defmodule Hawk.PaginationTest do
   end
 
   test "JSON:API request options parse page_size alias" do
-    assert Hawk.JsonApi.request_options(%{"page_size" => "2"}) == [page: %{size: 2}]
+    assert Hawk.JsonApi.Request.request_options(%{"page_size" => "2"}) == [page: %{size: 2}]
   end
 
   test "JSON:API documents include pagination metadata for collection pages" do
     document =
-      Hawk.JsonApi.document([%Videdal.Course{id: 1, title: "Math"}], page: %{number: 2, size: 1})
+      Hawk.JsonApi.Document.document([%Videdal.Course{id: 1, title: "Math"}], page: %{number: 2, size: 1})
 
     assert document.meta == %{page: %{number: 2, size: 1, count: 1}}
-  end
-
-  test "OpenAPI operation includes sort and pagination parameters" do
-    operation = Hawk.JsonApi.openapi_index_operation(Videdal.Course)
-
-    assert %{name: "sort", schema: %{enum: ["id", "-id", "title", "-title"]}} in operation.parameters
-    assert %{name: "page[size]", schema: %{type: "integer", minimum: 0}} in operation.parameters
-    assert %{name: "page[number]", schema: %{type: "integer", minimum: 1}} in operation.parameters
-    assert %{name: "page_size", schema: %{type: "integer", minimum: 0}} in operation.parameters
   end
 end

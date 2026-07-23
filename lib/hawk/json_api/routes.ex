@@ -34,7 +34,7 @@ defmodule Hawk.JsonApi.Routes do
       function_exported?(module, :__hawk_json_api__, 0) ->
         %{
           resource: module.__hawk_resource__(),
-          json_api: Hawk.JsonApi.metadata(module),
+          json_api: Hawk.JsonApi.Schema.metadata(module),
           capabilities: %{writer: true, actions: true}
         }
 
@@ -51,7 +51,7 @@ defmodule Hawk.JsonApi.Routes do
       json_api ->
         %{
           resource: resource,
-          json_api: Hawk.JsonApi.metadata(json_api),
+          json_api: Hawk.JsonApi.Schema.metadata(json_api),
           capabilities: resource.__hawk_resource__(:capabilities)
         }
     end

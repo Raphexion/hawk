@@ -65,7 +65,7 @@ defmodule Hawk.JsonApiAttributeTest do
       }
     }
 
-    assert Hawk.JsonApi.document(post, context: %{locale: "da"}).data.attributes == %{
+    assert Hawk.JsonApi.Document.document(post, context: %{locale: "da"}).data.attributes == %{
              slug: "north-sea",
              slug_copy: "north-sea",
              title: "Hus ved havet"

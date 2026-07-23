@@ -46,7 +46,7 @@ defmodule Hawk.OpenApi do
       %{
         model: module,
         resource: module.__hawk_resource__(),
-        json_api: Hawk.JsonApi.metadata(module),
+        json_api: Hawk.JsonApi.Schema.metadata(module),
         capabilities: %{writer: true, actions: true}
       }
     end

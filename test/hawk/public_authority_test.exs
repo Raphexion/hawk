@@ -46,7 +46,7 @@ defmodule Hawk.PublicAuthorityTest do
     conn = PublicCoursesController.index(conn(), %{})
 
     assert conn.status == 200
-    assert resp(conn).data == [Hawk.JsonApi.document(hd(courses)).data]
+    assert resp(conn).data == [Hawk.JsonApi.Document.document(hd(courses)).data]
   end
 
   test "deeper includes do not bypass nested policies for public endpoints" do

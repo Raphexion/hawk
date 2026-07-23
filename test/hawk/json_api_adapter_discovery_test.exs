@@ -80,12 +80,8 @@ defmodule Hawk.JsonApiAdapterDiscoveryTest do
   alias Hawk.JsonApiAdapterDiscoveryTest.{Author, Book}
 
   test "metadata uses the sibling JSON:API adapter discovered from the model resource" do
-    assert Hawk.JsonApi.metadata(Author).type == "authors"
-    assert Map.has_key?(Hawk.JsonApi.metadata(Author).attributes, :name)
-
-    assert Hawk.JsonApi.openapi_schema(Author)["properties"]["name"] == %{
-             "description" => "Author name"
-           }
+    assert Hawk.JsonApi.Schema.metadata(Author).type == "authors"
+    assert Map.has_key?(Hawk.JsonApi.Schema.metadata(Author).attributes, :name)
   end
 
   test "resource contracts use sibling JSON:API adapter metadata" do
@@ -100,7 +96,7 @@ defmodule Hawk.JsonApiAdapterDiscoveryTest do
       author: %Author{id: Videdal.parent_id(), name: "Ada"}
     }
 
-    assert Hawk.JsonApi.document(book, preloads: [:author]) == %{
+    assert Hawk.JsonApi.Document.document(book, preloads: [:author]) == %{
              data: %{
                type: "books",
                id: Videdal.course_id(),

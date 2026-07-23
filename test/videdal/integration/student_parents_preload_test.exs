@@ -67,7 +67,7 @@ defmodule Videdal.Integration.StudentParentsPreloadTest do
     assert [student] = StudentsReader.all(authority: Authority.system(), preloads: [:parents])
     assert Enum.map(student.parents, & &1.name) |> Enum.sort() == ["Anna", "Marcus"]
 
-    document = Hawk.JsonApi.document(student, preloads: [:parents])
+    document = Hawk.JsonApi.Document.document(student, preloads: [:parents])
 
     assert Enum.sort_by(document.data.relationships.parents.data, & &1.id) ==
              Enum.sort_by(
@@ -101,7 +101,7 @@ defmodule Videdal.Integration.StudentParentsPreloadTest do
     assert [parent] = ParentsReader.all(authority: Authority.system(), preloads: [:students])
     assert Enum.map(parent.students, & &1.name) |> Enum.sort() == ["Alma", "Birk", "Clara"]
 
-    document = Hawk.JsonApi.document(parent, preloads: [:students])
+    document = Hawk.JsonApi.Document.document(parent, preloads: [:students])
 
     assert Enum.sort_by(document.data.relationships.students.data, & &1.id) ==
              students
