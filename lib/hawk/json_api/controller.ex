@@ -360,25 +360,31 @@ defmodule Hawk.JsonApi.Controller do
         public? \\ false
       ) do
     telemetry_span(conn, resource, model, :relationship, %{id_kind: id_kind(id)}, fn ->
-      do_relationship(conn, resource, id, relationship_name, public?)
+      do_relationship(conn, resource, model, id, relationship_name, public?)
     end)
   end
 
-  defp do_relationship(conn, resource, id, relationship_name, public?) do
+  defp do_relationship(conn, resource, model, id, relationship_name, public?) do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
       context = request_context(conn)
+      json_api_opts = json_api_opts(resource, model)
 
-      case resource.one(authority: authority, context: context, filter: %{id: normalize_id(id)}) do
-        {:ok, model} ->
+      relationship = JsonApi.relationship_key!(model, relationship_name, json_api_opts)
+      association = model.__schema__(:association, relationship)
+      preloads = if match?(%{cardinality: :many}, association), do: [relationship], else: []
+
+      case resource.one(
+             authority: authority,
+             context: context,
+             filter: %{id: normalize_id(id)},
+             preloads: preloads
+           ) do
+        {:ok, loaded} ->
           json(
             conn,
             200,
-            JsonApi.relationship_document(model, relationship_name,
-              json_api_by_model: %{
-                model_module(model) => json_api_metadata(resource, model_module(model))
-              }
-            )
+            JsonApi.relationship_document(loaded, relationship_name, json_api_opts)
           )
 
         :not_found ->
@@ -527,32 +533,21 @@ defmodule Hawk.JsonApi.Controller do
     header(conn, "x-locale") || accept_language_locale(header(conn, "accept-language")) || "en"
   end
 
-  defp header(conn, name) do
-    cond do
-      plug_conn?(conn) -> plug_conn_header(conn, name)
-      is_map(conn) and is_list(Map.get(conn, :req_headers)) -> map_header(conn, name)
-      true -> nil
-    end
+  defp header(%Plug.Conn{} = conn, name) do
+    conn
+    |> Plug.Conn.get_req_header(name)
+    |> List.first()
   end
 
-  defp plug_conn?(conn) do
-    Code.ensure_loaded?(plug_conn_module()) and
-      function_exported?(plug_conn_module(), :get_req_header, 2) and
-      is_map(conn) and Map.get(conn, :__struct__) == plug_conn_module()
-  end
+  defp header(%{req_headers: headers}, name) when is_list(headers), do: map_header(headers, name)
 
-  defp plug_conn_header(conn, name) do
-    plug_conn = plug_conn_module()
-    plug_conn.get_req_header(conn, name) |> List.first()
-  end
+  defp header(_conn, _name), do: nil
 
-  defp map_header(conn, name) do
-    Enum.find_value(conn.req_headers, fn {key, value} ->
+  defp map_header(headers, name) do
+    Enum.find_value(headers, fn {key, value} ->
       if String.downcase(to_string(key)) == name, do: value
     end)
   end
-
-  defp plug_conn_module, do: Module.concat(["Plug", "Conn"])
 
   defp accept_language_locale(nil), do: nil
 
@@ -566,32 +561,21 @@ defmodule Hawk.JsonApi.Controller do
     end
   end
 
-  defp json(conn, status, body) do
-    phoenix_controller = Module.concat([Phoenix, Controller])
-
-    plug_conn = Module.concat([Plug, Conn])
-
-    if Code.ensure_loaded?(phoenix_controller) and
-         Code.ensure_loaded?(plug_conn) and
-         function_exported?(phoenix_controller, :json, 2) do
-      try do
-        conn
-        |> then(&plug_conn.put_status(&1, status))
-        |> put_json_api_content_type(plug_conn)
-        |> then(&phoenix_controller.json(&1, body))
-      rescue
-        FunctionClauseError -> conn |> Map.put(:status, status) |> Map.put(:resp_body, body)
-      end
-    else
-      conn |> Map.put(:status, status) |> Map.put(:resp_body, body)
-    end
+  defp json(%Plug.Conn{} = conn, status, body) do
+    conn
+    |> Plug.Conn.put_resp_content_type("application/vnd.api+json")
+    |> Plug.Conn.send_resp(status, Jason.encode!(body))
   end
 
-  defp put_json_api_content_type(%{__struct__: conn_module} = conn, conn_module) do
-    conn_module.put_resp_content_type(conn, "application/vnd.api+json")
+  defp json(conn, status, body) when is_map(conn) do
+    conn
+    |> Map.put(:status, status)
+    |> Map.put(:resp_body, body)
   end
 
-  defp put_json_api_content_type(conn, _plug_conn), do: conn
+  defp no_content(%Plug.Conn{} = conn), do: Plug.Conn.send_resp(conn, 204, "")
+
+  defp no_content(conn) when is_map(conn), do: Map.put(conn, :status, 204)
 
   defp not_found(resource) do
     name =

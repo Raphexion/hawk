@@ -544,6 +544,9 @@ resource type and a valid UUID id.
 Resource objects returned by `show/2` include resource and relationship links.
 Relationship endpoints return JSON:API relationship linkage or related resource
 documents, using the same reader policy and preload path as ordinary includes.
+To-one relationship linkage is read from the foreign key; to-many relationship
+linkage is preloaded through the related resource's reader so the returned
+identifiers reflect policy-visible related records.
 
 #### Short IDs
 

@@ -142,7 +142,7 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest do
     assert query_count == 2
   end
 
-  test "relationship linkage endpoint does not preload the related records" do
+  test "to-many relationship linkage endpoint preloads related identifiers" do
     %{course: course} = seed_courses_with_grades(4)
 
     {conn, query_count} =
@@ -151,7 +151,20 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest do
       end)
 
     assert conn.status == 200
-    assert conn.resp_body.data == []
+    assert [%{type: "grades"}] = conn.resp_body.data
+    assert query_count == 2
+  end
+
+  test "to-one relationship linkage endpoint returns identifiers from the foreign key without a preload" do
+    %{course: course} = seed_courses_with_grades(4)
+
+    {conn, query_count} =
+      count_queries(fn ->
+        CoursesController.relationship(conn(), %{"id" => course.id, "relationship" => "teacher"})
+      end)
+
+    assert conn.status == 200
+    assert conn.resp_body.data == %{type: "teachers", id: course.teacher_id}
     assert query_count == 1
   end
 
