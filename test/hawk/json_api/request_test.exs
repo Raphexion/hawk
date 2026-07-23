@@ -114,6 +114,13 @@ defmodule Hawk.JsonApi.RequestTest do
     refute_existing_atom(hostile_sort)
   end
 
+  test "request options parse includes through reader preload declarations" do
+    assert Request.request_options(
+             %{"include" => "grades.student,teacher"},
+             reader: Videdal.Courses.Reader
+           ) == [preloads: [{:grades, [:student]}, :teacher]]
+  end
+
   defp hostile_name(label), do: "hawk_hostile_#{label}_#{System.unique_integer([:positive])}"
 
   defp refute_existing_atom(name) do

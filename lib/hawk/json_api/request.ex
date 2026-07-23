@@ -99,10 +99,12 @@ defmodule Hawk.JsonApi.Request do
   @doc """
   Parses JSON:API query params into reader options.
   """
-  def request_options(params) when is_map(params) do
+  def request_options(params, opts \\ []) when is_map(params) and is_list(opts) do
+    reader = Keyword.get(opts, :reader)
+
     []
     |> put_request_option(:page, parse_page(params), %{})
-    |> put_request_option(:preloads, parse_include(Map.get(params, "include")), [])
+    |> put_request_option(:preloads, parse_include(Map.get(params, "include"), reader), [])
     |> put_request_option(:filter, parse_filter(Map.get(params, "filter")), :all)
     |> put_sort(Map.get(params, "sort"))
   end
@@ -360,24 +362,56 @@ defmodule Hawk.JsonApi.Request do
   defp parse_filter_scalar("false"), do: false
   defp parse_filter_scalar(value), do: value
 
-  defp parse_include(nil), do: []
-  defp parse_include(""), do: []
+  defp parse_include(nil, _reader), do: []
+  defp parse_include("", _reader), do: []
 
-  defp parse_include(include) when is_binary(include) do
+  defp parse_include(include, reader) when is_binary(include) do
     include
     |> String.split(",", trim: true)
     |> Enum.map(&String.split(&1, ".", trim: true))
-    |> Enum.map(&include_path_to_preload/1)
+    |> Enum.map(&include_path_to_preload(&1, reader))
     |> Enum.reduce([], &merge_preload/2)
     |> Enum.reverse()
   end
 
-  defp include_path_to_preload([segment]) do
-    existing_param_atom!(segment, "include")
+  defp include_path_to_preload([segment], reader) do
+    include_atom!(segment, reader)
   end
 
-  defp include_path_to_preload([segment | rest]) do
-    {existing_param_atom!(segment, "include"), [include_path_to_preload(rest)]}
+  defp include_path_to_preload([segment | rest], reader) do
+    key = include_atom!(segment, reader)
+    nested_reader = preload_reader(reader, key)
+
+    {key, [include_path_to_preload(rest, nested_reader)]}
+  end
+
+  defp include_atom!(segment, nil), do: existing_param_atom!(segment, "include")
+
+  defp include_atom!(segment, reader) do
+    reader
+    |> preload_keys()
+    |> Enum.find(&(to_string(&1) == segment))
+    |> case do
+      nil -> raise ArgumentError, "unknown include #{inspect(segment)}"
+      key -> key
+    end
+  end
+
+  defp preload_keys(reader) do
+    if Code.ensure_compiled(reader) == {:module, reader} and function_exported?(reader, :preload_keys, 0) do
+      reader.preload_keys()
+    else
+      MapSet.new()
+    end
+  end
+
+  defp preload_reader(nil, _key), do: nil
+
+  defp preload_reader(reader, key) do
+    if Code.ensure_compiled(reader) == {:module, reader} and
+         function_exported?(reader, :preload_readers, 0) do
+      Map.get(reader.preload_readers(), key)
+    end
   end
 
   defp merge_preload(preload, acc) when is_atom(preload) do

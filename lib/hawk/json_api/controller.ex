@@ -151,6 +151,19 @@ defmodule Hawk.JsonApi.Controller do
     end
   end
 
+  defp controller_reader(resource) do
+    if Code.ensure_compiled(resource) == {:module, resource} and
+         function_exported?(resource, :__hawk_resource__, 1) do
+      resource.__hawk_resource__(:reader)
+    else
+      reader = Module.concat(resource, Reader)
+
+      if Code.ensure_compiled(reader) == {:module, reader} do
+        reader
+      end
+    end
+  end
+
   def index(conn, resource, model, params, public? \\ false) do
     telemetry_span(conn, resource, model, :index, %{}, fn ->
       with_error_boundary(conn, fn ->
@@ -158,7 +171,7 @@ defmodule Hawk.JsonApi.Controller do
 
         opts =
           params
-          |> Request.request_options()
+          |> Request.request_options(reader: controller_reader(resource))
           |> Keyword.put(:authority, authority)
           |> Keyword.put(:context, request_context(conn))
 
@@ -265,7 +278,7 @@ defmodule Hawk.JsonApi.Controller do
 
       case resource.one(authority: authority, context: context, filter: %{id: normalize_id(id)}) do
         {:ok, existing} ->
-            Request.validate_document!(params, model, :updatable)
+          Request.validate_document!(params, model, :updatable)
 
           params
           |> Request.attributes(model, :updatable)
@@ -389,8 +402,7 @@ defmodule Hawk.JsonApi.Controller do
       context = request_context(conn)
 
       relationship =
-        Schema.relationship_key!(model, relationship_name
-        )
+        Schema.relationship_key!(model, relationship_name)
 
       case resource.one(
              authority: authority,
@@ -402,8 +414,7 @@ defmodule Hawk.JsonApi.Controller do
           json(
             conn,
             200,
-            Document.related_document(model, relationship_name
-            )
+            Document.related_document(model, relationship_name)
           )
 
         :not_found ->
