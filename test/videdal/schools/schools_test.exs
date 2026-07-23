@@ -10,6 +10,5 @@ defmodule Videdal.SchoolsTest do
 
     assert Schools.all(authority: Authority.system()) == [school]
     assert Schools.one(authority: Authority.system(), filter: %{id: 7}) == {:ok, school}
-    assert Schools.one!(authority: Authority.system(), filter: %{id: 7}) == school
   end
 end

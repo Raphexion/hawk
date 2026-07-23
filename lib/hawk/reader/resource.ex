@@ -166,7 +166,6 @@ defmodule Hawk.Reader.Resource do
   defp quote_public_reader_functions do
     quote do
       def one(opts), do: Hawk.Reader.one(config(), opts)
-      def one!(opts), do: Hawk.Reader.one!(config(), opts)
       def all(opts), do: Hawk.Reader.all(config(), opts)
 
       def preload_query(query, authority) do

@@ -61,7 +61,7 @@ defmodule Hawk.Resource do
     validate_module!(modules.live_view, :live_view)
     validate_module!(modules.actions, :actions)
 
-    validate_functions!(modules.reader, :reader, all: 1, one: 1, one!: 1)
+    validate_functions!(modules.reader, :reader, all: 1, one: 1)
     validate_functions!(modules.policy, :policy, read_filter: 1)
     validate_functions!(modules.writer, :writer, create: 2, update: 3, delete: 2)
     validate_writer_form_contract!(modules.writer)
@@ -326,7 +326,6 @@ defmodule Hawk.Resource do
   defp quote_reader_delegates(reader) do
     quote do
       def one(opts), do: unquote(reader).one(opts)
-      def one!(opts), do: unquote(reader).one!(opts)
       def all(opts), do: unquote(reader).all(opts)
     end
   end

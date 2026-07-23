@@ -6,7 +6,6 @@ defmodule Videdal.Schools do
   alias Videdal.Schools.{Reader, Writer}
 
   def one(opts), do: Reader.one(opts)
-  def one!(opts), do: Reader.one!(opts)
   def all(opts), do: Reader.all(opts)
 
   def create(attrs, authority), do: Writer.create(attrs, authority)

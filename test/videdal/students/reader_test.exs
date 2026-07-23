@@ -119,19 +119,6 @@ defmodule Videdal.Students.ReaderTest do
     end
   end
 
-  test "one!/1 returns the model or raises when missing" do
-    student = %Student{id: 1, name: "Ada"}
-    put_repo_results([student])
-
-    assert Students.one!(authority: Authority.system(), filter: %{id: 1}) == student
-
-    put_repo_results([])
-
-    assert_raise RuntimeError, ~r/expected one result, got none/, fn ->
-      Students.one!(authority: Authority.system(), filter: %{id: 2})
-    end
-  end
-
   defp put_repo_results(results) do
     Process.put({Videdal.Repo, :all_results}, results)
   end

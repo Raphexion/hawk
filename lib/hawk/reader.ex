@@ -72,17 +72,6 @@ defmodule Hawk.Reader do
   end
 
   @doc """
-  Fetches exactly one record or raises when no record exists.
-  """
-  @spec one!(config(), keyword() | map()) :: struct()
-  def one!(config, opts) do
-    case one(config, opts) do
-      {:ok, model} -> model
-      :not_found -> raise "expected one result, got none"
-    end
-  end
-
-  @doc """
   Builds the query for a reader call.
   """
   @spec build_query(config(), keyword() | map()) :: Ecto.Query.t()

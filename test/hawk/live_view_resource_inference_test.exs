@@ -10,8 +10,6 @@ defmodule Hawk.LiveViewResourceInferenceTest.Courses.Reader do
   def one(opts),
     do: {:ok, %Hawk.LiveViewResourceInferenceTest.Course{id: opts[:filter].id, title: "Math"}}
 
-  def one!(_opts), do: raise("not used")
-
   def all(_opts),
     do: [%Hawk.LiveViewResourceInferenceTest.Course{id: Videdal.course_id(), title: "Math"}]
 end
@@ -66,7 +64,6 @@ defmodule Hawk.LiveViewResourceInferenceTest do
                    Code.compile_string("""
                    defmodule Hawk.LiveViewResourceInferenceTest.LiveViewDisabled.Reader do
                      def one(_opts), do: :not_found
-                     def one!(_opts), do: raise("not used")
                      def all(_opts), do: []
                    end
 

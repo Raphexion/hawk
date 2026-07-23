@@ -6,7 +6,6 @@ defmodule Videdal.CourseGradeSummaries do
   alias Videdal.CourseGradeSummaries.{Reader, Writer}
 
   def one(opts), do: Reader.one(opts)
-  def one!(opts), do: Reader.one!(opts)
   def all(opts), do: Reader.all(opts)
 
   def create(attrs, authority), do: Writer.create(attrs, authority)

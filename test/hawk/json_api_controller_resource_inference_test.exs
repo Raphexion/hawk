@@ -15,8 +15,6 @@ defmodule Hawk.JsonApiControllerResourceInferenceTest.Courses.Reader do
   def one(opts),
     do: {:ok, %Hawk.JsonApiControllerResourceInferenceTest.Course{id: opts[:filter].id, title: "Math"}}
 
-  def one!(_opts), do: raise("not used")
-
   def all(_opts),
     do: [
       %Hawk.JsonApiControllerResourceInferenceTest.Course{id: Videdal.course_id(), title: "Math"}
@@ -84,7 +82,6 @@ defmodule Hawk.JsonApiControllerResourceInferenceTest do
                    Code.compile_string("""
                    defmodule Hawk.JsonApiControllerResourceInferenceTest.JsonApiDisabled.Reader do
                      def one(_opts), do: :not_found
-                     def one!(_opts), do: raise("not used")
                      def all(_opts), do: []
                    end
 

@@ -28,7 +28,7 @@ defmodule Videdal.ResourceFacadeTest do
   @student_id Videdal.student_id()
   @teacher_id Videdal.teacher_id()
 
-  test "read facades expose one/1 and one!/1 for controller and LiveView style callers" do
+  test "read facades expose one/1 for controller and LiveView style callers" do
     course = %Course{
       id: @course_id,
       title: "Math",
@@ -42,7 +42,6 @@ defmodule Videdal.ResourceFacadeTest do
     Process.put({Videdal.Repo, :all_results}, [course])
 
     assert Courses.one(authority: Authority.system(), filter: %{id: @course_id}) == {:ok, course}
-    assert Courses.one!(authority: Authority.system(), filter: %{id: @course_id}) == course
 
     grade = %Grade{
       id: @grade_id,
@@ -54,7 +53,7 @@ defmodule Videdal.ResourceFacadeTest do
 
     Process.put({Videdal.Repo, :all_results}, [grade])
 
-    assert Grades.one!(authority: Authority.system(), filter: %{id: @grade_id}) == grade
+    assert Grades.one(authority: Authority.system(), filter: %{id: @grade_id}) == {:ok, grade}
 
     summary = %CourseGradeSummary{
       id: @course_id,
@@ -71,11 +70,11 @@ defmodule Videdal.ResourceFacadeTest do
            ) ==
              {:ok, summary}
 
-    assert CourseGradeSummaries.one!(
+    assert CourseGradeSummaries.one(
              authority: Authority.system(),
              filter: %{course_id: @course_id}
            ) ==
-             summary
+             {:ok, summary}
 
     enrollment = %Enrollment{
       id: @enrollment_id,
@@ -89,8 +88,8 @@ defmodule Videdal.ResourceFacadeTest do
     assert Enrollments.one(authority: Authority.system(), filter: %{id: @enrollment_id}) ==
              {:ok, enrollment}
 
-    assert Enrollments.one!(authority: Authority.system(), filter: %{id: @enrollment_id}) ==
-             enrollment
+    assert Enrollments.one(authority: Authority.system(), filter: %{id: @enrollment_id}) ==
+             {:ok, enrollment}
 
     teacher = %Teacher{id: @teacher_id, name: "Grace", school_id: @school_id}
     Process.put({Videdal.Repo, :all_results}, [teacher])
@@ -98,7 +97,7 @@ defmodule Videdal.ResourceFacadeTest do
     assert Teachers.one(authority: Authority.system(), filter: %{id: @teacher_id}) ==
              {:ok, teacher}
 
-    assert Teachers.one!(authority: Authority.system(), filter: %{id: @teacher_id}) == teacher
+    assert Teachers.one(authority: Authority.system(), filter: %{id: @teacher_id}) == {:ok, teacher}
   end
 
   test "course grade summary facade keeps read-only writer errors at resource boundary" do
@@ -236,7 +235,7 @@ defmodule Videdal.ResourceFacadeTest do
     Process.put({Videdal.Repo, :all_results}, [school])
 
     assert Schools.one(authority: Authority.system(), filter: %{id: @school_id}) == {:ok, school}
-    assert Schools.one!(authority: Authority.system(), filter: %{id: @school_id}) == school
+    assert Schools.one(authority: Authority.system(), filter: %{id: @school_id}) == {:ok, school}
     assert [^school] = Schools.all(authority: Authority.system())
     assert_received {:videdal_repo, :all, _query}
 
@@ -260,7 +259,7 @@ defmodule Videdal.ResourceFacadeTest do
     assert Students.one(authority: Authority.system(), filter: %{id: @student_id}) ==
              {:ok, student}
 
-    assert Students.one!(authority: Authority.system(), filter: %{id: @student_id}) == student
+    assert Students.one(authority: Authority.system(), filter: %{id: @student_id}) == {:ok, student}
     assert [^student] = Students.all(authority: Authority.system())
     assert_received {:videdal_repo, :all, _query}
 
@@ -300,7 +299,7 @@ defmodule Videdal.ResourceFacadeTest do
     Process.put({Videdal.Repo, :all_results}, [grade])
 
     assert Grades.one(authority: Authority.system(), filter: %{id: @grade_id}) == {:ok, grade}
-    assert Grades.one!(authority: Authority.system(), filter: %{id: @grade_id}) == grade
+    assert Grades.one(authority: Authority.system(), filter: %{id: @grade_id}) == {:ok, grade}
     assert [^grade] = Grades.all(authority: Authority.system())
     assert_received {:videdal_repo, :all, _query}
 
@@ -344,8 +343,8 @@ defmodule Videdal.ResourceFacadeTest do
     assert Enrollments.one(authority: Authority.system(), filter: %{id: @enrollment_id}) ==
              {:ok, enrollment}
 
-    assert Enrollments.one!(authority: Authority.system(), filter: %{id: @enrollment_id}) ==
-             enrollment
+    assert Enrollments.one(authority: Authority.system(), filter: %{id: @enrollment_id}) ==
+             {:ok, enrollment}
 
     assert [^enrollment] = Enrollments.all(authority: Authority.system())
     assert_received {:videdal_repo, :all, _query}
@@ -380,7 +379,7 @@ defmodule Videdal.ResourceFacadeTest do
     assert Teachers.one(authority: Authority.system(), filter: %{id: @teacher_id}) ==
              {:ok, teacher}
 
-    assert Teachers.one!(authority: Authority.system(), filter: %{id: @teacher_id}) == teacher
+    assert Teachers.one(authority: Authority.system(), filter: %{id: @teacher_id}) == {:ok, teacher}
     assert [^teacher] = Teachers.all(authority: Authority.system())
     assert_received {:videdal_repo, :all, _query}
 

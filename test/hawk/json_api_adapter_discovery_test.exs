@@ -18,7 +18,6 @@ end
 
 defmodule Hawk.JsonApiAdapterDiscoveryTest.Authors.Reader do
   def one(opts), do: {:one, opts}
-  def one!(opts), do: {:one!, opts}
   def all(opts), do: {:all, opts}
 end
 
@@ -46,7 +45,6 @@ end
 
 defmodule Hawk.JsonApiAdapterDiscoveryTest.Books.Reader do
   def one(opts), do: {:one, opts}
-  def one!(opts), do: {:one!, opts}
   def all(opts), do: {:all, opts}
   def filter_keys, do: MapSet.new([:id])
   def filter_handlers, do: %{}

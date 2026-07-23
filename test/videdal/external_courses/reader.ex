@@ -2,7 +2,6 @@ defmodule Videdal.ExternalCourses.Reader do
   @moduledoc false
 
   def one(_opts), do: {:ok, sample()}
-  def one!(_opts), do: sample()
   def all(_opts), do: [sample()]
 
   def preload_keys, do: [:teacher]

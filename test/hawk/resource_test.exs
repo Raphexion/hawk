@@ -8,7 +8,6 @@ end
 
 defmodule Hawk.ResourceTest.Courses.Reader do
   def one(opts), do: {:one, opts}
-  def one!(opts), do: {:one!, opts}
   def all(opts), do: {:all, opts}
   def filter_keys, do: MapSet.new([:title])
 end
@@ -61,7 +60,6 @@ end
 
 defmodule Hawk.ResourceTest.CourseSummaries.Reader do
   def one(opts), do: {:one, opts}
-  def one!(opts), do: {:one!, opts}
   def all(opts), do: {:all, opts}
 end
 
@@ -79,7 +77,6 @@ end
 
 defmodule Hawk.ResourceTest.CustomFacade.CustomReader do
   def one(opts), do: {:custom_one, opts}
-  def one!(opts), do: {:custom_one!, opts}
   def all(opts), do: {:custom_all, opts}
 end
 
@@ -115,7 +112,6 @@ defmodule Hawk.ResourceTest do
     course = %Course{id: Videdal.course_id(), title: "Math"}
 
     assert Courses.one(authority: authority) == {:one, [authority: authority]}
-    assert Courses.one!(authority: authority) == {:one!, [authority: authority]}
     assert Courses.all(authority: authority) == {:all, [authority: authority]}
     assert Courses.create(%{title: "Math"}, authority) == {:create, %{title: "Math"}, authority}
 
@@ -198,7 +194,6 @@ defmodule Hawk.ResourceTest do
                    Code.compile_string("""
                    defmodule Hawk.ResourceTest.Malformed.Reader do
                      def one(opts), do: {:one, opts}
-                     def one!(opts), do: {:one!, opts}
                      def all(opts), do: {:all, opts}
                    end
 
@@ -233,7 +228,6 @@ defmodule Hawk.ResourceTest do
                    Code.compile_string("""
                    defmodule Hawk.ResourceTest.BadAttributeSource.Reader do
                      def one(opts), do: {:one, opts}
-                     def one!(opts), do: {:one!, opts}
                      def all(opts), do: {:all, opts}
                    end
 
@@ -272,7 +266,6 @@ defmodule Hawk.ResourceTest do
                    Code.compile_string("""
                    defmodule Hawk.ResourceTest.BadRelationshipSource.Reader do
                      def one(opts), do: {:one, opts}
-                     def one!(opts), do: {:one!, opts}
                      def all(opts), do: {:all, opts}
                    end
 
@@ -311,7 +304,6 @@ defmodule Hawk.ResourceTest do
                    Code.compile_string("""
                    defmodule Hawk.ResourceTest.BadWritableRelationship.Reader do
                      def one(opts), do: {:one, opts}
-                     def one!(opts), do: {:one!, opts}
                      def all(opts), do: {:all, opts}
                    end
 
@@ -356,7 +348,6 @@ defmodule Hawk.ResourceTest do
                    Code.compile_string("""
                    defmodule Hawk.ResourceTest.BadLiveField.Reader do
                      def one(opts), do: {:one, opts}
-                     def one!(opts), do: {:one!, opts}
                      def all(opts), do: {:all, opts}
                    end
 
@@ -396,7 +387,6 @@ defmodule Hawk.ResourceTest do
                    Code.compile_string("""
                    defmodule Hawk.ResourceTest.BadLiveFormField.Reader do
                      def one(opts), do: {:one, opts}
-                     def one!(opts), do: {:one!, opts}
                      def all(opts), do: {:all, opts}
                    end
 
@@ -436,7 +426,6 @@ defmodule Hawk.ResourceTest do
                    Code.compile_string("""
                    defmodule Hawk.ResourceTest.PartialFormWriter.Reader do
                      def one(opts), do: {:one, opts}
-                     def one!(opts), do: {:one!, opts}
                      def all(opts), do: {:all, opts}
                    end
 
@@ -473,7 +462,6 @@ defmodule Hawk.ResourceTest do
                    Code.compile_string("""
                    defmodule Hawk.ResourceTest.BadLiveSearch.Reader do
                      def one(opts), do: {:one, opts}
-                     def one!(opts), do: {:one!, opts}
                      def all(opts), do: {:all, opts}
                      def filter_keys, do: MapSet.new([:teacher_id])
                    end
@@ -514,7 +502,6 @@ defmodule Hawk.ResourceTest do
                    Code.compile_string("""
                    defmodule Hawk.ResourceTest.BadLiveSort.Reader do
                      def one(opts), do: {:one, opts}
-                     def one!(opts), do: {:one!, opts}
                      def all(opts), do: {:all, opts}
                      def sort_keys, do: MapSet.new([:id])
                    end
@@ -555,7 +542,6 @@ defmodule Hawk.ResourceTest do
                    Code.compile_string("""
                    defmodule Hawk.ResourceTest.BadLiveFilter.Reader do
                      def one(opts), do: {:one, opts}
-                     def one!(opts), do: {:one!, opts}
                      def all(opts), do: {:all, opts}
                      def filter_keys, do: MapSet.new([:title])
                    end

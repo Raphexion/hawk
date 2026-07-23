@@ -98,11 +98,10 @@ defmodule Hawk.Reader.ResourceTest do
     end
   end
 
-  test "generates one/1 and one!/1" do
+  test "generates one/1" do
     student = %Student{id: 12, school_id: 7}
     Process.put({Videdal.Repo, :all_results}, [student])
 
     assert Reader.one(authority: Authority.system(), filter: %{student_id: 12}) == {:ok, student}
-    assert Reader.one!(authority: Authority.system(), filter: %{student_id: 12}) == student
   end
 end
