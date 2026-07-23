@@ -98,7 +98,11 @@ defmodule Hawk.JsonApiControllerCase do
       import Hawk.JsonApiControllerCase,
         only: [
           assert_json_api_controller_matrix: 1,
+          assert_index_query_growth: 2,
           authorities: 2,
+          count_repo_queries: 2,
+          count_repo_queries: 3,
+          n_plus_one_guard: 1,
           pre_authorities: 1,
           pre_sample: 3,
           sample: 5
@@ -182,6 +186,21 @@ defmodule Hawk.JsonApiControllerCase do
     end
   end
 
+  defmacro n_plus_one_guard(opts) do
+    description =
+      opts
+      |> Keyword.take([:include, :params, :parent_counts, :max_extra_queries])
+      |> inspect()
+
+    opts = Macro.escape(opts)
+
+    quote do
+      test "Hawk JSON:API index query growth stays bounded #{unquote(description)}" do
+        assert_index_query_growth(__MODULE__, unquote(opts))
+      end
+    end
+  end
+
   def assert_json_api_controller_matrix(test_module) do
     config = test_module.__hawk_json_api_controller_case__()
     samples = sample_models(test_module, config.sample_count)
@@ -197,6 +216,84 @@ defmodule Hawk.JsonApiControllerCase do
       assert_update(config, role_case)
       assert_delete(config, role_case)
     end)
+  end
+
+  def assert_index_query_growth(test_module, opts) when is_atom(test_module) and is_list(opts) do
+    config = test_module.__hawk_json_api_controller_case__()
+    repo = config.repo || raise ArgumentError, "n_plus_one_guard requires :repo in Hawk.JsonApiControllerCase"
+
+    unless ecto_repo?(repo) do
+      raise ArgumentError, "n_plus_one_guard requires an Ecto repo, got #{inspect(repo)}"
+    end
+
+    parent_counts = Keyword.get(opts, :parent_counts, [1, max(config.sample_count, 2)])
+    max_extra_queries = Keyword.get(opts, :max_extra_queries, 0)
+    role_case = query_growth_role_case(test_module, config, Keyword.get(opts, :authority))
+
+    results =
+      Enum.map(parent_counts, fn parent_count ->
+        samples = sample_models(test_module, parent_count)
+        put_results(config, samples)
+
+        params = query_growth_params(opts, parent_count)
+
+        {conn, query_count} =
+          count_repo_queries(repo, fn ->
+            config.controller.index(conn_for(role_case.authority), params)
+          end)
+
+        assert_status(conn, 200, role_case, :n_plus_one_guard)
+        %{parent_count: parent_count, query_count: query_count, params: params}
+      end)
+
+    baseline = hd(results)
+
+    Enum.each(tl(results), fn result ->
+      ExUnit.Assertions.assert(
+        result.query_count <= baseline.query_count + max_extra_queries,
+        """
+        expected bounded Hawk JSON:API query growth for #{inspect(config.controller)} index
+
+        baseline parent_count=#{baseline.parent_count}: #{baseline.query_count} queries
+        parent_count=#{result.parent_count}: #{result.query_count} queries
+        max_extra_queries=#{max_extra_queries}
+        params=#{inspect(result.params)}
+        """
+      )
+    end)
+
+    results
+  end
+
+  def count_repo_queries(repo, fun, opts \\ []) when is_atom(repo) and is_function(fun, 0) do
+    test_pid = self()
+    ref = make_ref()
+    handler_id = {__MODULE__, self(), ref}
+    ignored_sources = Keyword.get(opts, :ignored_sources, ["schema_migrations"])
+
+    :telemetry.attach(
+      handler_id,
+      repo_query_event(repo, opts),
+      &__MODULE__.handle_query_event/4,
+      %{test_pid: test_pid, ref: ref, ignored_sources: ignored_sources}
+    )
+
+    try do
+      result = fun.()
+      {result, drain_query_count(ref, 0)}
+    after
+      :telemetry.detach(handler_id)
+    end
+  end
+
+  def handle_query_event(_event, _measurements, metadata, %{
+        test_pid: test_pid,
+        ref: ref,
+        ignored_sources: ignored_sources
+      }) do
+    unless metadata[:source] in ignored_sources do
+      send(test_pid, {ref, :query})
+    end
   end
 
   def create_params_for(test_module) do
@@ -361,7 +458,9 @@ defmodule Hawk.JsonApiControllerCase do
 
   defp assert_json_api_collection(conn, role_case, action) do
     case decode(conn) do
-      %{data: data} when is_list(data) -> :ok
+      %{data: data} when is_list(data) ->
+        :ok
+
       _other ->
         ExUnit.Assertions.flunk(
           "expected #{role_case.name} #{action} to return a JSON:API collection document, got #{inspect(decode(conn))}"
@@ -453,6 +552,49 @@ defmodule Hawk.JsonApiControllerCase do
     end
   end
 
+  defp query_growth_role_case(test_module, config, nil) do
+    Enum.find(authority_cases(test_module), &read_allowed?(config, &1)) ||
+      raise ArgumentError,
+            "n_plus_one_guard could not find a readable authority case for #{inspect(test_module)}"
+  end
+
+  defp query_growth_role_case(test_module, _config, name) when is_atom(name) do
+    Enum.find(authority_cases(test_module), &(&1.name == name)) ||
+      raise ArgumentError,
+            "n_plus_one_guard authority #{inspect(name)} is not defined for #{inspect(test_module)}"
+  end
+
+  defp query_growth_role_case(_test_module, _config, %Authority{} = authority) do
+    %{name: :custom, authority: authority}
+  end
+
+  defp query_growth_params(opts, parent_count) do
+    opts
+    |> Keyword.get(:params, %{})
+    |> stringify_keys()
+    |> maybe_put_include(Keyword.get(opts, :include))
+    |> put_page_size(parent_count)
+  end
+
+  defp maybe_put_include(params, nil), do: params
+  defp maybe_put_include(params, include), do: Map.put(params, "include", include)
+
+  defp put_page_size(params, parent_count) do
+    Map.update(params, "page", %{"size" => to_string(parent_count)}, fn page ->
+      page
+      |> stringify_keys()
+      |> Map.put("size", to_string(parent_count))
+    end)
+  end
+
+  defp stringify_keys(map) when is_map(map) do
+    Map.new(map, fn {key, value} -> {to_string(key), stringify_keys(value)} end)
+  end
+
+  defp stringify_keys(list) when is_list(list), do: Enum.map(list, &stringify_keys/1)
+
+  defp stringify_keys(value), do: value
+
   def normalize_authority_case({name, %Authority{} = authority}) when is_atom(name) do
     %{name: name, authority: authority}
   end
@@ -505,6 +647,23 @@ defmodule Hawk.JsonApiControllerCase do
 
   defp ecto_repo?(repo) do
     Code.ensure_loaded?(repo) and function_exported?(repo, :__adapter__, 0)
+  end
+
+  defp repo_query_event(repo, opts) do
+    prefix =
+      Keyword.get(opts, :telemetry_prefix) || repo.config()[:telemetry_prefix] ||
+        raise ArgumentError,
+              "could not determine telemetry_prefix for #{inspect(repo)}; pass :telemetry_prefix to count_repo_queries/3"
+
+    prefix ++ [:query]
+  end
+
+  defp drain_query_count(ref, count) do
+    receive do
+      {^ref, :query} -> drain_query_count(ref, count + 1)
+    after
+      0 -> count
+    end
   end
 
   defp insert_sample!(repo, sample) when is_struct(sample) do

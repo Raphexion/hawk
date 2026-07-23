@@ -35,11 +35,30 @@ defmodule Hawk.Reader.ResourceTest.Reader do
   end
 end
 
+defmodule Hawk.Reader.ResourceTest.ScopedReader do
+  @moduledoc false
+
+  use Hawk.Reader.Resource,
+    repo: Videdal.Repo,
+    schema: Videdal.Student,
+    policy: Hawk.Reader.ResourceTest.Policy
+
+  filter(:id)
+  filter(:school_id)
+
+  def scope(query, _params, _opts) do
+    where(query, [root: student], student.active == true)
+  end
+end
+
 defmodule Hawk.Reader.ResourceTest do
   use ExUnit.Case, async: true
 
+  import Ecto.Query, only: [from: 2]
+
   alias Hawk.Authority
   alias Hawk.Reader.ResourceTest.Reader
+  alias Hawk.Reader.ResourceTest.ScopedReader
   alias Videdal.Student
 
   test "generates reader metadata functions" do
@@ -79,6 +98,22 @@ defmodule Hawk.Reader.ResourceTest do
     inspected = inspect(query)
     assert inspected =~ "join: s1 in assoc(s0, :school)"
     assert inspected =~ ~s(s1.name == ^"Videdal Skole")
+  end
+
+  test "applies reader scope to root reads and preload queries" do
+    Process.put({Videdal.Repo, :all_results}, [%Student{id: 12, school_id: 7, active: true}])
+
+    ScopedReader.all(authority: Authority.system())
+
+    assert_received {:videdal_repo, :all, query}
+    assert inspect(query) =~ "s0.active == true"
+
+    query =
+      Videdal.Student
+      |> from(as: :root)
+      |> ScopedReader.preload_query(Authority.system())
+
+    assert inspect(query) =~ "s0.active == true"
   end
 
   test "preloads declared associations after fetching rows" do

@@ -80,6 +80,47 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest.CoursesController 
     model: Videdal.Course
 end
 
+defmodule Videdal.Integration.JsonApiControllerQueryCountTest.ControllerCaseHarness do
+  @moduledoc false
+
+  alias Hawk.Authority
+  alias Videdal.{Course, SandboxRepo, School, Teacher}
+  alias Videdal.Integration.JsonApiControllerQueryCountTest.CoursesController
+
+  def __hawk_json_api_controller_case__ do
+    %{
+      controller: CoursesController,
+      resource: Videdal.Integration.JsonApiControllerQueryCountTest.Courses,
+      model: Course,
+      repo: SandboxRepo,
+      sample_count: 3,
+      create_params: nil,
+      update_params: nil
+    }
+  end
+
+  def __hawk_pre_authorities__, do: %{}
+
+  def __hawk_authorities__(_pre_authorities) do
+    %{system: Authority.system()}
+  end
+
+  def pre_sample(_pre_authorities, _authorities) do
+    school = SandboxRepo.insert!(%School{name: "Videdal Skole"})
+    teacher = SandboxRepo.insert!(%Teacher{name: "Ms. Curie", school_id: school.id})
+    %{school: school, teacher: teacher}
+  end
+
+  def sample(_pre_authorities, _authorities, known, index) do
+    %Course{
+      id: Ecto.UUID.generate(),
+      title: "Course #{index}",
+      school_id: known.school.id,
+      teacher_id: known.teacher.id
+    }
+  end
+end
+
 defmodule Videdal.Integration.JsonApiControllerQueryCountTest do
   use Videdal.DatabaseCase, async: false
 
@@ -116,6 +157,24 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest do
     assert length(resp(conn).data) == 5
     assert one_course_query_count == 3
     assert many_course_query_count == one_course_query_count
+  end
+
+  test "controller case helper asserts bounded index query growth" do
+    results =
+      Hawk.JsonApiControllerCase.assert_index_query_growth(
+        Videdal.Integration.JsonApiControllerQueryCountTest.ControllerCaseHarness,
+        include: "teacher",
+        parent_counts: [1, 5],
+        max_extra_queries: 0,
+        authority: :system
+      )
+
+    assert [
+             %{parent_count: 1, query_count: one_query_count},
+             %{parent_count: 5, query_count: five_query_count}
+           ] = results
+
+    assert one_query_count == five_query_count
   end
 
   test "related to-one endpoint uses one root query and one batched preload query" do
@@ -197,5 +256,4 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest do
 
     %{school: school, teacher: teacher, course: hd(courses), courses: courses}
   end
-
 end

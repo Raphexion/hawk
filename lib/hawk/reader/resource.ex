@@ -169,7 +169,9 @@ defmodule Hawk.Reader.Resource do
       def all(opts), do: Hawk.Reader.all(config(), opts)
 
       def preload_query(query, authority) do
-        Hawk.Reader.apply_authorized_filter(query, config(), authority)
+        query
+        |> Hawk.Reader.apply_authorized_filter(config(), authority)
+        |> Hawk.Reader.apply_scope(config(), %{}, %{authority: authority})
       end
     end
   end
@@ -188,10 +190,15 @@ defmodule Hawk.Reader.Resource do
           default_sort: @hawk_reader_default_sort,
           preload_keys: preload_keys(),
           preload_readers: preload_readers(),
+          scope: &__MODULE__.scope/3,
           sort_keys: sort_keys(),
           default_page_size: @hawk_reader_default_page_size,
           max_page_size: @hawk_reader_max_page_size
         }
+      end
+
+      unless Module.defines?(__MODULE__, {:scope, 3}) do
+        def scope(query, _params, _opts), do: query
       end
     end
   end

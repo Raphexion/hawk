@@ -27,6 +27,7 @@ defmodule Hawk.Reader do
           optional(:forced_filter) => Filter.t(),
           optional(:preload_keys) => Enumerable.t(),
           optional(:preload_readers) => %{optional(atom()) => module()},
+          optional(:scope) => (Ecto.Query.t(), map(), map() -> Ecto.Query.t()),
           optional(:sort_keys) => Enumerable.t(),
           optional(:default_sort) => keyword(atom()),
           optional(:default_page_size) => pos_integer() | nil,
@@ -89,6 +90,7 @@ defmodule Hawk.Reader do
     config.schema
     |> from(as: :root)
     |> apply_authorized_filter(config, authority, caller_filter, sort_columns(sort))
+    |> apply_scope(config, opts, %{authority: authority})
     |> apply_sort(sort)
     |> apply_offset(page)
     |> apply_limit(page)
@@ -110,6 +112,20 @@ defmodule Hawk.Reader do
     query
     |> JoinPlan.apply(Map.get(config, :join_plan, []), filter, sort_key)
     |> FilterCompiler.compile(config.schema, filter, Map.get(config, :filter_handlers, %{}))
+  end
+
+  @doc """
+  Applies a reader's resource-owned query shaping hook.
+
+  Reader scopes are for projections or joins that belong to the resource shape,
+  not for authorization; policy filters are applied before this hook.
+  """
+  @spec apply_scope(Ecto.Query.t(), config(), map(), map()) :: Ecto.Query.t()
+  def apply_scope(query, config, params, opts) do
+    case Map.get(config, :scope) do
+      scope when is_function(scope, 3) -> scope.(query, params, opts)
+      _ -> query
+    end
   end
 
   defp authorized_filter(config, authority, caller_filter) do
