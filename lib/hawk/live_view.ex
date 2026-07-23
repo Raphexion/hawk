@@ -3,9 +3,7 @@ defmodule Hawk.LiveView do
   Small Phoenix LiveView helper DSL for Hawk resources.
 
   Hawk runs in Phoenix LiveViews and assigns through `Phoenix.Component.assign/3`
-  and `Phoenix.Component.to_form/2` on real `Phoenix.LiveView.Socket` structs. A
-  lightweight plain-map socket remains supported as a test boundary so helpers can
-  be exercised without a live socket.
+  and `Phoenix.Component.to_form/2` on real `Phoenix.LiveView.Socket` structs.
   """
 
   alias Hawk.LiveView
@@ -468,13 +466,7 @@ defmodule Hawk.LiveView do
     |> Enum.reject(&MapSet.member?(hidden, &1.name))
   end
 
-  defp form_value(socket, changeset, as) do
-    if is_struct(socket) do
-      Phoenix.Component.to_form(changeset, as: as)
-    else
-      changeset
-    end
-  end
+  defp form_value(_socket, changeset, as), do: Phoenix.Component.to_form(changeset, as: as)
 
   defp live_error(result) do
     case Hawk.Errors.to_live_view(result) do
@@ -482,14 +474,7 @@ defmodule Hawk.LiveView do
     end
   end
 
-  defp assign(socket, key, value) do
-    if is_struct(socket) do
-      Phoenix.Component.assign(socket, key, value)
-    else
-      assigns = Map.get(socket, :assigns, %{})
-      Map.put(socket, :assigns, Map.put(assigns, key, value))
-    end
-  end
+  defp assign(socket, key, value), do: Phoenix.Component.assign(socket, key, value)
 
   defp normalize_id(id), do: id
 

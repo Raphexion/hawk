@@ -12,6 +12,8 @@ end
 defmodule Hawk.LiveViewPageTest do
   use ExUnit.Case, async: true
 
+  import Hawk.TestSocket, only: [socket: 0]
+
   alias Hawk.Authority
   alias Hawk.LiveViewPageTest.CourseWorkspaceLive
   alias Videdal.{Course, Grade, Student}
@@ -152,6 +154,4 @@ defmodule Hawk.LiveViewPageTest do
 
     assert_raise ArgumentError, fn -> String.to_existing_atom(hostile) end
   end
-
-  defp socket, do: %{assigns: %{}}
 end

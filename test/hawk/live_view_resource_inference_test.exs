@@ -40,6 +40,8 @@ end
 defmodule Hawk.LiveViewResourceInferenceTest do
   use ExUnit.Case, async: true
 
+  import Hawk.TestSocket, only: [socket: 0]
+
   alias Hawk.LiveViewResourceInferenceTest.CourseLive
 
   test "LiveView infers assign names from Hawk.Resource model" do
@@ -89,6 +91,4 @@ defmodule Hawk.LiveViewResourceInferenceTest do
                    """)
                  end
   end
-
-  defp socket, do: %{assigns: %{}}
 end

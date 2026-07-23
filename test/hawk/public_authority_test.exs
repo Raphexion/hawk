@@ -14,6 +14,8 @@ end
 defmodule Hawk.PublicAuthorityTest do
   use ExUnit.Case, async: true
 
+  import Hawk.TestConn, only: [conn: 0, conn: 1, resp: 1]
+
   alias Hawk.Authority
   alias Videdal.Controllers.AuthenticatedCoursesController
   alias Videdal.Controllers.PublicCoursesController
@@ -44,7 +46,7 @@ defmodule Hawk.PublicAuthorityTest do
     conn = PublicCoursesController.index(conn(), %{})
 
     assert conn.status == 200
-    assert conn.resp_body.data == [Hawk.JsonApi.document(hd(courses)).data]
+    assert resp(conn).data == [Hawk.JsonApi.document(hd(courses)).data]
   end
 
   test "deeper includes do not bypass nested policies for public endpoints" do
@@ -113,12 +115,6 @@ defmodule Hawk.PublicAuthorityTest do
       })
 
     assert conn.status == 403
-    assert [%{status: "403", code: "not_authorized"}] = conn.resp_body.errors
-  end
-
-  defp conn, do: %{assigns: %{}, status: nil, resp_body: nil}
-
-  defp conn(%{role: role, scopes: scopes}) do
-    %{assigns: %{authority: Authority.new(role, 1, scopes: scopes)}, status: nil, resp_body: nil}
+    assert [%{status: "403", code: "not_authorized"}] = resp(conn).errors
   end
 end

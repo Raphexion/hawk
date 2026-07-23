@@ -7,12 +7,16 @@ end
 defmodule Hawk.JsonApiControllerUuidValidationTest do
   use ExUnit.Case, async: true
 
+  import Hawk.TestConn, only: [conn: 1, resp: 1]
+
+  alias Hawk.Authority
   alias Hawk.JsonApiControllerUuidValidationTest.Controller
 
   @invalid_id "not-a-uuid"
+  @system Authority.system()
 
   test "show rejects invalid UUID path ids before querying" do
-    conn = Controller.show(conn(), %{"id" => @invalid_id})
+    conn = Controller.show(conn(@system), %{"id" => @invalid_id})
 
     assert conn.status == 400
     assert_error(conn, "id must be a valid UUID or 8-character short id")
@@ -20,7 +24,7 @@ defmodule Hawk.JsonApiControllerUuidValidationTest do
   end
 
   test "update rejects invalid UUID path ids before querying or validating body" do
-    conn = Controller.update(conn(), %{"id" => @invalid_id, "data" => %{}})
+    conn = Controller.update(conn(@system), %{"id" => @invalid_id, "data" => %{}})
 
     assert conn.status == 400
     assert_error(conn, "id must be a valid UUID")
@@ -28,7 +32,7 @@ defmodule Hawk.JsonApiControllerUuidValidationTest do
   end
 
   test "delete rejects invalid UUID path ids before querying" do
-    conn = Controller.delete(conn(), %{"id" => @invalid_id})
+    conn = Controller.delete(conn(@system), %{"id" => @invalid_id})
 
     assert conn.status == 400
     assert_error(conn, "id must be a valid UUID")
@@ -37,7 +41,7 @@ defmodule Hawk.JsonApiControllerUuidValidationTest do
 
   test "custom actions reject invalid UUID path ids before querying" do
     conn =
-      Controller.action(conn(), %{
+      Controller.action(conn(@system), %{
         "id" => @invalid_id,
         "action" => "open-registration",
         "meta" => %{}
@@ -49,7 +53,7 @@ defmodule Hawk.JsonApiControllerUuidValidationTest do
   end
 
   test "relationship endpoint rejects invalid UUID path ids before querying" do
-    conn = Controller.relationship(conn(), %{"id" => @invalid_id, "relationship" => "teacher"})
+    conn = Controller.relationship(conn(@system), %{"id" => @invalid_id, "relationship" => "teacher"})
 
     assert conn.status == 400
     assert_error(conn, "id must be a valid UUID")
@@ -57,22 +61,14 @@ defmodule Hawk.JsonApiControllerUuidValidationTest do
   end
 
   test "related endpoint rejects invalid UUID path ids before querying" do
-    conn = Controller.related(conn(), %{"id" => @invalid_id, "relationship" => "teacher"})
+    conn = Controller.related(conn(@system), %{"id" => @invalid_id, "relationship" => "teacher"})
 
     assert conn.status == 400
     assert_error(conn, "id must be a valid UUID")
     refute_received {:videdal_repo, :all, _query}
   end
 
-  defp conn do
-    %{
-      assigns: %{authority: Hawk.Authority.system()},
-      status: nil,
-      resp_body: nil
-    }
-  end
-
   defp assert_error(conn, detail) do
-    assert %{errors: [%{detail: ^detail}]} = conn.resp_body
+    assert %{errors: [%{detail: ^detail}]} = resp(conn)
   end
 end

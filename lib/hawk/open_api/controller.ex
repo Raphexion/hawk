@@ -37,10 +37,4 @@ defmodule Hawk.OpenApi.Controller do
     |> Plug.Conn.put_resp_content_type("application/vnd.api+json")
     |> Plug.Conn.send_resp(status, Jason.encode!(body))
   end
-
-  defp json(conn, status, body) when is_map(conn) do
-    conn
-    |> Map.put(:status, status)
-    |> Map.put(:resp_body, body)
-  end
 end

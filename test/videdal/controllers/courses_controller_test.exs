@@ -7,15 +7,16 @@ end
 defmodule Videdal.Controllers.CoursesControllerTest do
   use ExUnit.Case, async: true
 
-  alias Hawk.Authority
+  import Hawk.TestConn, only: [conn: 1, resp: 1]
+
   alias Videdal.Controllers.CoursesController
   alias Videdal.Course
 
   @course_id Videdal.course_id()
-  @school_admin_id Videdal.school_admin_id()
   @school_id Videdal.school_id()
   @student_id Videdal.student_id()
   @teacher_id Videdal.teacher_id()
+  @school_admin Hawk.Authority.new(:school_admin, Videdal.school_admin_id(), scopes: %{school_id: Videdal.school_id()})
 
   test "index returns a JSON:API collection document" do
     courses = [
@@ -32,11 +33,11 @@ defmodule Videdal.Controllers.CoursesControllerTest do
 
     Process.put({Videdal.Repo, :all_results}, courses)
 
-    conn = CoursesController.index(conn(), %{"sort" => "title", "page" => %{"size" => "10"}})
+    conn = CoursesController.index(conn(@school_admin), %{"sort" => "title", "page" => %{"size" => "10"}})
 
     assert conn.status == 200
 
-    assert conn.resp_body == %{
+    assert resp(conn) == %{
              data: [
                %{
                  type: "courses",
@@ -77,13 +78,13 @@ defmodule Videdal.Controllers.CoursesControllerTest do
 
     Process.put({Videdal.Repo, :all_results}, [course])
 
-    conn = CoursesController.show(conn(), %{"id" => @course_id})
+    conn = CoursesController.show(conn(@school_admin), %{"id" => @course_id})
 
     assert conn.status == 200
-    assert conn.resp_body.data.type == "courses"
-    assert conn.resp_body.data.id == @course_id
+    assert resp(conn).data.type == "courses"
+    assert resp(conn).data.id == @course_id
 
-    assert conn.resp_body.data.attributes == %{
+    assert resp(conn).data.attributes == %{
              title: "Math",
              registration_state: "draft",
              seat_count: 0,
@@ -94,11 +95,11 @@ defmodule Videdal.Controllers.CoursesControllerTest do
   test "show returns a JSON:API error when missing" do
     Process.put({Videdal.Repo, :all_results}, [])
 
-    conn = CoursesController.show(conn(), %{"id" => Videdal.other_course_id()})
+    conn = CoursesController.show(conn(@school_admin), %{"id" => Videdal.other_course_id()})
 
     assert conn.status == 404
 
-    assert conn.resp_body == %{
+    assert resp(conn) == %{
              errors: [
                %{
                  status: "404",
@@ -112,7 +113,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
 
   test "create writes through the resource writer and returns JSON:API" do
     conn =
-      CoursesController.create(conn(), %{
+      CoursesController.create(conn(@school_admin), %{
         "data" => %{
           "type" => "courses",
           "attributes" => %{"title" => "Math"},
@@ -125,7 +126,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
 
     assert conn.status == 201
 
-    assert conn.resp_body.data.attributes == %{
+    assert resp(conn).data.attributes == %{
              title: "Math",
              registration_state: "draft",
              seat_count: 0,
@@ -150,7 +151,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
     Process.put({Videdal.Repo, :all_results}, [course])
 
     conn =
-      CoursesController.action(conn(), %{
+      CoursesController.action(conn(@school_admin), %{
         "id" => @course_id,
         "action" => "open-registration",
         "meta" => "not-a-map"
@@ -158,7 +159,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
 
     assert conn.status == 200
 
-    assert conn.resp_body.data.attributes == %{
+    assert resp(conn).data.attributes == %{
              title: "Math",
              registration_state: "open",
              seat_count: 3,
@@ -183,7 +184,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
     Process.put({Videdal.Repo, :all_results}, [course])
 
     conn =
-      CoursesController.action(conn(), %{
+      CoursesController.action(conn(@school_admin), %{
         "id" => @course_id,
         "action" => "open-registration",
         "meta" => %{"seat_count" => 2, "waitlist_count" => 1}
@@ -191,7 +192,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
 
     assert conn.status == 200
 
-    assert conn.resp_body.data.attributes == %{
+    assert resp(conn).data.attributes == %{
              title: "Math",
              registration_state: "open",
              seat_count: 2,
@@ -221,14 +222,14 @@ defmodule Videdal.Controllers.CoursesControllerTest do
     Process.put({Videdal.Repo, :all_results}, [course])
 
     conn =
-      CoursesController.action(conn(), %{
+      CoursesController.action(conn(@school_admin), %{
         "id" => @course_id,
         "action" => "open-registration"
       })
 
     assert conn.status == 200
 
-    assert conn.resp_body.data.attributes == %{
+    assert resp(conn).data.attributes == %{
              title: "Math",
              registration_state: "open",
              seat_count: 4,
@@ -253,7 +254,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
     Process.put({Videdal.Repo, :all_results}, [course])
 
     conn =
-      CoursesController.action(conn(), %{
+      CoursesController.action(conn(@school_admin), %{
         "id" => @course_id,
         "action" => "launch-rocket",
         "meta" => %{}
@@ -261,7 +262,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
 
     assert conn.status == 404
 
-    assert conn.resp_body == %{
+    assert resp(conn) == %{
              errors: [
                %{
                  status: "404",
@@ -287,7 +288,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
     Process.put({Videdal.Repo, :all_results}, [course])
 
     conn =
-      CoursesController.action(conn(), %{
+      CoursesController.action(conn(@school_admin), %{
         "id" => @course_id,
         "action" => "close-registration",
         "meta" => %{}
@@ -301,7 +302,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
                code: "invalid",
                source: %{pointer: "/data/attributes/registration_state"}
              }
-           ] = conn.resp_body.errors
+           ] = resp(conn).errors
 
     refute_received {:videdal_repo, :transaction}
   end
@@ -310,7 +311,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
     Process.put({Videdal.Repo, :all_results}, [])
 
     conn =
-      CoursesController.action(conn(), %{
+      CoursesController.action(conn(@school_admin), %{
         "id" => @course_id,
         "action" => "open-registration",
         "meta" => %{"seat_count" => 2, "waitlist_count" => 1}
@@ -318,7 +319,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
 
     assert conn.status == 404
 
-    assert conn.resp_body == %{
+    assert resp(conn) == %{
              errors: [
                %{
                  status: "404",
@@ -380,7 +381,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
     Process.put({Videdal.Repo, :all_results, Videdal.Enrollment}, enrollments)
 
     conn =
-      CoursesController.action(conn(), %{
+      CoursesController.action(conn(@school_admin), %{
         "id" => @course_id,
         "action" => "close-registration",
         "meta" => %{}
@@ -388,7 +389,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
 
     assert conn.status == 200
 
-    assert conn.resp_body.data.attributes == %{
+    assert resp(conn).data.attributes == %{
              title: "Math",
              registration_state: "closed",
              seat_count: 2,
@@ -435,13 +436,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
       )
 
     assert conn.status == 403
-    assert [%{status: "403", code: "not_authorized"}] = conn.resp_body.errors
+    assert [%{status: "403", code: "not_authorized"}] = resp(conn).errors
   end
 
-  defp conn(authority_opts \\ %{role: :school_admin, scopes: %{school_id: @school_id}}) do
-    %{assigns: %{authority: authority(authority_opts)}, status: nil, resp_body: nil}
-  end
-
-  defp authority(%{role: role, scopes: scopes}),
-    do: Authority.new(role, @school_admin_id, scopes: scopes)
 end

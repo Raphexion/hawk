@@ -42,6 +42,8 @@ end
 defmodule Hawk.LiveViewTest do
   use ExUnit.Case, async: true
 
+  import Hawk.TestSocket, only: [socket: 0]
+
   alias Hawk.Authority
 
   alias Hawk.LiveViewTest.{
@@ -193,7 +195,7 @@ defmodule Hawk.LiveViewTest do
   test "assign_new_form assigns a keyed validation form and create fields without persisting" do
     socket = CourseIndexLive.assign_new_form(socket(), Authority.system())
 
-    assert %Ecto.Changeset{action: :validate, valid?: false} = socket.assigns.course_form
+    assert %Phoenix.HTML.Form{action: :validate, source: %Ecto.Changeset{valid?: false}} = socket.assigns.course_form
     assert errors_on(socket.assigns.course_form).title == ["can't be blank"]
 
     assert socket.assigns.course_form_fields == [
@@ -230,7 +232,7 @@ defmodule Hawk.LiveViewTest do
         hidden: [:school_id, :teacher_id]
       )
 
-    assert %Ecto.Changeset{action: :validate, valid?: false} = socket.assigns.course_form
+    assert %Phoenix.HTML.Form{action: :validate, source: %Ecto.Changeset{valid?: false}} = socket.assigns.course_form
     assert errors_on(socket.assigns.course_form).title == ["can't be blank"]
     refute Map.has_key?(errors_on(socket.assigns.course_form), :school_id)
     refute Map.has_key?(errors_on(socket.assigns.course_form), :teacher_id)
@@ -252,7 +254,7 @@ defmodule Hawk.LiveViewTest do
 
     socket = CourseIndexLive.assign_edit_form(socket(), course, Authority.system())
 
-    assert %Ecto.Changeset{action: :validate, valid?: true} = socket.assigns.course_form
+    assert %Phoenix.HTML.Form{action: :validate, source: %Ecto.Changeset{valid?: true}} = socket.assigns.course_form
     assert socket.assigns.course_form.data == course
     assert socket.assigns.course_form_fields == [%{name: :title, label: "Course"}]
     assert socket.assigns.hawk_form_states.course.mode == :update
@@ -265,7 +267,7 @@ defmodule Hawk.LiveViewTest do
 
     {:noreply, socket} = CourseIndexLive.hawk_validate(%{"course" => %{"title" => ""}}, socket)
 
-    assert %Ecto.Changeset{action: :validate, valid?: false} = socket.assigns.course_form
+    assert %Phoenix.HTML.Form{action: :validate, source: %Ecto.Changeset{valid?: false}} = socket.assigns.course_form
     assert errors_on(socket.assigns.course_form).title == ["can't be blank"]
     refute_received {:videdal_repo, :insert, _changeset}
   end
@@ -276,7 +278,7 @@ defmodule Hawk.LiveViewTest do
     {:noreply, socket} =
       CourseIndexLive.handle_event("hawk:validate", %{"course" => %{"title" => ""}}, socket)
 
-    assert %Ecto.Changeset{action: :validate, valid?: false} = socket.assigns.course_form
+    assert %Phoenix.HTML.Form{action: :validate, source: %Ecto.Changeset{valid?: false}} = socket.assigns.course_form
     assert errors_on(socket.assigns.course_form).title == ["can't be blank"]
     refute_received {:videdal_repo, :insert, _changeset}
   end
@@ -298,7 +300,7 @@ defmodule Hawk.LiveViewTest do
         socket
       )
 
-    assert %Ecto.Changeset{action: :validate, valid?: false} = socket.assigns.course_form
+    assert %Phoenix.HTML.Form{action: :validate, source: %Ecto.Changeset{valid?: false}} = socket.assigns.course_form
     assert errors_on(socket.assigns.course_form).title == ["is reserved"]
     refute_received {:videdal_repo, :update, _changeset}
   end
@@ -382,7 +384,7 @@ defmodule Hawk.LiveViewTest do
     assert %Course{title: "History", school_id: @school_id, teacher_id: @teacher_id} =
              socket.assigns.course
 
-    assert %Ecto.Changeset{action: :validate, valid?: true} = socket.assigns.course_form
+    assert %Phoenix.HTML.Form{action: :validate, source: %Ecto.Changeset{valid?: true}} = socket.assigns.course_form
     assert socket.assigns.hawk_form_states.course.mode == :update
     assert socket.assigns.hawk_form_states.course.model == socket.assigns.course
     assert_received {:videdal_repo, :insert, %Ecto.Changeset{valid?: true}}
@@ -394,7 +396,7 @@ defmodule Hawk.LiveViewTest do
     {:noreply, socket} =
       CourseIndexLive.handle_event("hawk:save", %{"course" => %{"title" => ""}}, socket)
 
-    assert %Ecto.Changeset{action: :insert, valid?: false} = socket.assigns.course_form
+    assert %Phoenix.HTML.Form{action: :insert, source: %Ecto.Changeset{valid?: false}} = socket.assigns.course_form
     assert errors_on(socket.assigns.course_form).title == ["can't be blank"]
     assert socket.assigns.hawk_form_states.course.mode == :create
     refute_received {:videdal_repo, :insert, _changeset}
@@ -432,7 +434,7 @@ defmodule Hawk.LiveViewTest do
     {:noreply, socket} =
       CourseIndexLive.handle_event("hawk:save", %{"course" => %{"title" => "Forbidden"}}, socket)
 
-    assert %Ecto.Changeset{action: :update, valid?: false} = socket.assigns.course_form
+    assert %Phoenix.HTML.Form{action: :update, source: %Ecto.Changeset{valid?: false}} = socket.assigns.course_form
     assert errors_on(socket.assigns.course_form).title == ["is reserved"]
     assert socket.assigns.hawk_form_states.course.mode == :update
     refute_received {:videdal_repo, :update, _changeset}
@@ -510,9 +512,7 @@ defmodule Hawk.LiveViewTest do
     assert socket.assigns.hawk_error == %{base: ["You are not allowed to delete this course."]}
   end
 
-  defp socket do
-    %{assigns: %{}}
-  end
+  defp errors_on(%Phoenix.HTML.Form{source: changeset}), do: errors_on(changeset)
 
   defp errors_on(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->

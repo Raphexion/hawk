@@ -7,13 +7,14 @@ end
 defmodule Hawk.JsonApiIncludeTest do
   use ExUnit.Case, async: true
 
+  import Hawk.TestConn, only: [conn: 1, resp: 1]
+
   alias Videdal.Controllers.InvalidIncludeCoursesController
   alias Videdal.Course
   alias Videdal.Grade
 
   @course_id Videdal.course_id()
   @grade_id Videdal.grade_id()
-  @school_admin_id Videdal.school_admin_id()
   @school_id Videdal.school_id()
   @teacher_id Videdal.teacher_id()
 
@@ -73,7 +74,7 @@ defmodule Hawk.JsonApiIncludeTest do
 
     assert conn.status == 400
 
-    assert conn.resp_body == %{
+    assert resp(conn) == %{
              errors: [
                %{
                  status: "400",
@@ -83,13 +84,5 @@ defmodule Hawk.JsonApiIncludeTest do
                }
              ]
            }
-  end
-
-  defp conn(%{role: role, scopes: scopes}) do
-    %{
-      assigns: %{authority: Hawk.Authority.new(role, @school_admin_id, scopes: scopes)},
-      status: nil,
-      resp_body: nil
-    }
   end
 end

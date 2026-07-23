@@ -11,6 +11,8 @@ defmodule Hawk.JsonApiControllerCaseTest do
     model: Videdal.Course,
     repo: Videdal.Repo
 
+  import Hawk.TestConn, only: [resp: 1]
+
   pre_authorities do
     count = Process.get(:json_api_controller_case_pre_authorities_count, 0) + 1
     Process.put(:json_api_controller_case_pre_authorities_count, count)
@@ -72,7 +74,7 @@ defmodule Hawk.JsonApiControllerCaseTest do
     conn = controller().show(conn_for(:public), %{"id" => sample_id(1)})
 
     assert conn.status == 200
-    assert conn.resp_body.data.id == sample_id(1)
+    assert resp(conn).data.id == sample_id(1)
   end
 
   test "specific controller behaviour can be tested beside the generated matrix" do
@@ -82,7 +84,7 @@ defmodule Hawk.JsonApiControllerCaseTest do
 
     assert conn.status == 200
 
-    assert conn.resp_body.data.attributes == %{
+    assert resp(conn).data.attributes == %{
              title: "Course 1",
              registration_state: "draft",
              seat_count: 0,

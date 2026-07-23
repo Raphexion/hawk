@@ -1,6 +1,8 @@
 defmodule Hawk.LiveViewAdapterContractTest do
   use ExUnit.Case, async: true
 
+  import Hawk.TestSocket, only: [socket: 0]
+
   alias Videdal.LiveViews.{CourseCatalogLive, ExternalCourseLive}
 
   test "LiveView helper infers assigns from LiveView adapter contract" do
@@ -28,6 +30,4 @@ defmodule Hawk.LiveViewAdapterContractTest do
     assert function_exported?(ExternalCourseLive, :handle_event, 3)
     refute function_exported?(CourseCatalogLive, :handle_event, 3)
   end
-
-  defp socket, do: %{assigns: %{}}
 end

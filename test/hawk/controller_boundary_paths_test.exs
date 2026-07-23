@@ -71,6 +71,8 @@ end
 defmodule Hawk.ControllerBoundaryPathsTest do
   use ExUnit.Case, async: true
 
+  import Hawk.TestConn, only: [conn: 0, conn: 1, resp: 1]
+
   alias Hawk.ControllerBoundaryPathsTest.CoursesController
   alias Hawk.ControllerBoundaryPathsTest.ErrorController
   alias Hawk.ControllerBoundaryPathsTest.MissingHandlerController
@@ -81,32 +83,33 @@ defmodule Hawk.ControllerBoundaryPathsTest do
   @course_id Videdal.course_id()
   @school_id Videdal.school_id()
   @teacher_id Videdal.teacher_id()
+  @school_admin Hawk.Authority.new(:school_admin, Videdal.school_admin_id(), scopes: %{school_id: @school_id})
 
   test "delete returns 204 No Content with an empty body" do
-    conn = OkDeleteController.delete(conn(), %{"id" => @course_id})
+    conn = OkDeleteController.delete(conn(@school_admin), %{"id" => @course_id})
 
     assert conn.status == 204
-    assert conn.resp_body == nil
+    assert conn.resp_body == ""
   end
 
   test "delete returns not found through the controller boundary" do
     Process.put({Videdal.Repo, :all_results}, [])
 
-    conn = CoursesController.delete(conn(), %{"id" => Videdal.other_course_id()})
+    conn = CoursesController.delete(conn(@school_admin), %{"id" => Videdal.other_course_id()})
 
     assert conn.status == 404
-    assert [%{status: "404", code: "not_found"}] = conn.resp_body.errors
+    assert [%{status: "404", code: "not_found"}] = resp(conn).errors
   end
 
   test "resource errors become JSON:API 500 errors" do
     conn =
-      ErrorController.create(conn(), %{
+      ErrorController.create(conn(@school_admin), %{
         "data" => %{"type" => "courses", "attributes" => %{}}
       })
 
     assert conn.status == 500
 
-    assert conn.resp_body == %{
+    assert resp(conn) == %{
              errors: [
                %{
                  status: "500",
@@ -130,7 +133,7 @@ defmodule Hawk.ControllerBoundaryPathsTest do
 
     conn =
       PublicCoursesController.action(
-        %{assigns: %{}, status: nil, resp_body: nil},
+        conn(),
         %{
           "id" => @course_id,
           "action" => "open-registration",
@@ -139,12 +142,12 @@ defmodule Hawk.ControllerBoundaryPathsTest do
       )
 
     assert conn.status == 403
-    assert [%{status: "403", code: "not_authorized"}] = conn.resp_body.errors
+    assert [%{status: "403", code: "not_authorized"}] = resp(conn).errors
   end
 
   test "actions with declared but missing handlers return action_not_found through the controller boundary" do
     conn =
-      MissingHandlerController.action(conn(), %{
+      MissingHandlerController.action(conn(@school_admin), %{
         "id" => @course_id,
         "action" => "open-registration",
         "meta" => %{"seat_count" => 1}
@@ -152,7 +155,7 @@ defmodule Hawk.ControllerBoundaryPathsTest do
 
     assert conn.status == 404
 
-    assert conn.resp_body == %{
+    assert resp(conn) == %{
              errors: [
                %{
                  status: "404",
@@ -162,15 +165,5 @@ defmodule Hawk.ControllerBoundaryPathsTest do
                }
              ]
            }
-  end
-
-  defp conn do
-    %{
-      assigns: %{
-        authority: Hawk.Authority.new(:school_admin, Videdal.school_admin_id(), scopes: %{school_id: @school_id})
-      },
-      status: nil,
-      resp_body: nil
-    }
   end
 end

@@ -122,14 +122,7 @@ defmodule Hawk.LiveView.Page do
     |> String.replace("_", " ")
   end
 
-  defp assign(socket, key, value) do
-    if is_struct(socket) do
-      Phoenix.Component.assign(socket, key, value)
-    else
-      assigns = Map.get(socket, :assigns, %{})
-      Map.put(socket, :assigns, Map.put(assigns, key, value))
-    end
-  end
+  defp assign(socket, key, value), do: Phoenix.Component.assign(socket, key, value)
 
   defp normalize_id(id), do: id
 end

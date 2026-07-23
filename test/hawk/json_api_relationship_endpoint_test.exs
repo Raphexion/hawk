@@ -7,6 +7,8 @@ end
 defmodule Hawk.JsonApiRelationshipEndpointTest do
   use ExUnit.Case, async: true
 
+  import Hawk.TestConn, only: [conn: 1, resp: 1]
+
   alias Hawk.JsonApiRelationshipEndpointTest.Controller
   alias Videdal.{Course, Grade, Teacher}
 
@@ -26,16 +28,17 @@ defmodule Hawk.JsonApiRelationshipEndpointTest do
 
     Process.put({Videdal.Repo, :all_results}, [course])
 
-    conn = Controller.show(conn(), %{"id" => @course_id})
+    conn = Controller.show(conn(Hawk.Authority.system()), %{"id" => @course_id})
 
     assert conn.status == 200
-    assert conn.resp_body.links.self == "/courses/#{@course_id}"
-    assert conn.resp_body.data.links.self == "/courses/#{@course_id}"
+    body = resp(conn)
+    assert body.links.self == "/courses/#{@course_id}"
+    assert body.data.links.self == "/courses/#{@course_id}"
 
-    assert conn.resp_body.data.relationships.teacher.links.self ==
+    assert body.data.relationships.teacher.links.self ==
              "/courses/#{@course_id}/relationships/teacher"
 
-    assert conn.resp_body.data.relationships.teacher.links.related ==
+    assert body.data.relationships.teacher.links.related ==
              "/courses/#{@course_id}/teacher"
   end
 
@@ -49,11 +52,15 @@ defmodule Hawk.JsonApiRelationshipEndpointTest do
 
     Process.put({Videdal.Repo, :all_results}, [course])
 
-    conn = Controller.relationship(conn(), %{"id" => @course_id, "relationship" => "teacher"})
+    conn =
+      Controller.relationship(conn(Hawk.Authority.system()), %{
+        "id" => @course_id,
+        "relationship" => "teacher"
+      })
 
     assert conn.status == 200
 
-    assert conn.resp_body == %{
+    assert resp(conn) == %{
              links: %{
                self: "/courses/#{@course_id}/relationships/teacher",
                related: "/courses/#{@course_id}/teacher"
@@ -75,12 +82,13 @@ defmodule Hawk.JsonApiRelationshipEndpointTest do
 
     Process.put({Videdal.Repo, :all_results}, [course])
 
-    conn = Controller.related(conn(), %{"id" => @course_id, "relationship" => "teacher"})
+    conn = Controller.related(conn(Hawk.Authority.system()), %{"id" => @course_id, "relationship" => "teacher"})
 
     assert conn.status == 200
-    assert conn.resp_body.links.self == "/teachers/#{@teacher_id}"
-    assert conn.resp_body.data.type == "teachers"
-    assert conn.resp_body.data.id == @teacher_id
+    body = resp(conn)
+    assert body.links.self == "/teachers/#{@teacher_id}"
+    assert body.data.type == "teachers"
+    assert body.data.id == @teacher_id
   end
 
   test "related endpoint returns collections for to-many relationships" do
@@ -104,11 +112,12 @@ defmodule Hawk.JsonApiRelationshipEndpointTest do
 
     Process.put({Videdal.Repo, :all_results}, [course])
 
-    conn = Controller.related(conn(), %{"id" => @course_id, "relationship" => "grades"})
+    conn = Controller.related(conn(Hawk.Authority.system()), %{"id" => @course_id, "relationship" => "grades"})
 
     assert conn.status == 200
-    assert conn.resp_body.links.self == "/grades"
-    assert [%{type: "grades", id: @grade_id}] = conn.resp_body.data
+    body = resp(conn)
+    assert body.links.self == "/grades"
+    assert [%{type: "grades", id: @grade_id}] = body.data
   end
 
   test "relationship endpoints reject unknown relationships" do
@@ -124,20 +133,21 @@ defmodule Hawk.JsonApiRelationshipEndpointTest do
     Process.put({Videdal.Repo, :all_results}, [course])
 
     relationship_conn =
-      Controller.relationship(conn(), %{"id" => @course_id, "relationship" => hostile})
+      Controller.relationship(conn(Hawk.Authority.system()), %{
+        "id" => @course_id,
+        "relationship" => hostile
+      })
 
-    related_conn = Controller.related(conn(), %{"id" => @course_id, "relationship" => hostile})
+    related_conn =
+      Controller.related(conn(Hawk.Authority.system()), %{"id" => @course_id, "relationship" => hostile})
+
     expected_detail = "unknown relationship #{inspect(hostile)}"
 
     assert relationship_conn.status == 400
     assert related_conn.status == 400
 
-    assert %{errors: [%{detail: ^expected_detail}]} = relationship_conn.resp_body
-    assert %{errors: [%{detail: ^expected_detail}]} = related_conn.resp_body
+    assert %{errors: [%{detail: ^expected_detail}]} = resp(relationship_conn)
+    assert %{errors: [%{detail: ^expected_detail}]} = resp(related_conn)
     assert_raise ArgumentError, fn -> String.to_existing_atom(hostile) end
-  end
-
-  defp conn do
-    %{assigns: %{authority: Hawk.Authority.system()}, status: nil, resp_body: nil}
   end
 end

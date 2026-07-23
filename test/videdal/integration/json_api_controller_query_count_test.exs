@@ -83,6 +83,8 @@ end
 defmodule Videdal.Integration.JsonApiControllerQueryCountTest do
   use Videdal.DatabaseCase, async: false
 
+  import Hawk.TestConn, only: [conn: 1, resp: 1]
+
   alias Hawk.Authority
   alias Videdal.{Course, Grade, SandboxRepo, School, Student, Teacher}
   alias Videdal.Integration.JsonApiControllerQueryCountTest.CoursesController
@@ -99,7 +101,7 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest do
 
     {_conn, one_course_query_count} =
       count_queries(fn ->
-        CoursesController.index(conn(), %{"include" => "grades.student"})
+        CoursesController.index(conn(Authority.system()), %{"include" => "grades.student"})
       end)
 
     Videdal.DatabaseCase.reset_schema!()
@@ -107,11 +109,11 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest do
 
     {conn, many_course_query_count} =
       count_queries(fn ->
-        CoursesController.index(conn(), %{"include" => "grades.student"})
+        CoursesController.index(conn(Authority.system()), %{"include" => "grades.student"})
       end)
 
     assert conn.status == 200
-    assert length(conn.resp_body.data) == 5
+    assert length(resp(conn).data) == 5
     assert one_course_query_count == 3
     assert many_course_query_count == one_course_query_count
   end
@@ -121,11 +123,11 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest do
 
     {conn, query_count} =
       count_queries(fn ->
-        CoursesController.related(conn(), %{"id" => course.id, "relationship" => "teacher"})
+        CoursesController.related(conn(Authority.system()), %{"id" => course.id, "relationship" => "teacher"})
       end)
 
     assert conn.status == 200
-    assert conn.resp_body.data.type == "teachers"
+    assert resp(conn).data.type == "teachers"
     assert query_count == 2
   end
 
@@ -134,11 +136,11 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest do
 
     {conn, query_count} =
       count_queries(fn ->
-        CoursesController.related(conn(), %{"id" => course.id, "relationship" => "grades"})
+        CoursesController.related(conn(Authority.system()), %{"id" => course.id, "relationship" => "grades"})
       end)
 
     assert conn.status == 200
-    assert length(conn.resp_body.data) == 1
+    assert length(resp(conn).data) == 1
     assert query_count == 2
   end
 
@@ -147,11 +149,11 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest do
 
     {conn, query_count} =
       count_queries(fn ->
-        CoursesController.relationship(conn(), %{"id" => course.id, "relationship" => "grades"})
+        CoursesController.relationship(conn(Authority.system()), %{"id" => course.id, "relationship" => "grades"})
       end)
 
     assert conn.status == 200
-    assert [%{type: "grades"}] = conn.resp_body.data
+    assert [%{type: "grades"}] = resp(conn).data
     assert query_count == 2
   end
 
@@ -160,11 +162,11 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest do
 
     {conn, query_count} =
       count_queries(fn ->
-        CoursesController.relationship(conn(), %{"id" => course.id, "relationship" => "teacher"})
+        CoursesController.relationship(conn(Authority.system()), %{"id" => course.id, "relationship" => "teacher"})
       end)
 
     assert conn.status == 200
-    assert conn.resp_body.data == %{type: "teachers", id: course.teacher_id}
+    assert resp(conn).data == %{type: "teachers", id: course.teacher_id}
     assert query_count == 1
   end
 
@@ -196,7 +198,4 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest do
     %{school: school, teacher: teacher, course: hd(courses), courses: courses}
   end
 
-  defp conn do
-    %{assigns: %{authority: Authority.system()}, status: nil, resp_body: nil}
-  end
 end

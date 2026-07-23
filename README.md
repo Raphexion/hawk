@@ -226,9 +226,9 @@ real `Phoenix.LiveView.Socket`. `hawk_save/2` uses the same state to call
 `action: :insert` or `:update`, authorization failures assign `:hawk_error`, and
 successful saves assign the saved model under `:course`. Use `hawk_save/3` with
 `on_success: fn socket, course -> ... end` when the app needs post-save behavior
-such as navigation while still reusing Hawk's save plumbing. The lightweight
-plain-map test boundary assigns the raw changeset instead of a `to_form`, which
-keeps LiveView helper tests simple without a live socket.
+such as navigation while still reusing Hawk's save plumbing. Form helpers
+build a `Phoenix.HTML.Form` through `to_form/2` on a real
+`Phoenix.LiveView.Socket`.
 
 Known server-side values can be forced into a form without trusting hidden client
 inputs:

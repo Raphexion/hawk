@@ -43,6 +43,9 @@ end
 defmodule Hawk.JsonApiAttributeTest do
   use ExUnit.Case, async: true
 
+  import Hawk.TestConn, only: [conn: 1, resp: 1]
+
+  alias Hawk.Authority
   alias Hawk.JsonApiAttributeTest.LocalizedPostsController
 
   def localized_title(post, opts) do
@@ -74,54 +77,44 @@ defmodule Hawk.JsonApiAttributeTest do
   end
 
   test "controllers pass request locale into JSON:API attribute resolvers" do
-    conn = %{
-      assigns: %{authority: Hawk.Authority.system()},
-      req_headers: [{"x-locale", "da"}],
-      resp_body: nil,
-      status: nil
-    }
+    conn =
+      Plug.Test.conn("get", "/")
+      |> Plug.Conn.assign(:authority, Authority.system())
+      |> Plug.Conn.put_req_header("x-locale", "da")
 
     response = LocalizedPostsController.index(conn, %{})
 
-    assert [%{attributes: %{title: "Hus ved havet"}}] = response.resp_body.data
+    assert [%{attributes: %{title: "Hus ved havet"}}] = resp(response).data
   end
 
   test "controllers fall back to english locale when no locale headers are present" do
-    conn = %{
-      assigns: %{authority: Hawk.Authority.system()},
-      req_headers: [],
-      resp_body: nil,
-      status: nil
-    }
+    conn = conn(Authority.system())
 
     response = LocalizedPostsController.index(conn, %{})
 
-    assert [%{attributes: %{title: "House by the sea"}}] = response.resp_body.data
+    assert [%{attributes: %{title: "House by the sea"}}] = resp(response).data
   end
 
   test "controllers fall back to accept-language when x-locale is missing" do
-    conn = %{
-      assigns: %{authority: Hawk.Authority.system()},
-      req_headers: [{"accept-language", "da-DK,da;q=0.9,en;q=0.8"}],
-      resp_body: nil,
-      status: nil
-    }
+    conn =
+      Plug.Test.conn("get", "/")
+      |> Plug.Conn.assign(:authority, Authority.system())
+      |> Plug.Conn.put_req_header("accept-language", "da-DK,da;q=0.9,en;q=0.8")
 
     response = LocalizedPostsController.index(conn, %{})
 
-    assert [%{attributes: %{title: "Hus ved havet"}}] = response.resp_body.data
+    assert [%{attributes: %{title: "Hus ved havet"}}] = resp(response).data
   end
 
   test "x-locale wins over accept-language and header names are matched case-insensitively" do
-    conn = %{
-      assigns: %{authority: Hawk.Authority.system()},
-      req_headers: [{"X-Locale", "en"}, {"Accept-Language", "da-DK,da;q=0.9"}],
-      resp_body: nil,
-      status: nil
-    }
+    conn =
+      Plug.Test.conn("get", "/")
+      |> Plug.Conn.assign(:authority, Authority.system())
+      |> Plug.Conn.put_req_header("x-locale", "en")
+      |> Plug.Conn.put_req_header("accept-language", "da-DK,da;q=0.9")
 
     response = LocalizedPostsController.index(conn, %{})
 
-    assert [%{attributes: %{title: "House by the sea"}}] = response.resp_body.data
+    assert [%{attributes: %{title: "House by the sea"}}] = resp(response).data
   end
 end

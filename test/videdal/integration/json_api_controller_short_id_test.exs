@@ -35,6 +35,8 @@ end
 defmodule Videdal.Integration.JsonApiControllerShortIdTest do
   use Videdal.DatabaseCase, async: false
 
+  import Hawk.TestConn, only: [conn: 1, resp: 1]
+
   alias Hawk.Authority
   alias Videdal.{Course, SandboxRepo, School, Teacher}
   alias Videdal.Integration.JsonApiControllerShortIdTest.CoursesController
@@ -53,11 +55,11 @@ defmodule Videdal.Integration.JsonApiControllerShortIdTest do
 
     {conn, query_count} =
       count_queries(fn ->
-        CoursesController.show(conn(), %{"id" => short_id})
+        CoursesController.show(conn(Authority.system()), %{"id" => short_id})
       end)
 
     assert conn.status == 200
-    assert conn.resp_body.data.id == course.id
+    assert resp(conn).data.id == course.id
     assert query_count == 1
   end
 
@@ -88,7 +90,4 @@ defmodule Videdal.Integration.JsonApiControllerShortIdTest do
     })
   end
 
-  defp conn do
-    %{assigns: %{authority: Authority.system()}, status: nil, resp_body: nil}
-  end
 end

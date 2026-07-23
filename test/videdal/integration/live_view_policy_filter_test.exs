@@ -1,6 +1,8 @@
 defmodule Videdal.Integration.LiveViewPolicyFilterTest do
   use Videdal.DatabaseCase, async: false
 
+  import Hawk.TestSocket, only: [socket: 0]
+
   alias Hawk.Authority
   alias Videdal.{Course, SandboxRepo, School, Teacher}
   alias Videdal.LiveViews.PolicyCheckedCoursesLive
@@ -55,6 +57,4 @@ defmodule Videdal.Integration.LiveViewPolicyFilterTest do
     assert [%Course{id: id, title: "Math"}] = socket.assigns.courses
     assert id == data.own_course.id
   end
-
-  defp socket, do: %{assigns: %{}}
 end

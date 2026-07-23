@@ -3,9 +3,7 @@ defmodule Hawk.JsonApi.Controller do
   Phoenix controller helpers for Hawk JSON:API resources.
 
   Hawk runs behind Phoenix controllers and renders responses through `Plug.Conn`
-  directly with the `application/vnd.api+json` content type. A lightweight
-  plain-map conn remains supported as a test boundary so controller actions can
-  be exercised without a live Plug adapter.
+  directly with the `application/vnd.api+json` content type.
   """
 
   alias Hawk.JsonApi
@@ -539,16 +537,6 @@ defmodule Hawk.JsonApi.Controller do
     |> List.first()
   end
 
-  defp header(%{req_headers: headers}, name) when is_list(headers), do: map_header(headers, name)
-
-  defp header(_conn, _name), do: nil
-
-  defp map_header(headers, name) do
-    Enum.find_value(headers, fn {key, value} ->
-      if String.downcase(to_string(key)) == name, do: value
-    end)
-  end
-
   defp accept_language_locale(nil), do: nil
 
   defp accept_language_locale(header) do
@@ -567,15 +555,7 @@ defmodule Hawk.JsonApi.Controller do
     |> Plug.Conn.send_resp(status, Jason.encode!(body))
   end
 
-  defp json(conn, status, body) when is_map(conn) do
-    conn
-    |> Map.put(:status, status)
-    |> Map.put(:resp_body, body)
-  end
-
   defp no_content(%Plug.Conn{} = conn), do: Plug.Conn.send_resp(conn, 204, "")
-
-  defp no_content(conn) when is_map(conn), do: Map.put(conn, :status, 204)
 
   defp not_found(resource) do
     name =

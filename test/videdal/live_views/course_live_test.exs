@@ -1,6 +1,8 @@
 defmodule Videdal.LiveViews.CourseLiveTest do
   use ExUnit.Case, async: true
 
+  import Hawk.TestSocket, only: [socket: 0]
+
   alias Hawk.Authority
   alias Videdal.Course
   alias Videdal.LiveViews.{CourseCustomSaveLive, CourseLive}
@@ -59,7 +61,7 @@ defmodule Videdal.LiveViews.CourseLiveTest do
     assert_received {:videdal_repo, :update, %Ecto.Changeset{valid?: true}}
   end
 
-  defp socket, do: %{assigns: %{}}
+  defp errors_on(%Phoenix.HTML.Form{source: changeset}), do: errors_on(changeset)
 
   defp errors_on(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->

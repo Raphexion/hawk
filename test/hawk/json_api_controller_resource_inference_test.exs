@@ -47,22 +47,28 @@ end
 defmodule Hawk.JsonApiControllerResourceInferenceTest do
   use ExUnit.Case, async: true
 
+  import Hawk.TestConn, only: [conn: 1, resp: 1]
+
+  alias Hawk.Authority
   alias Hawk.JsonApiControllerResourceInferenceTest.Controller
 
+  @system Authority.system()
+
   test "controller infers model from Hawk.Resource facade" do
-    conn = Controller.index(conn(), %{})
+    conn = Controller.index(conn(@system), %{})
 
     assert conn.status == 200
-    assert [%{type: "courses", id: course_id}] = conn.resp_body.data
+    assert [%{type: "courses", id: course_id}] = resp(conn).data
     assert course_id == Videdal.course_id()
   end
 
   test "member actions use the inferred model metadata" do
-    conn = Controller.show(conn(), %{"id" => Videdal.course_id()})
+    conn = Controller.show(conn(@system), %{"id" => Videdal.course_id()})
 
     assert conn.status == 200
-    assert conn.resp_body.data.type == "courses"
-    assert conn.resp_body.data.id == Videdal.course_id()
+    body = resp(conn)
+    assert body.data.type == "courses"
+    assert body.data.id == Videdal.course_id()
   end
 
   test "controller only exposes write actions when writer is enabled" do
@@ -106,9 +112,5 @@ defmodule Hawk.JsonApiControllerResourceInferenceTest do
                    end
                    """)
                  end
-  end
-
-  defp conn do
-    %{assigns: %{authority: Hawk.Authority.system()}, status: nil, resp_body: nil}
   end
 end

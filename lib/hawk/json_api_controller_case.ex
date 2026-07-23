@@ -251,7 +251,9 @@ defmodule Hawk.JsonApiControllerCase do
   end
 
   def conn_for(%Authority{} = authority) do
-    %{assigns: %{authority: authority}, status: nil, resp_body: nil}
+    Plug.Test.conn("get", "/")
+    |> Plug.Conn.assign(:authority, authority)
+    |> Plug.Conn.assign(:hawk_authority, authority)
   end
 
   def put_json_api_results(config, results) when is_list(results) do
@@ -357,13 +359,14 @@ defmodule Hawk.JsonApiControllerCase do
     assert_status(conn, expected_status, role_case, :delete)
   end
 
-  defp assert_json_api_collection(%{resp_body: %{data: data}}, _role_case, _action)
-       when is_list(data), do: :ok
-
   defp assert_json_api_collection(conn, role_case, action) do
-    ExUnit.Assertions.flunk(
-      "expected #{role_case.name} #{action} to return a JSON:API collection document, got #{inspect(conn.resp_body)}"
-    )
+    case decode(conn) do
+      %{data: data} when is_list(data) -> :ok
+      _other ->
+        ExUnit.Assertions.flunk(
+          "expected #{role_case.name} #{action} to return a JSON:API collection document, got #{inspect(decode(conn))}"
+        )
+    end
   end
 
   defp assert_index_size(%{repo: repo}, conn, expected, role_case) do
@@ -374,22 +377,35 @@ defmodule Hawk.JsonApiControllerCase do
     end
   end
 
-  defp assert_index_size_for_static_repo(%{resp_body: %{data: data}}, expected, role_case)
-       when is_list(data) do
-    ExUnit.Assertions.assert(
-      length(data) == expected,
-      "expected #{role_case.name} index to return #{expected} resources, got #{length(data)}"
-    )
-  end
+  defp assert_index_size_for_static_repo(conn, expected, role_case) do
+    case decode(conn) do
+      %{data: data} when is_list(data) ->
+        ExUnit.Assertions.assert(
+          length(data) == expected,
+          "expected #{role_case.name} index to return #{expected} resources, got #{length(data)}"
+        )
 
-  defp assert_index_size_for_static_repo(_conn, _expected, _role_case), do: :ok
+      _other ->
+        :ok
+    end
+  end
 
   defp assert_status(conn, expected, role_case, action) do
     ExUnit.Assertions.assert(
       conn.status in List.wrap(expected),
-      "expected #{role_case.name} #{action} to return #{expected}, got #{inspect(conn.status)} with body #{inspect(conn.resp_body)}"
+      "expected #{role_case.name} #{action} to return #{expected}, got #{inspect(conn.status)} with body #{inspect(safe_decode(conn))}"
     )
   end
+
+  defp decode(%Plug.Conn{resp_body: body}) when is_binary(body) and byte_size(body) > 0,
+    do: Jason.decode!(body, keys: :atoms)
+
+  defp decode(_conn), do: nil
+
+  defp safe_decode(%Plug.Conn{resp_body: body}) when is_binary(body) and byte_size(body) > 0,
+    do: Jason.decode!(body, keys: :atoms)
+
+  defp safe_decode(_conn), do: ""
 
   def authority_map(test_module) when is_atom(test_module) do
     test_module

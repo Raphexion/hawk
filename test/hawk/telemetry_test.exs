@@ -7,8 +7,13 @@ end
 defmodule Hawk.TelemetryTest do
   use ExUnit.Case, async: false
 
+  import Hawk.TestConn, only: [conn: 1]
+
+  alias Hawk.Authority
   alias Hawk.TelemetryTest.CoursesController
   alias Videdal.Course
+
+  @system Authority.system()
 
   @course_id Videdal.course_id()
   @short_id @course_id |> String.split("-") |> List.first()
@@ -48,7 +53,7 @@ defmodule Hawk.TelemetryTest do
 
     Process.put({Videdal.Repo, :all_results}, [course])
 
-    conn = CoursesController.show(conn(), %{"id" => @course_id})
+    conn = CoursesController.show(conn(@system), %{"id" => @course_id})
 
     assert conn.status == 200
 
@@ -81,7 +86,7 @@ defmodule Hawk.TelemetryTest do
 
     Process.put({Videdal.Repo, :all_results}, [course])
 
-    conn = CoursesController.show(conn(), %{"id" => @short_id})
+    conn = CoursesController.show(conn(@system), %{"id" => @short_id})
 
     assert conn.status == 200
 
@@ -93,7 +98,7 @@ defmodule Hawk.TelemetryTest do
   end
 
   test "bad request stop telemetry records status and result" do
-    conn = CoursesController.show(conn(), %{"id" => "not-a-uuid"})
+    conn = CoursesController.show(conn(@system), %{"id" => "not-a-uuid"})
 
     assert conn.status == 400
 
@@ -105,7 +110,7 @@ defmodule Hawk.TelemetryTest do
   end
 
   test "controller index emits standard span events" do
-    conn = CoursesController.index(conn(), %{})
+    conn = CoursesController.index(conn(@system), %{})
 
     assert conn.status == 200
 
@@ -118,9 +123,5 @@ defmodule Hawk.TelemetryTest do
 
   def handle_telemetry(event, measurements, metadata, %{test_pid: test_pid}) do
     send(test_pid, {:hawk_telemetry, event, measurements, metadata})
-  end
-
-  defp conn do
-    %{assigns: %{authority: Hawk.Authority.system()}, status: nil, resp_body: nil}
   end
 end
