@@ -420,7 +420,7 @@ defmodule Hawk.JsonApi.Request do
   end
 
   defp preload_keys(reader) do
-    if Code.ensure_compiled(reader) == {:module, reader} and function_exported?(reader, :preload_keys, 0) do
+    if Code.ensure_loaded?(reader) and function_exported?(reader, :preload_keys, 0) do
       reader.preload_keys()
     else
       MapSet.new()
@@ -430,7 +430,7 @@ defmodule Hawk.JsonApi.Request do
   defp preload_reader(nil, _key), do: nil
 
   defp preload_reader(reader, key) do
-    if Code.ensure_compiled(reader) == {:module, reader} and
+    if Code.ensure_loaded?(reader) and
          function_exported?(reader, :preload_readers, 0) do
       Map.get(reader.preload_readers(), key)
     end
