@@ -4,24 +4,51 @@ defmodule Videdal.Integration.JsonApiControllerShortIdTest.CourseReader do
   use Hawk.Reader.Resource,
     repo: Videdal.SandboxRepo,
     schema: Videdal.Course,
-    policy: Videdal.Integration.JsonApiControllerShortIdTest.AllowAllPolicy
+    policy: Videdal.Integration.JsonApiControllerShortIdTest.Courses.Policy
 
   filter(:id)
 end
 
-defmodule Videdal.Integration.JsonApiControllerShortIdTest.AllowAllPolicy do
+defmodule Videdal.Integration.JsonApiControllerShortIdTest.Courses.Policy do
   @moduledoc false
 
-  def read_filter(_authority), do: :all
+  use Hawk.Policy
+
+  read(:all)
+  write(:never)
+end
+
+defmodule Videdal.Integration.JsonApiControllerShortIdTest.Courses.Writer do
+  @moduledoc false
+
+  use Hawk.Writer.Resource,
+    model: Videdal.Course,
+    repo: Videdal.SandboxRepo,
+    policy: Videdal.Integration.JsonApiControllerShortIdTest.Courses.Policy
+
+  create do
+    cast([:title, :school_id, :teacher_id])
+  end
+
+  update do
+    cast([:title, :school_id, :teacher_id])
+  end
+
+  def delete(%Videdal.Course{} = course, authority) do
+    Hawk.MutationContext.delete(course, authority)
+    |> Hawk.MutationContext.validate_policy(&Videdal.Integration.JsonApiControllerShortIdTest.Courses.Policy.delete?/1)
+    |> Hawk.RepositoryBoundary.delete(Videdal.SandboxRepo)
+  end
 end
 
 defmodule Videdal.Integration.JsonApiControllerShortIdTest.Courses do
   @moduledoc false
 
-  alias Videdal.Integration.JsonApiControllerShortIdTest.CourseReader
-
-  def one(opts), do: CourseReader.one(opts)
-  def all(opts), do: CourseReader.all(opts)
+  use Hawk.Resource,
+    model: Videdal.Course,
+    reader: Videdal.Integration.JsonApiControllerShortIdTest.CourseReader,
+    json_api: Videdal.Courses.JsonApi,
+    live_view: false
 end
 
 defmodule Videdal.Integration.JsonApiControllerShortIdTest.CoursesController do

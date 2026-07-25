@@ -4,7 +4,7 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest.CourseReader do
   use Hawk.Reader.Resource,
     repo: Videdal.SandboxRepo,
     schema: Videdal.Course,
-    policy: Videdal.Integration.JsonApiControllerQueryCountTest.AllowAllPolicy
+    policy: Videdal.Integration.JsonApiControllerQueryCountTest.Courses.Policy
 
   filter(:id)
   filter(:school_id)
@@ -23,7 +23,7 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest.GradeReader do
   use Hawk.Reader.Resource,
     repo: Videdal.SandboxRepo,
     schema: Videdal.Grade,
-    policy: Videdal.Integration.JsonApiControllerQueryCountTest.AllowAllPolicy
+    policy: Videdal.Integration.JsonApiControllerQueryCountTest.Courses.Policy
 
   filter(:id)
   filter(:school_id)
@@ -39,7 +39,7 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest.StudentReader do
   use Hawk.Reader.Resource,
     repo: Videdal.SandboxRepo,
     schema: Videdal.Student,
-    policy: Videdal.Integration.JsonApiControllerQueryCountTest.AllowAllPolicy
+    policy: Videdal.Integration.JsonApiControllerQueryCountTest.Courses.Policy
 
   filter(:id)
   filter(:school_id)
@@ -51,25 +51,54 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest.TeacherReader do
   use Hawk.Reader.Resource,
     repo: Videdal.SandboxRepo,
     schema: Videdal.Teacher,
-    policy: Videdal.Integration.JsonApiControllerQueryCountTest.AllowAllPolicy
+    policy: Videdal.Integration.JsonApiControllerQueryCountTest.Courses.Policy
 
   filter(:id)
   filter(:school_id)
 end
 
-defmodule Videdal.Integration.JsonApiControllerQueryCountTest.AllowAllPolicy do
+defmodule Videdal.Integration.JsonApiControllerQueryCountTest.Courses.Writer do
   @moduledoc false
 
-  def read_filter(_authority), do: :all
+  use Hawk.Writer.Resource,
+    model: Videdal.Course,
+    repo: Videdal.SandboxRepo,
+    policy: Videdal.Integration.JsonApiControllerQueryCountTest.Courses.Policy
+
+  create do
+    cast([:title, :school_id, :teacher_id])
+  end
+
+  update do
+    cast([:title, :school_id, :teacher_id])
+  end
+
+  def delete(%Videdal.Course{} = course, authority) do
+    Hawk.MutationContext.delete(course, authority)
+    |> Hawk.MutationContext.validate_policy(
+      &Videdal.Integration.JsonApiControllerQueryCountTest.Courses.Policy.delete?/1
+    )
+    |> Hawk.RepositoryBoundary.delete(Videdal.SandboxRepo)
+  end
+end
+
+defmodule Videdal.Integration.JsonApiControllerQueryCountTest.Courses.Policy do
+  @moduledoc false
+
+  use Hawk.Policy
+
+  read(:all)
+  write(:never)
 end
 
 defmodule Videdal.Integration.JsonApiControllerQueryCountTest.Courses do
   @moduledoc false
 
-  alias Videdal.Integration.JsonApiControllerQueryCountTest.CourseReader
-
-  def one(opts), do: CourseReader.one(opts)
-  def all(opts), do: CourseReader.all(opts)
+  use Hawk.Resource,
+    model: Videdal.Course,
+    reader: Videdal.Integration.JsonApiControllerQueryCountTest.CourseReader,
+    json_api: Videdal.Courses.JsonApi,
+    live_view: false
 end
 
 defmodule Videdal.Integration.JsonApiControllerQueryCountTest.CoursesController do

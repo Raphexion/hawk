@@ -12,11 +12,12 @@ defmodule Hawk.JsonApi.Controller do
   defmacro __using__(opts) do
     env = __CALLER__
     resource = Keyword.fetch!(opts, :resource) |> Macro.expand(env)
+    require_facade!(resource)
     model = controller_model!(resource, Keyword.get(opts, :model), env)
     validate_json_api_enabled!(resource)
     public? = Keyword.get(opts, :public, false)
-    capabilities = controller_capabilities(resource)
-    reader = controller_reader(resource)
+    capabilities = resource.__hawk_resource__(:capabilities)
+    reader = resource.__hawk_resource__(:reader)
 
     quote do
       def index(conn, params) do
@@ -65,12 +66,19 @@ defmodule Hawk.JsonApi.Controller do
     end
   end
 
-  defp controller_capabilities(resource) do
-    if Code.ensure_compiled(resource) == {:module, resource} and
-         function_exported?(resource, :__hawk_resource__, 1) do
-      resource.__hawk_resource__(:capabilities)
-    else
-      %{actions: true}
+  defp require_facade!(resource) do
+    case Code.ensure_compiled(resource) do
+      {:module, ^resource} ->
+        if function_exported?(resource, :__hawk_resource__, 1) do
+          :ok
+        else
+          raise ArgumentError,
+                "Hawk JSON:API controller resource #{inspect(resource)} must be a Hawk.Resource facade"
+        end
+
+      _ ->
+        raise ArgumentError,
+              "Hawk JSON:API controller resource #{inspect(resource)} is not available"
     end
   end
 
@@ -127,40 +135,12 @@ defmodule Hawk.JsonApi.Controller do
   defp controller_model!(_resource, model, env) when not is_nil(model),
     do: Macro.expand(model, env)
 
-  defp controller_model!(resource, nil, _env) do
-    cond do
-      Code.ensure_compiled(resource) != {:module, resource} ->
-        raise ArgumentError,
-              "Hawk JSON:API controller resource #{inspect(resource)} is not available"
-
-      function_exported?(resource, :__hawk_resource__, 1) ->
-        resource.__hawk_resource__(:model)
-
-      true ->
-        raise ArgumentError,
-              "Hawk JSON:API controller requires :model when resource #{inspect(resource)} is not a Hawk.Resource facade"
-    end
-  end
+  defp controller_model!(resource, nil, _env), do: resource.__hawk_resource__(:model)
 
   defp validate_json_api_enabled!(resource) do
-    if Code.ensure_compiled(resource) == {:module, resource} and
-         function_exported?(resource, :__hawk_resource__, 1) and
-         resource.__hawk_resource__(:json_api) == false do
+    if resource.__hawk_resource__(:json_api) == false do
       raise ArgumentError,
             "Hawk JSON:API controller resource #{inspect(resource)} has json_api disabled"
-    end
-  end
-
-  defp controller_reader(resource) do
-    if Code.ensure_compiled(resource) == {:module, resource} and
-         function_exported?(resource, :__hawk_resource__, 1) do
-      resource.__hawk_resource__(:reader)
-    else
-      reader = Module.concat(resource, Reader)
-
-      if Code.ensure_compiled(reader) == {:module, reader} do
-        reader
-      end
     end
   end
 
