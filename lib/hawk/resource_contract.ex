@@ -4,7 +4,7 @@ defmodule Hawk.ResourceContract do
   """
 
   def validate!(resource, model, opts \\ []) when is_atom(resource) and is_atom(model) do
-    json_api = validate_model!(model, Hawk.JsonApi.Schema.metadata(model))
+    json_api = do_validate_model!(model, resolve_json_api(resource, model, opts))
     reader = resource_module(resource, :reader, Reader)
     policy = resource_module(resource, :policy, Policy)
 
@@ -24,11 +24,44 @@ defmodule Hawk.ResourceContract do
   Useful for standalone models whose adapter is the only declared contract
   surface (e.g. computed-attribute resources).
   """
-  def validate_model!(model) when is_atom(model) do
-    validate_model!(model, Hawk.JsonApi.Schema.metadata(model))
+  def validate_model!(model, opts \\ []) when is_atom(model) and is_list(opts) do
+    json_api =
+      case Keyword.fetch(opts, :json_api) do
+        {:ok, adapter} -> adapter_metadata(adapter)
+        :error -> Hawk.JsonApi.Schema.metadata(model)
+      end
+
+    do_validate_model!(model, json_api)
   end
 
-  defp validate_model!(model, json_api) when is_atom(model) do
+  defp resolve_json_api(resource, model, opts) do
+    cond do
+      adapter = Keyword.get(opts, :json_api) ->
+        adapter_metadata(adapter)
+
+      function_exported?(resource, :__hawk_resource__, 1) ->
+        case resource.__hawk_resource__(:json_api) do
+          false -> Hawk.JsonApi.Schema.metadata(model)
+          adapter -> adapter_metadata(adapter)
+        end
+
+      true ->
+        Hawk.JsonApi.Schema.metadata(model)
+    end
+  end
+
+  defp adapter_metadata(adapter) when is_atom(adapter) do
+    Code.ensure_compiled(adapter)
+
+    if function_exported?(adapter, :__hawk_json_api__, 0) do
+      adapter.__hawk_json_api__()
+    else
+      raise ArgumentError,
+            "Hawk resource json_api adapter #{inspect(adapter)} must define __hawk_json_api__/0"
+    end
+  end
+
+  defp do_validate_model!(model, json_api) when is_atom(model) do
     validate_json_api_attributes!(model, json_api)
     validate_json_api_relationships!(model, json_api)
     validate_write_fields!(json_api)
@@ -38,7 +71,7 @@ defmodule Hawk.ResourceContract do
   end
 
   defp validate_json_api_attributes!(model, json_api) do
-    schema_fields = model.__hawk_schema__(:fields) |> MapSet.new()
+    schema_fields = model.__schema__(:fields) |> MapSet.new()
 
     json_api.attributes
     |> Enum.reject(fn {name, metadata} ->
@@ -60,7 +93,7 @@ defmodule Hawk.ResourceContract do
   defp computed_attribute?(_metadata, _schema_fields), do: false
 
   defp validate_json_api_relationships!(model, json_api) do
-    associations = model.__hawk_schema__(:associations) |> MapSet.new()
+    associations = model.__schema__(:associations) |> MapSet.new()
 
     json_api.relationships
     |> Map.keys()
@@ -97,7 +130,7 @@ defmodule Hawk.ResourceContract do
       source = Map.get(metadata, :source, name)
 
       not MapSet.member?(writable, name) or
-        match?(%Ecto.Association.BelongsTo{}, model.__hawk_schema__(:association, source))
+        match?(%Ecto.Association.BelongsTo{}, model.__schema__(:association, source))
     end)
     |> Enum.map(fn {name, _metadata} -> name end)
     |> raise_if_any!("JSON:API writable relationships must be belongs_to associations")
@@ -124,7 +157,7 @@ defmodule Hawk.ResourceContract do
   end
 
   defp validate_reader_sorts!(reader, model) do
-    schema_fields = model.__hawk_schema__(:fields) |> MapSet.new()
+    schema_fields = model.__schema__(:fields) |> MapSet.new()
 
     reader
     |> reader_values(:sort_keys)
@@ -133,7 +166,7 @@ defmodule Hawk.ResourceContract do
   end
 
   defp validate_reader_filters!(reader, model) do
-    schema_fields = model.__hawk_schema__(:fields) |> MapSet.new()
+    schema_fields = model.__schema__(:fields) |> MapSet.new()
     handlers = reader_values(reader, :filter_handlers) |> Map.keys() |> MapSet.new()
 
     reader

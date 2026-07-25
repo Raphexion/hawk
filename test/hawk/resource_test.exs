@@ -67,10 +67,17 @@ defmodule Hawk.ResourceTest.CourseSummaries.Policy do
   def read_filter(_authority), do: :all
 end
 
+defmodule Hawk.ResourceTest.CourseSummaries.Writer do
+  @moduledoc false
+
+  def create(attrs, _authority), do: {:ok, struct!(Hawk.ResourceTest.Course, attrs)}
+  def update(model, attrs, _authority), do: {:ok, Map.merge(model, attrs)}
+  def delete(_model, _authority), do: :ok
+end
+
 defmodule Hawk.ResourceTest.CourseSummaries do
   use Hawk.Resource,
     model: Hawk.ResourceTest.Course,
-    writer: false,
     json_api: false,
     live_view: false
 end
@@ -80,7 +87,7 @@ defmodule Hawk.ResourceTest.CustomFacade.CustomReader do
   def all(opts), do: {:custom_all, opts}
 end
 
-defmodule Hawk.ResourceTest.CustomFacade.CustomPolicy do
+defmodule Hawk.ResourceTest.CustomFacade.Policy do
   def read_filter(_authority), do: :none
 end
 
@@ -92,12 +99,18 @@ defmodule Hawk.ResourceTest.CustomFacade.CustomLiveView do
   def __hawk_live_view__, do: %{index: %{}, show: %{}}
 end
 
+defmodule Hawk.ResourceTest.CustomFacade.Writer do
+  @moduledoc false
+
+  def create(attrs, _authority), do: {:ok, struct!(Hawk.ResourceTest.Course, attrs)}
+  def update(model, attrs, _authority), do: {:ok, Map.merge(model, attrs)}
+  def delete(_model, _authority), do: :ok
+end
+
 defmodule Hawk.ResourceTest.CustomFacade do
   use Hawk.Resource,
     model: Hawk.ResourceTest.Course,
     reader: Hawk.ResourceTest.CustomFacade.CustomReader,
-    policy: Hawk.ResourceTest.CustomFacade.CustomPolicy,
-    writer: false,
     json_api: Hawk.ResourceTest.CustomFacade.CustomJsonApi,
     live_view: Hawk.ResourceTest.CustomFacade.CustomLiveView
 end
@@ -145,16 +158,16 @@ defmodule Hawk.ResourceTest do
            }
   end
 
-  test "explicit false documents absent capabilities and does not generate writer delegates" do
+  test "writer is always resolved by convention and delegates are generated" do
     assert CourseSummaries.one(authority: Hawk.Authority.system()) ==
              {:one, [authority: Hawk.Authority.system()]}
 
-    assert CourseSummaries.__hawk_resource__(:writer) == false
+    assert CourseSummaries.__hawk_resource__(:writer) == Hawk.ResourceTest.CourseSummaries.Writer
     assert CourseSummaries.__hawk_resource__(:json_api) == false
     assert CourseSummaries.__hawk_resource__(:live_view) == false
-    refute function_exported?(CourseSummaries, :create, 2)
-    refute function_exported?(CourseSummaries, :update, 3)
-    refute function_exported?(CourseSummaries, :delete, 2)
+    assert function_exported?(CourseSummaries, :create, 2)
+    assert function_exported?(CourseSummaries, :update, 3)
+    assert function_exported?(CourseSummaries, :delete, 2)
   end
 
   test "explicit modules override conventions" do
@@ -162,7 +175,7 @@ defmodule Hawk.ResourceTest do
              {:custom_all, [authority: Hawk.Authority.system()]}
 
     assert CustomFacade.__hawk_resource__(:reader) == Hawk.ResourceTest.CustomFacade.CustomReader
-    assert CustomFacade.__hawk_resource__(:policy) == Hawk.ResourceTest.CustomFacade.CustomPolicy
+    assert CustomFacade.__hawk_resource__(:policy) == Hawk.ResourceTest.CustomFacade.Policy
 
     assert CustomFacade.__hawk_resource__(:json_api) ==
              Hawk.ResourceTest.CustomFacade.CustomJsonApi
@@ -176,10 +189,15 @@ defmodule Hawk.ResourceTest do
                  ~r/Hawk resource reader module Hawk.ResourceTest.Broken.Reader is not available/,
                  fn ->
                    Code.compile_string("""
+                   defmodule Hawk.ResourceTest.Broken.Writer do
+                     def create(attrs, _authority), do: {:ok, struct!(Hawk.ResourceTest.Course, attrs)}
+                     def update(model, attrs, _authority), do: {:ok, Map.merge(model, attrs)}
+                     def delete(_model, _authority), do: :ok
+                   end
+
                    defmodule Hawk.ResourceTest.Broken do
                      use Hawk.Resource,
                        model: Hawk.ResourceTest.Course,
-                       writer: false,
                        json_api: false,
                        live_view: false
                    end
@@ -332,8 +350,6 @@ defmodule Hawk.ResourceTest do
                      use Hawk.Resource,
                        model: Videdal.Course,
                        reader: Hawk.ResourceTest.BadWritableRelationship.Reader,
-                       policy: Hawk.ResourceTest.BadWritableRelationship.Policy,
-                       writer: Hawk.ResourceTest.BadWritableRelationship.Writer,
                        json_api: Hawk.ResourceTest.BadWritableRelationship.JsonApi,
                        live_view: Hawk.ResourceTest.BadWritableRelationship.LiveView
                    end

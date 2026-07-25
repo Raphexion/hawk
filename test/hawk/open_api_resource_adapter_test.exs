@@ -53,7 +53,7 @@ defmodule Hawk.OpenApiResourceAdapterTest do
     assert %{
              name: "include",
              in: "query",
-             schema: %{type: "string", enum: ["instructor"]}
+             schema: %{type: "string", enum: ["instructor", "instructor.school"]}
            } in parameters
 
     assert %{
@@ -72,15 +72,15 @@ defmodule Hawk.OpenApiResourceAdapterTest do
     refute Map.has_key?(spec.components.schemas, :InternalNoteResource)
   end
 
-  test "OpenAPI follows route capabilities for read-only resources" do
+  test "OpenAPI exposes write routes and omits action routes when actions are absent" do
     spec = Hawk.OpenApi.spec([Videdal.CourseCatalog])
 
     assert spec.paths["/course-catalog"].get
-    refute Map.has_key?(spec.paths["/course-catalog"], :post)
+    assert Map.has_key?(spec.paths["/course-catalog"], :post)
 
     assert spec.paths["/course-catalog/{id}"].get
-    refute Map.has_key?(spec.paths["/course-catalog/{id}"], :patch)
-    refute Map.has_key?(spec.paths["/course-catalog/{id}"], :delete)
+    assert Map.has_key?(spec.paths["/course-catalog/{id}"], :patch)
+    assert Map.has_key?(spec.paths["/course-catalog/{id}"], :delete)
     refute Map.has_key?(spec.paths, "/course-catalog/{id}/-actions/{action}")
 
     assert Map.has_key?(spec.paths, "/course-catalog/{id}/relationships/{relationship}")

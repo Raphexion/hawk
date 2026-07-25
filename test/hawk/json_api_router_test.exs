@@ -65,10 +65,13 @@ defmodule Hawk.JsonApiRouterTest do
            ]
   end
 
-  test "router macro omits unsupported read-only routes and applies prefixes" do
+  test "router macro emits write routes and applies prefixes" do
     assert ReadOnlyRouter.__fake_routes__() == [
              {:get, "/api/v1/course-catalog", Videdal.Controllers.CourseCatalogController, :index},
+             {:post, "/api/v1/course-catalog", Videdal.Controllers.CourseCatalogController, :create},
              {:get, "/api/v1/course-catalog/:id", Videdal.Controllers.CourseCatalogController, :show},
+             {:patch, "/api/v1/course-catalog/:id", Videdal.Controllers.CourseCatalogController, :update},
+             {:delete, "/api/v1/course-catalog/:id", Videdal.Controllers.CourseCatalogController, :delete},
              {:get, "/api/v1/course-catalog/:id/relationships/:relationship",
               Videdal.Controllers.CourseCatalogController, :relationship},
              {:get, "/api/v1/course-catalog/:id/:relationship", Videdal.Controllers.CourseCatalogController, :related}
@@ -77,7 +80,7 @@ defmodule Hawk.JsonApiRouterTest do
 
   test "router macro validates emitted controller actions" do
     assert_raise ArgumentError,
-                 ~r/Hawk JSON:API router controller Hawk.JsonApiRouterTest.IncompleteController must define relationship\/2 for get \/course-catalog\/:id\/relationships\/:relationship/,
+                 ~r/Hawk JSON:API router controller Hawk.JsonApiRouterTest.IncompleteController must define create\/2 for post \/course-catalog/,
                  fn ->
                    Code.compile_string("""
                    defmodule Hawk.JsonApiRouterTest.IncompleteController do

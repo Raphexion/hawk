@@ -5,7 +5,5 @@ defmodule Videdal.PolicyCheckedCourses do
 
   use Hawk.Resource,
     model: Videdal.Course,
-    policy: Videdal.Courses.Policy,
-    writer: false,
     json_api: false
 end

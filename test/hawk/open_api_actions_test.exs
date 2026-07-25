@@ -1,63 +1,27 @@
-defmodule Hawk.OpenApiActionsTest.Switch do
-  use Hawk.Model
-
-  model "switches" do
-    field(:state, :string)
-  end
-end
-
-defmodule Hawk.OpenApiActionsTest.Switches.JsonApi do
-  use Hawk.JsonApi.Resource
-
-  type("switches")
-  doc("A switch that supports custom actions.")
-
-  attribute(:state,
-    writable: true,
-    doc: "Current state.",
-    example: "off"
-  )
-end
-
-defmodule Hawk.OpenApiActionsTest.Switches do
-end
-
-defmodule Hawk.OpenApiActionsTest.Switches.Actions do
-  use Hawk.Actions
-
-  action("toggle",
-    params: [
-      enabled: [type: :boolean, doc: "Whether the switch should be on.", example: true],
-      threshold: [type: :float, doc: "Optional numeric threshold.", example: 0.5],
-      label: [type: :string, doc: "Human label for the command.", example: "night mode"]
-    ]
-  )
-end
-
 defmodule Hawk.OpenApiActionsTest do
   use ExUnit.Case, async: true
 
-  test "OpenAPI action schemas map Hawk action param types to JSON schema types" do
-    spec = Hawk.OpenApi.spec([Hawk.OpenApiActionsTest.Switch])
+  # Videdal.Courses is a full Hawk.Resource facade (reader + writer + policy
+  # + actions) — the shape EPI uses. Its `open-registration` action exercises
+  # the OpenAPI action-param → JSON schema mapping without a dedicated
+  # reader-less test fixture.
 
-    action = spec.paths["/switches/{id}/-actions/toggle"].post
+  test "OpenAPI action schemas map Hawk action param types to JSON schema types" do
+    spec = Hawk.OpenApi.spec([Videdal.Courses])
+
+    action = spec.paths["/courses/{id}/-actions/open-registration"].post
     meta = action.requestBody.content["application/vnd.api+json"].schema.properties.meta
 
     assert meta.properties == %{
-             enabled: %{
-               type: "boolean",
-               description: "Whether the switch should be on.",
-               example: true
+             seat_count: %{
+               type: "integer",
+               description: "Seats offered immediately when registration opens.",
+               example: 2
              },
-             threshold: %{
-               type: "number",
-               description: "Optional numeric threshold.",
-               example: 0.5
-             },
-             label: %{
-               type: "string",
-               description: "Human label for the command.",
-               example: "night mode"
+             waitlist_count: %{
+               type: "integer",
+               description: "How many waitlist places should be tracked for this course.",
+               example: 1
              }
            }
   end

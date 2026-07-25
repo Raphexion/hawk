@@ -42,13 +42,6 @@ defmodule Hawk.OpenApi do
             capabilities: module.__hawk_resource__(:capabilities)
           }
       end
-    else
-      %{
-        model: module,
-        resource: module.__hawk_resource__(),
-        json_api: Hawk.JsonApi.Schema.metadata(module),
-        capabilities: %{writer: true, actions: true}
-      }
     end
   end
 
@@ -393,7 +386,7 @@ defmodule Hawk.OpenApi do
 
   defp attribute_type(resource, name, metadata) do
     source = Map.get(metadata, :source, name)
-    resource.model.__hawk_schema__(:type, source)
+    resource.model.__schema__(:type, source)
   end
 
   defp relationship_schema(metadata) do
@@ -498,7 +491,7 @@ defmodule Hawk.OpenApi do
   end
 
   defp fetch_association(schema, key) do
-    case schema.__hawk_schema__(:association, key) do
+    case schema.__schema__(:association, key) do
       nil -> :error
       association -> {:ok, association}
     end

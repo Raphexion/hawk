@@ -8,7 +8,8 @@ defmodule Mix.Tasks.Hawk.Gen.Resource do
         --attributes title,code --relationships school,teacher
 
   By default the generated JSON:API fields are writable and a writer skeleton is
-  emitted. Pass `--read-only` to generate `writer: false` and omit the writer.
+  emitted. Pass `--read-only` to gate writes with `write(:never)` in the policy;
+  the writer skeleton is still emitted so routes exist and refuse writes.
   Pass `--web MyAppWeb` to also generate a Phoenix JSON:API controller,
   LiveView index/show modules and templates, and a router snippet.
   """
@@ -110,14 +111,12 @@ defmodule Mix.Tasks.Hawk.Gen.Resource do
   end
 
   defp write_resource(config) do
-    writer_line = if config.read_only?, do: ",\n    writer: false", else: ""
-
     write_ex("lib/#{config.base_path}.ex", """
     defmodule #{config.resource} do
       @moduledoc false
 
       use Hawk.Resource,
-        model: #{config.model}#{writer_line}
+        model: #{config.model}
     end
     """)
   end
@@ -217,8 +216,6 @@ defmodule Mix.Tasks.Hawk.Gen.Resource do
     end
     """)
   end
-
-  defp maybe_write_writer(%{read_only?: true}), do: :ok
 
   defp maybe_write_writer(config) do
     writer_fields =

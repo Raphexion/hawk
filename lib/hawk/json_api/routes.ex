@@ -27,19 +27,8 @@ defmodule Hawk.JsonApi.Routes do
   defp normalize_resource(module) do
     Code.ensure_compiled(module)
 
-    cond do
-      function_exported?(module, :__hawk_resource__, 1) ->
-        normalize_facade(module)
-
-      function_exported?(module, :__hawk_json_api__, 0) ->
-        %{
-          resource: module.__hawk_resource__(),
-          json_api: Hawk.JsonApi.Schema.metadata(module),
-          capabilities: %{writer: true, actions: true}
-        }
-
-      true ->
-        nil
+    if function_exported?(module, :__hawk_resource__, 1) do
+      normalize_facade(module)
     end
   end
 
@@ -74,8 +63,7 @@ defmodule Hawk.JsonApi.Routes do
     |> Enum.reject(&is_nil/1)
   end
 
-  defp writer_route(%{capabilities: %{writer: true}}, _action, route), do: route
-  defp writer_route(_resource, _action, _route), do: nil
+  defp writer_route(_resource, _action, route), do: route
 
   defp action_route(%{capabilities: %{actions: true}} = resource, member_path),
     do: route(resource, :post, member_path <> "/-actions/:action", :action, :action)

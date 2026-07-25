@@ -5,7 +5,6 @@ defmodule Videdal.InternalNotes do
 
   use Hawk.Resource,
     model: Videdal.InternalNote,
-    writer: false,
     json_api: false,
     live_view: false
 end

@@ -25,11 +25,23 @@ defmodule Hawk.Resource do
 
     env = __CALLER__
 
+    if Keyword.has_key?(opts, :policy) do
+      raise ArgumentError,
+            "Hawk resources resolve policy by convention as #{inspect(Module.concat(caller, Policy))}; " <>
+              "the :policy opt is not accepted"
+    end
+
+    if Keyword.has_key?(opts, :writer) do
+      raise ArgumentError,
+            "Hawk resources resolve writer by convention as #{inspect(Module.concat(caller, Writer))}; " <>
+              "gate writes with the policy instead (the :writer opt is not accepted)"
+    end
+
     modules = %{
       model: Macro.expand(model, env),
       reader: resolve_module(caller, opts, :reader, Reader, env, required?: true),
-      policy: resolve_module(caller, opts, :policy, Policy, env, required?: true),
-      writer: resolve_module(caller, opts, :writer, Writer, env, required?: true),
+      policy: Module.concat(caller, Policy),
+      writer: Module.concat(caller, Writer),
       json_api: resolve_module(caller, opts, :json_api, JsonApi, env, required?: true),
       live_view: resolve_module(caller, opts, :live_view, LiveView, env, required?: true),
       actions: resolve_module(caller, opts, :actions, Actions, env, required?: false)
@@ -93,8 +105,6 @@ defmodule Hawk.Resource do
       def all(opts), do: unquote(reader).all(opts)
     end
   end
-
-  defp quote_writer_delegates(false), do: []
 
   defp quote_writer_delegates(writer) do
     form_delegates = quote_writer_form_delegates(writer)

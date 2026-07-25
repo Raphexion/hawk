@@ -57,14 +57,7 @@ defmodule Hawk.Model do
     resource = convention_resource(env.module)
 
     quote do
-      @behaviour Hawk.Schema
-
       def __hawk_resource__, do: unquote(resource)
-
-      def __hawk_schema__(:fields), do: __schema__(:fields)
-      def __hawk_schema__(:type, field), do: __schema__(:type, field)
-      def __hawk_schema__(:associations), do: __schema__(:associations)
-      def __hawk_schema__(:association, name), do: __schema__(:association, name)
 
       unquote(quote_fetch_function(:__hawk_association_policy__, policies))
       unquote(quote_fetch_function(:__hawk_association_reader__, readers))

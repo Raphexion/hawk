@@ -74,8 +74,6 @@ defmodule Hawk.LiveView do
     end
   end
 
-  defp quote_form_helpers(_resource, _as, %{writer: false}, _events?, _live_view), do: []
-
   defp quote_form_helpers(resource, as, _capabilities, events?, live_view) do
     if function_exported?(resource, :change_create, 2) and
          function_exported?(resource, :change_update, 3) do
@@ -131,9 +129,6 @@ defmodule Hawk.LiveView do
       end
     end
   end
-
-  defp quote_delete_handler(_resource, _as, _plural_as, %{writer: false}, _live_view, _events?),
-    do: []
 
   defp quote_delete_handler(_resource, _as, _plural_as, _capabilities, _live_view, false), do: []
 

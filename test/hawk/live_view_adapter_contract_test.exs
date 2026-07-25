@@ -23,11 +23,11 @@ defmodule Hawk.LiveViewAdapterContractTest do
     refute Map.has_key?(socket.assigns, :course)
   end
 
-  test "LiveView delete handler follows writer capability" do
+  test "LiveView delete handler is generated for every resource" do
     Code.ensure_loaded!(ExternalCourseLive)
     Code.ensure_loaded!(CourseCatalogLive)
 
     assert function_exported?(ExternalCourseLive, :handle_event, 3)
-    refute function_exported?(CourseCatalogLive, :handle_event, 3)
+    assert function_exported?(CourseCatalogLive, :handle_event, 3)
   end
 end

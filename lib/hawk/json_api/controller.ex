@@ -70,11 +70,9 @@ defmodule Hawk.JsonApi.Controller do
          function_exported?(resource, :__hawk_resource__, 1) do
       resource.__hawk_resource__(:capabilities)
     else
-      %{writer: true, actions: true}
+      %{actions: true}
     end
   end
-
-  defp quote_writer_actions(_resource, _model, _public?, %{writer: false}), do: []
 
   defp quote_writer_actions(resource, model, public?, _capabilities) do
     quote do
@@ -354,7 +352,7 @@ defmodule Hawk.JsonApi.Controller do
       context = request_context(conn)
 
       relationship = Schema.relationship_key!(model, relationship_name)
-      association = model.__hawk_schema__(:association, relationship)
+      association = model.__schema__(:association, relationship)
       preloads = if match?(%{cardinality: :many}, association), do: [relationship], else: []
 
       case resource.one(

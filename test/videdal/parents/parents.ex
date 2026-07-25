@@ -5,6 +5,5 @@ defmodule Videdal.Parents do
 
   use Hawk.Resource,
     model: Videdal.Parent,
-    writer: false,
     live_view: false
 end

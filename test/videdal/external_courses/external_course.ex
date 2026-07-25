@@ -9,6 +9,6 @@ defmodule Videdal.ExternalCourse do
     field(:title, :string)
     field(:public_slug, :string)
 
-    belongs_to(:teacher, Videdal.ExternalTeacher)
+    belongs_to(:teacher, Videdal.Teacher)
   end
 end

@@ -8,7 +8,7 @@ defmodule Hawk.OpenApi.Controller do
         use Hawk.OpenApi.Controller,
           title: "My API",
           version: "1.0.0",
-          resources: [MyApp.Course, MyApp.Grade]
+          resources: [MyApp.Courses, MyApp.Grades]
       end
   """
 

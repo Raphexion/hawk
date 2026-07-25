@@ -21,7 +21,9 @@ defmodule Hawk.JsonApiAttributeTest.LocalizedPosts.JsonApi do
   )
 end
 
-defmodule Hawk.JsonApiAttributeTest.LocalizedPosts do
+defmodule Hawk.JsonApiAttributeTest.LocalizedPosts.Reader do
+  @moduledoc false
+
   def all(_opts) do
     [
       %Hawk.JsonApiAttributeTest.LocalizedPost{
@@ -34,6 +36,45 @@ defmodule Hawk.JsonApiAttributeTest.LocalizedPosts do
       }
     ]
   end
+
+  def one(opts) do
+    case Keyword.get(opts, :filter, %{}) do
+      %{id: id} ->
+        Enum.find_value(all([]), fn post -> post.id == id and {:ok, post} end) || :not_found
+
+      _ ->
+        :not_found
+    end
+  end
+
+  def preload_keys, do: MapSet.new()
+  def filter_keys, do: MapSet.new([:id])
+  def filter_handlers, do: %{}
+  def sort_keys, do: MapSet.new()
+end
+
+defmodule Hawk.JsonApiAttributeTest.LocalizedPosts.Policy do
+  use Hawk.Policy
+
+  @moduledoc false
+
+  read do
+    role(:system, :all)
+  end
+end
+
+defmodule Hawk.JsonApiAttributeTest.LocalizedPosts.Writer do
+  @moduledoc false
+
+  def create(attrs, _authority), do: {:ok, struct!(Hawk.JsonApiAttributeTest.LocalizedPost, attrs)}
+  def update(model, attrs, _authority), do: {:ok, Map.merge(model, attrs)}
+  def delete(_model, _authority), do: :ok
+end
+
+defmodule Hawk.JsonApiAttributeTest.LocalizedPosts do
+  use Hawk.Resource,
+    model: Hawk.JsonApiAttributeTest.LocalizedPost,
+    live_view: false
 end
 
 defmodule Hawk.JsonApiAttributeTest.LocalizedPostsController do

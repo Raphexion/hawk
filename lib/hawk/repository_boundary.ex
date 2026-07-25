@@ -167,14 +167,14 @@ defmodule Hawk.RepositoryBoundary do
 
   defp schema_associations(%module{}) do
     if function_exported?(module, :__schema__, 1) do
-      module.__hawk_schema__(:associations)
+      module.__schema__(:associations)
     else
       []
     end
   end
 
   defp schema_association(%module{}, association) do
-    module.__hawk_schema__(:association, association)
+    module.__schema__(:association, association)
   end
 
   defp audit(context, operation, model, opts) do

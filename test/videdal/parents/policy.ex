@@ -11,4 +11,6 @@ defmodule Videdal.Parents.Policy do
     role(:school_admin, scopes: [:school_id])
     role(:parent, scopes: [:school_id, :parent_id])
   end
+
+  write(:never)
 end

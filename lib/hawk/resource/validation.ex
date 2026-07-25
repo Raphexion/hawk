@@ -88,7 +88,7 @@ defmodule Hawk.Resource.Validation do
     Enum.each(Map.get(json_api, :attributes, %{}), fn {name, metadata} ->
       source = Map.get(metadata, :source, name)
 
-      if is_nil(model.__hawk_schema__(:type, source)) do
+      if is_nil(model.__schema__(:type, source)) and not computed_attribute?(metadata) do
         raise ArgumentError,
               "Hawk resource json_api module #{inspect(json_api_module)} attribute #{inspect(name)} source #{inspect(source)} must reference a field on #{inspect(model)}"
       end
@@ -97,7 +97,7 @@ defmodule Hawk.Resource.Validation do
     Enum.each(Map.get(json_api, :relationships, %{}), fn {name, metadata} ->
       source = Map.get(metadata, :source, name)
 
-      if is_nil(model.__hawk_schema__(:association, source)) do
+      if is_nil(model.__schema__(:association, source)) do
         raise ArgumentError,
               "Hawk resource json_api module #{inspect(json_api_module)} relationship #{inspect(name)} source #{inspect(source)} must reference an association on #{inspect(model)}"
       end
@@ -152,7 +152,7 @@ defmodule Hawk.Resource.Validation do
 
   defp validate_json_api_writable_relationship!(model, json_api_module, name, metadata) do
     source = Map.get(metadata, :source, name)
-    association = model.__hawk_schema__(:association, source)
+    association = model.__schema__(:association, source)
 
     unless match?(%Ecto.Association.BelongsTo{}, association) do
       raise ArgumentError,
@@ -253,12 +253,16 @@ defmodule Hawk.Resource.Validation do
     |> Enum.map(&Map.fetch!(&1, :name))
   end
 
+  defp computed_attribute?(%{resolver: resolver}) when is_function(resolver, 1), do: true
+  defp computed_attribute?(%{resolver: resolver}) when is_function(resolver, 2), do: true
+  defp computed_attribute?(_metadata), do: false
+
   defp validate_live_view_fields!(model, live_view_module, kind, fields) do
     Enum.each(fields, fn metadata ->
       name = Map.fetch!(metadata, :name)
       source = Map.get(metadata, :source, name)
 
-      if is_nil(model.__hawk_schema__(:type, source)) do
+      if is_nil(model.__schema__(:type, source)) do
         raise ArgumentError,
               "Hawk resource live_view module #{inspect(live_view_module)} #{kind} field #{inspect(name)} source #{inspect(source)} must reference a field on #{inspect(model)}"
       end

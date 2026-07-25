@@ -23,10 +23,13 @@ defmodule Hawk.JsonApiRoutesTest do
            ]
   end
 
-  test "routes omit write and action endpoints when capabilities are absent" do
+  test "routes omit action endpoints when actions capability is absent" do
     assert Routes.routes(Videdal.CourseCatalog) == [
              route(:get, "/course-catalog", :index, :read, Videdal.CourseCatalog),
+             route(:post, "/course-catalog", :create, :write, Videdal.CourseCatalog),
              route(:get, "/course-catalog/:id", :show, :read, Videdal.CourseCatalog),
+             route(:patch, "/course-catalog/:id", :update, :write, Videdal.CourseCatalog),
+             route(:delete, "/course-catalog/:id", :delete, :write, Videdal.CourseCatalog),
              route(
                :get,
                "/course-catalog/:id/relationships/:relationship",
@@ -51,7 +54,10 @@ defmodule Hawk.JsonApiRoutesTest do
   test "routes support path prefixes" do
     assert Routes.routes(Videdal.CourseCatalog, path_prefix: "/api/v1") == [
              route(:get, "/api/v1/course-catalog", :index, :read, Videdal.CourseCatalog),
+             route(:post, "/api/v1/course-catalog", :create, :write, Videdal.CourseCatalog),
              route(:get, "/api/v1/course-catalog/:id", :show, :read, Videdal.CourseCatalog),
+             route(:patch, "/api/v1/course-catalog/:id", :update, :write, Videdal.CourseCatalog),
+             route(:delete, "/api/v1/course-catalog/:id", :delete, :write, Videdal.CourseCatalog),
              route(
                :get,
                "/api/v1/course-catalog/:id/relationships/:relationship",
@@ -73,9 +79,6 @@ defmodule Hawk.JsonApiRoutesTest do
     assert_controller_exports!(CourseRoutesController, Routes.routes(Videdal.Courses))
     assert_controller_exports!(CourseCatalogController, Routes.routes(Videdal.CourseCatalog))
 
-    refute function_exported?(CourseCatalogController, :create, 2)
-    refute function_exported?(CourseCatalogController, :update, 2)
-    refute function_exported?(CourseCatalogController, :delete, 2)
     refute function_exported?(CourseCatalogController, :action, 2)
   end
 

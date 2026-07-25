@@ -39,8 +39,11 @@ defmodule Mix.Tasks.Hawk.Gen.ResourceTest do
     end)
 
     assert_file(tmp, "lib/my_app/students.ex", "use Hawk.Resource")
-    assert_file(tmp, "lib/my_app/students.ex", "model: MyApp.Student,")
-    assert_file(tmp, "lib/my_app/students.ex", "writer: false")
+    assert_file(tmp, "lib/my_app/students.ex", "model: MyApp.Student")
+    refute File.read!(Path.join(tmp, "lib/my_app/students.ex")) =~ "writer: false"
+
+    assert_file(tmp, "lib/my_app/students/policy.ex", "write(:never)")
+    assert_file(tmp, "lib/my_app/students/writer.ex", "use Hawk.Writer.Resource")
 
     assert_file(tmp, "lib/my_app/students/reader.ex", "repo: MyApp.Repo,")
     assert_file(tmp, "lib/my_app/students/reader.ex", "schema: MyApp.Student")

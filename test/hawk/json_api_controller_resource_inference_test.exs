@@ -28,10 +28,17 @@ defmodule Hawk.JsonApiControllerResourceInferenceTest.Courses.LiveView do
   def __hawk_live_view__, do: %{index: %{}, show: %{}}
 end
 
+defmodule Hawk.JsonApiControllerResourceInferenceTest.Courses.Writer do
+  @moduledoc false
+
+  def create(attrs, _authority), do: {:ok, struct!(Hawk.JsonApiControllerResourceInferenceTest.Course, attrs)}
+  def update(model, attrs, _authority), do: {:ok, Map.merge(model, attrs)}
+  def delete(_model, _authority), do: :ok
+end
+
 defmodule Hawk.JsonApiControllerResourceInferenceTest.Courses do
   use Hawk.Resource,
-    model: Hawk.JsonApiControllerResourceInferenceTest.Course,
-    writer: false
+    model: Hawk.JsonApiControllerResourceInferenceTest.Course
 end
 
 defmodule Hawk.JsonApiControllerResourceInferenceTest.Controller do
@@ -66,10 +73,10 @@ defmodule Hawk.JsonApiControllerResourceInferenceTest do
     assert body.data.id == Videdal.course_id()
   end
 
-  test "controller only exposes write actions when writer is enabled" do
-    refute function_exported?(Controller, :create, 2)
-    refute function_exported?(Controller, :update, 2)
-    refute function_exported?(Controller, :delete, 2)
+  test "controller always exposes write actions" do
+    assert function_exported?(Controller, :create, 2)
+    assert function_exported?(Controller, :update, 2)
+    assert function_exported?(Controller, :delete, 2)
   end
 
   test "controller only exposes custom action endpoint when actions are enabled" do
@@ -94,10 +101,15 @@ defmodule Hawk.JsonApiControllerResourceInferenceTest do
                      def __hawk_live_view__, do: %{index: %{}, show: %{}}
                    end
 
+                   defmodule Hawk.JsonApiControllerResourceInferenceTest.JsonApiDisabled.Writer do
+                     def create(attrs, _authority), do: {:ok, struct!(Hawk.JsonApiControllerResourceInferenceTest.Course, attrs)}
+                     def update(model, attrs, _authority), do: {:ok, Map.merge(model, attrs)}
+                     def delete(_model, _authority), do: :ok
+                   end
+
                    defmodule Hawk.JsonApiControllerResourceInferenceTest.JsonApiDisabled do
                      use Hawk.Resource,
                        model: Hawk.JsonApiControllerResourceInferenceTest.Course,
-                       writer: false,
                        json_api: false
                    end
 

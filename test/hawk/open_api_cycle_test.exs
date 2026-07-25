@@ -26,23 +26,45 @@ defmodule Hawk.OpenApiCycleTest.Nodes.JsonApi do
   )
 end
 
-defmodule Hawk.OpenApiCycleTest.Nodes do
+defmodule Hawk.OpenApiCycleTest.Nodes.Policy do
+  use Hawk.Policy
+
+  @moduledoc false
+
+  read do
+    role(:system, :all)
+  end
 end
 
 defmodule Hawk.OpenApiCycleTest.Nodes.Reader do
   use Hawk.Reader.Resource,
     repo: Videdal.Repo,
     schema: Hawk.OpenApiCycleTest.Node,
-    policy: Videdal.Courses.Policy
+    policy: Hawk.OpenApiCycleTest.Nodes.Policy
 
   preload(:parent)
+end
+
+defmodule Hawk.OpenApiCycleTest.Nodes.Writer do
+  @moduledoc false
+
+  def create(attrs, _authority), do: {:ok, struct!(Hawk.OpenApiCycleTest.Node, attrs)}
+  def update(model, attrs, _authority), do: {:ok, Map.merge(model, attrs)}
+  def delete(_model, _authority), do: :ok
+end
+
+defmodule Hawk.OpenApiCycleTest.Nodes do
+  use Hawk.Resource,
+    model: Hawk.OpenApiCycleTest.Node,
+    reader: Hawk.OpenApiCycleTest.Nodes.Reader,
+    live_view: false
 end
 
 defmodule Hawk.OpenApiCycleTest do
   use ExUnit.Case, async: true
 
   test "OpenAPI include generation stops on self-referential reader cycles" do
-    spec = Hawk.OpenApi.spec([Hawk.OpenApiCycleTest.Node])
+    spec = Hawk.OpenApi.spec([Hawk.OpenApiCycleTest.Nodes])
 
     include =
       spec.paths["/nodes"].get.parameters

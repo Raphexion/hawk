@@ -17,7 +17,7 @@ defmodule Hawk.JsonApiControllerAdapterContractTest do
     assert body.data.attributes == %{name: "Math", slug: "math"}
 
     assert body.data.relationships.instructor.data == %{
-             type: "internal_teachers",
+             type: "teachers",
              id: Videdal.teacher_id()
            }
 
@@ -35,7 +35,7 @@ defmodule Hawk.JsonApiControllerAdapterContractTest do
 
     assert conn.status == 200
     body = resp(conn)
-    assert body.data == %{type: "internal_teachers", id: Videdal.teacher_id()}
+    assert body.data == %{type: "teachers", id: Videdal.teacher_id()}
     assert body.links.self == "/courses/#{Videdal.course_id()}/relationships/instructor"
   end
 
@@ -45,7 +45,7 @@ defmodule Hawk.JsonApiControllerAdapterContractTest do
         conn(@system),
         create_params(%{"name" => "Science", "slug" => "science"}, %{
           "instructor" => %{
-            "data" => %{"type" => "internal_teachers", "id" => Videdal.teacher_id()}
+            "data" => %{"type" => "teachers", "id" => Videdal.teacher_id()}
           }
         })
       )

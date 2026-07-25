@@ -1,5 +1,11 @@
 defmodule Videdal.CourseCatalog.Policy do
+  use Hawk.Policy
+
   @moduledoc false
 
-  def read_filter(_authority), do: :all
+  read do
+    role(:system, :all)
+  end
+
+  write(:never)
 end

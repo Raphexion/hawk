@@ -96,9 +96,9 @@ defmodule Hawk.ResourceContractCaseTest do
 
   test "contract validation explains mismatched declarations" do
     assert_raise ArgumentError, ~r/JSON:API attributes must be schema fields: :missing/, fn ->
-      Hawk.ResourceContract.validate!(
-        Hawk.ResourceContractCaseTest.BadResource,
-        Hawk.ResourceContractCaseTest.BadModel
+      Hawk.ResourceContract.validate_model!(
+        Hawk.ResourceContractCaseTest.BadModel,
+        json_api: Hawk.ResourceContractCaseTest.BadModels.JsonApi
       )
     end
   end

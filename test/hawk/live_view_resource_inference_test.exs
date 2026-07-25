@@ -26,10 +26,17 @@ defmodule Hawk.LiveViewResourceInferenceTest.Courses.LiveView do
   def __hawk_live_view__, do: %{index: %{}, show: %{}}
 end
 
+defmodule Hawk.LiveViewResourceInferenceTest.Courses.Writer do
+  @moduledoc false
+
+  def create(attrs, _authority), do: {:ok, struct!(Hawk.LiveViewResourceInferenceTest.Course, attrs)}
+  def update(model, attrs, _authority), do: {:ok, Map.merge(model, attrs)}
+  def delete(_model, _authority), do: :ok
+end
+
 defmodule Hawk.LiveViewResourceInferenceTest.Courses do
   use Hawk.Resource,
-    model: Hawk.LiveViewResourceInferenceTest.Course,
-    writer: false
+    model: Hawk.LiveViewResourceInferenceTest.Course
 end
 
 defmodule Hawk.LiveViewResourceInferenceTest.CourseLive do
@@ -77,10 +84,15 @@ defmodule Hawk.LiveViewResourceInferenceTest do
                      def __hawk_json_api__, do: %{type: "courses"}
                    end
 
+                   defmodule Hawk.LiveViewResourceInferenceTest.LiveViewDisabled.Writer do
+                     def create(attrs, _authority), do: {:ok, struct!(Hawk.LiveViewResourceInferenceTest.Course, attrs)}
+                     def update(model, attrs, _authority), do: {:ok, Map.merge(model, attrs)}
+                     def delete(_model, _authority), do: :ok
+                   end
+
                    defmodule Hawk.LiveViewResourceInferenceTest.LiveViewDisabled do
                      use Hawk.Resource,
                        model: Hawk.LiveViewResourceInferenceTest.Course,
-                       writer: false,
                        live_view: false
                    end
 

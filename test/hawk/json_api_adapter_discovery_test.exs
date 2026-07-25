@@ -37,10 +37,19 @@ defmodule Hawk.JsonApiAdapterDiscoveryTest.Authors.LiveView do
   def __hawk_live_view__, do: %{}
 end
 
+defmodule Hawk.JsonApiAdapterDiscoveryTest.Authors.Writer do
+  @moduledoc false
+
+  def create(attrs, _authority), do: {:ok, struct!(Hawk.JsonApiAdapterDiscoveryTest.Author, attrs)}
+  def update(model, attrs, _authority), do: {:ok, Map.merge(model, attrs)}
+  def delete(_model, _authority), do: :ok
+  def change_create(attrs, _authority), do: {:ok, attrs}
+  def change_update(_model, attrs, _authority), do: {:ok, attrs}
+end
+
 defmodule Hawk.JsonApiAdapterDiscoveryTest.Authors do
   use Hawk.Resource,
-    model: Hawk.JsonApiAdapterDiscoveryTest.Author,
-    writer: false
+    model: Hawk.JsonApiAdapterDiscoveryTest.Author
 end
 
 defmodule Hawk.JsonApiAdapterDiscoveryTest.Books.Reader do
@@ -68,10 +77,19 @@ defmodule Hawk.JsonApiAdapterDiscoveryTest.Books.LiveView do
   def __hawk_live_view__, do: %{}
 end
 
+defmodule Hawk.JsonApiAdapterDiscoveryTest.Books.Writer do
+  @moduledoc false
+
+  def create(attrs, _authority), do: {:ok, struct!(Hawk.JsonApiAdapterDiscoveryTest.Book, attrs)}
+  def update(model, attrs, _authority), do: {:ok, Map.merge(model, attrs)}
+  def delete(_model, _authority), do: :ok
+  def change_create(attrs, _authority), do: {:ok, attrs}
+  def change_update(_model, attrs, _authority), do: {:ok, attrs}
+end
+
 defmodule Hawk.JsonApiAdapterDiscoveryTest.Books do
   use Hawk.Resource,
-    model: Hawk.JsonApiAdapterDiscoveryTest.Book,
-    writer: false
+    model: Hawk.JsonApiAdapterDiscoveryTest.Book
 end
 
 defmodule Hawk.JsonApiAdapterDiscoveryTest do

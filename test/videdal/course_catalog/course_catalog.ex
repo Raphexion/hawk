@@ -4,6 +4,5 @@ defmodule Videdal.CourseCatalog do
   """
 
   use Hawk.Resource,
-    model: Videdal.Course,
-    writer: false
+    model: Videdal.Course
 end

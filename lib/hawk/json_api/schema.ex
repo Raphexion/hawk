@@ -131,22 +131,12 @@ defmodule Hawk.JsonApi.Schema do
   end
 
   defp resolve_adapter(resource) do
-    if function_exported?(resource, :__hawk_resource__, 1) do
+    if Code.ensure_compiled(resource) == {:module, resource} and
+         function_exported?(resource, :__hawk_resource__, 1) do
       case resource.__hawk_resource__(:json_api) do
         false -> nil
         adapter -> adapter
       end
-    else
-      convention_adapter(resource)
-    end
-  end
-
-  defp convention_adapter(resource) do
-    adapter = Module.concat(resource, JsonApi)
-
-    if Code.ensure_compiled(adapter) == {:module, adapter} and
-         function_exported?(adapter, :__hawk_json_api__, 0) do
-      adapter
     else
       nil
     end
