@@ -438,5 +438,4 @@ defmodule Videdal.Controllers.CoursesControllerTest do
     assert conn.status == 403
     assert [%{status: "403", code: "not_authorized"}] = resp(conn).errors
   end
-
 end

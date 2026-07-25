@@ -166,5 +166,4 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
     assert open_registration.responses["403"].description == "Forbidden by Hawk policy"
     assert open_registration.responses["422"].description == "Validation failed"
   end
-
 end

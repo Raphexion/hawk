@@ -89,5 +89,4 @@ defmodule Videdal.Integration.JsonApiControllerShortIdTest do
       teacher_id: teacher.id
     })
   end
-
 end
