@@ -189,7 +189,7 @@ defmodule Hawk.JsonApi.Request do
   end
 
   defp validate_relationship_identifier!(model, name, %{"data" => data}) do
-    association = model.__schema__(:association, name)
+    association = model.__hawk_schema__(:association, name)
     expected_type = Schema.metadata(association.related).type
 
     case {association.cardinality, data} do
@@ -273,7 +273,7 @@ defmodule Hawk.JsonApi.Request do
   end
 
   defp writable_relationship_association!(model, source) do
-    association = model.__schema__(:association, source)
+    association = model.__hawk_schema__(:association, source)
 
     case association do
       %Ecto.Association.BelongsTo{} ->

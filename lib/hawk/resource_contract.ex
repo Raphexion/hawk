@@ -38,7 +38,7 @@ defmodule Hawk.ResourceContract do
   end
 
   defp validate_json_api_attributes!(model, json_api) do
-    schema_fields = model.__schema__(:fields) |> MapSet.new()
+    schema_fields = model.__hawk_schema__(:fields) |> MapSet.new()
 
     json_api.attributes
     |> Enum.reject(fn {name, metadata} ->
@@ -60,7 +60,7 @@ defmodule Hawk.ResourceContract do
   defp computed_attribute?(_metadata, _schema_fields), do: false
 
   defp validate_json_api_relationships!(model, json_api) do
-    associations = model.__schema__(:associations) |> MapSet.new()
+    associations = model.__hawk_schema__(:associations) |> MapSet.new()
 
     json_api.relationships
     |> Map.keys()
@@ -97,7 +97,7 @@ defmodule Hawk.ResourceContract do
       source = Map.get(metadata, :source, name)
 
       not MapSet.member?(writable, name) or
-        match?(%Ecto.Association.BelongsTo{}, model.__schema__(:association, source))
+        match?(%Ecto.Association.BelongsTo{}, model.__hawk_schema__(:association, source))
     end)
     |> Enum.map(fn {name, _metadata} -> name end)
     |> raise_if_any!("JSON:API writable relationships must be belongs_to associations")
@@ -124,7 +124,7 @@ defmodule Hawk.ResourceContract do
   end
 
   defp validate_reader_sorts!(reader, model) do
-    schema_fields = model.__schema__(:fields) |> MapSet.new()
+    schema_fields = model.__hawk_schema__(:fields) |> MapSet.new()
 
     reader
     |> reader_values(:sort_keys)
@@ -133,7 +133,7 @@ defmodule Hawk.ResourceContract do
   end
 
   defp validate_reader_filters!(reader, model) do
-    schema_fields = model.__schema__(:fields) |> MapSet.new()
+    schema_fields = model.__hawk_schema__(:fields) |> MapSet.new()
     handlers = reader_values(reader, :filter_handlers) |> Map.keys() |> MapSet.new()
 
     reader

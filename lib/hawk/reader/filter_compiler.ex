@@ -145,7 +145,7 @@ defmodule Hawk.Reader.FilterCompiler do
   defp combine(:or, left, right), do: dynamic([row], ^left or ^right)
 
   defp validate_field!(schema, field) when is_atom(field) do
-    if field in schema.__schema__(:fields) do
+    if field in schema.__hawk_schema__(:fields) do
       :ok
     else
       raise ArgumentError, "unknown field #{inspect(field)} for #{inspect(schema)}"

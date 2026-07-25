@@ -354,7 +354,7 @@ defmodule Hawk.JsonApi.Controller do
       context = request_context(conn)
 
       relationship = Schema.relationship_key!(model, relationship_name)
-      association = model.__schema__(:association, relationship)
+      association = model.__hawk_schema__(:association, relationship)
       preloads = if match?(%{cardinality: :many}, association), do: [relationship], else: []
 
       case resource.one(

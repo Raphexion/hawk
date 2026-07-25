@@ -83,7 +83,7 @@ defmodule Hawk.Reader.Preloader do
 
       {key, nested} when is_atom(key) and is_list(nested) ->
         reader = fetch_reader!(root_schema, key, readers)
-        association = root_schema.__schema__(:association, key)
+        association = root_schema.__hawk_schema__(:association, key)
 
         validate_preloads!(
           nested,
@@ -115,7 +115,7 @@ defmodule Hawk.Reader.Preloader do
   defp apply_preload_policy(root_schema, {key, nested}, authority, readers)
        when is_atom(key) and is_list(nested) do
     reader = fetch_reader!(root_schema, key, readers)
-    association = root_schema.__schema__(:association, key)
+    association = root_schema.__hawk_schema__(:association, key)
     nested = apply_nested_preload_policies(association.related, nested, authority, reader)
 
     {key, {association_query(root_schema, key, reader, authority), nested}}
@@ -176,7 +176,7 @@ defmodule Hawk.Reader.Preloader do
             "reader preload #{inspect(key)} reader #{inspect(reader)} must define preload_query/2"
     end
 
-    association = root_schema.__schema__(:association, key)
+    association = root_schema.__hawk_schema__(:association, key)
     query = from(association.related, as: :root)
 
     reader.preload_query(query, authority)

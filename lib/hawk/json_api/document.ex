@@ -134,7 +134,7 @@ defmodule Hawk.JsonApi.Document do
   end
 
   defp relationship_data(model, name, preloads) do
-    association = Schema.schema_module(model).__schema__(:association, name)
+    association = Schema.schema_module(model).__hawk_schema__(:association, name)
 
     case association.cardinality do
       :one -> belongs_to_identifier(model, association)
@@ -178,7 +178,7 @@ defmodule Hawk.JsonApi.Document do
   defp document_self_link(model) when is_struct(model), do: resource_path(model, Schema.metadata(model))
 
   defp collection_path(model, relationship) do
-    association = Schema.schema_module(model).__schema__(:association, relationship)
+    association = Schema.schema_module(model).__hawk_schema__(:association, relationship)
     "/" <> Schema.metadata(association.related).type
   end
 
