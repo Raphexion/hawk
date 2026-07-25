@@ -16,6 +16,7 @@ defmodule Hawk.JsonApi.Controller do
     validate_json_api_enabled!(resource)
     public? = Keyword.get(opts, :public, false)
     capabilities = controller_capabilities(resource)
+    reader = controller_reader(resource)
 
     quote do
       def index(conn, params) do
@@ -23,6 +24,7 @@ defmodule Hawk.JsonApi.Controller do
           conn,
           unquote(resource),
           unquote(model),
+          unquote(reader),
           params,
           unquote(public?)
         )
@@ -164,14 +166,14 @@ defmodule Hawk.JsonApi.Controller do
     end
   end
 
-  def index(conn, resource, _model, params, public? \\ false) do
+  def index(conn, resource, _model, reader, params, public? \\ false) do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
       fields = Request.sparse_fieldsets(params)
 
       opts =
         params
-        |> Request.request_options(reader: controller_reader(resource))
+        |> Request.request_options(reader: reader)
         |> Keyword.put(:authority, authority)
         |> Keyword.put(:context, request_context(conn))
 
