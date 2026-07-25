@@ -13,6 +13,13 @@ defmodule Hawk.JsonApi.RequestTest do
            }) == [filter: %{school_id: "school-1", active: {:eq, true}, name: {:ilike, "%math%"}}]
   end
 
+  test "sparse fieldsets parse JSON:API fields params without atomizing field names" do
+    assert Request.sparse_fieldsets(%{"fields" => %{"courses" => "title,teacher", "schools" => "name"}}) == %{
+             "courses" => MapSet.new(["title", "teacher"]),
+             "schools" => MapSet.new(["name"])
+           }
+  end
+
   test "request options reject unsupported filter operators" do
     assert_raise ArgumentError, ~r/unsupported filter operator "starts_with"/, fn ->
       Request.request_options(%{"filter" => %{"name" => %{"starts_with" => "math"}}})

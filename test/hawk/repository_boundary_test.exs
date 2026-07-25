@@ -163,6 +163,7 @@ defmodule Hawk.RepositoryBoundaryTest do
 
     test "returns unchanged model without repo update or audit when nothing changed" do
       model = %Student{id: @student_id, name: "Ada"}
+
       context =
         MutationContext.update(model, %{}, Authority.system())
         |> MutationContext.mark_policy_validated()
@@ -176,6 +177,7 @@ defmodule Hawk.RepositoryBoundaryTest do
   describe "delete/3" do
     test "deletes valid contexts and audits successful deletes" do
       model = %Student{id: @student_id, name: "Ada"}
+
       context =
         MutationContext.delete(model, Authority.system())
         |> MutationContext.mark_policy_validated()

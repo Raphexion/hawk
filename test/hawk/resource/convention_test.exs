@@ -25,6 +25,7 @@ defmodule Hawk.Resource.ConventionTest do
       # Box -> Boxes, Church -> Churches
       assert Convention.resource_module(String.to_atom("Elixir.TestBox")) ==
                String.to_atom("Elixir.TestBoxes")
+
       assert Convention.resource_module(String.to_atom("Elixir.TestChurch")) ==
                String.to_atom("Elixir.TestChurches")
     end
