@@ -49,6 +49,14 @@ defmodule Hawk.LiveView do
         LiveView.field_label(field, label_resolver: unquote(Macro.escape(label_resolver)))
       end
 
+      def hawk_field_value(model, field) do
+        LiveView.field_value(model, field)
+      end
+
+      def assign_read_form(socket, model, opts \\ []) do
+        LiveView.assign_read_form(socket, unquote(as), model, opts, unquote(Macro.escape(live_view)))
+      end
+
       unquote(quote_form_helpers(resource, as, capabilities, events?, live_view))
       unquote(quote_delete_handler(resource, as, plural_as, capabilities, live_view, events?))
     end
@@ -208,11 +216,13 @@ defmodule Hawk.LiveView do
       |> Keyword.put(:authority, authority)
 
     results = resource.all(reader_opts)
+    page = Keyword.get(reader_opts, :page, %{})
 
     socket
     |> assign(:hawk_resource, as)
     |> assign(:hawk_index_state, state)
-    |> assign(:hawk_page, Keyword.get(reader_opts, :page, %{}))
+    |> assign(:hawk_index_meta, index_meta(as, plural_as, results, page))
+    |> assign(:hawk_page, page)
     |> assign(:hawk_table, live_view_table(live_view))
     |> assign(plural_as, results)
   end
@@ -222,10 +232,13 @@ defmodule Hawk.LiveView do
   end
 
   def assign_show(socket, resource, as, authority, id, opts, live_view) do
+    lookup = Keyword.get(opts, :lookup, :id)
+
     opts =
       opts
+      |> Keyword.delete(:lookup)
       |> Keyword.put(:authority, authority)
-      |> Keyword.update(:filter, %{id: normalize_id(id)}, &Map.put(&1, :id, normalize_id(id)))
+      |> Keyword.update(:filter, %{lookup => normalize_id(id)}, &Map.put(&1, lookup, normalize_id(id)))
 
     case resource.one(opts) do
       {:ok, model} ->
@@ -239,6 +252,15 @@ defmodule Hawk.LiveView do
           base: ["#{String.replace(to_string(as), "_", " ")} was not found"]
         })
     end
+  end
+
+  def assign_read_form(socket, as, model, opts \\ [], live_view \\ %{}) do
+    fields = live_view |> form_fields(:update_form, Keyword.get(opts, :hidden, [])) |> fallback_read_fields(live_view)
+
+    socket
+    |> put_form_state(as, %{mode: :read, model: model})
+    |> assign(form_assign(as), Phoenix.Component.to_form(read_form_data(model), as: as))
+    |> assign(form_fields_assign(as), fields)
   end
 
   def assign_new_form(socket, resource, as, authority, attrs \\ %{}) do
@@ -397,6 +419,15 @@ defmodule Hawk.LiveView do
     |> resolve_label(Keyword.get(opts, :label_resolver))
   end
 
+  def field_value(model, field) when is_map(field) do
+    source = Map.get(field, :source, Map.fetch!(field, :name))
+    value = Map.get(model, source)
+
+    field
+    |> Map.get(:format)
+    |> apply_field_format(value, model, field)
+  end
+
   defp resolve_label({:gettext, msgid} = label, resolver),
     do: resolve_with_app(label, resolver, msgid)
 
@@ -415,6 +446,11 @@ defmodule Hawk.LiveView do
       fallback
     end
   end
+
+  defp apply_field_format(nil, value, _model, _field), do: value
+  defp apply_field_format(format, value, _model, _field) when is_function(format, 1), do: format.(value)
+  defp apply_field_format(format, value, model, _field) when is_function(format, 2), do: format.(value, model)
+  defp apply_field_format(format, value, model, field) when is_function(format, 3), do: format.(value, model, field)
 
   defp humanize(name) do
     name
@@ -454,8 +490,33 @@ defmodule Hawk.LiveView do
     end
   end
 
+  defp read_form_data(model) when is_struct(model) do
+    model
+    |> Map.from_struct()
+    |> Map.reject(fn {_key, value} -> match?(%Ecto.Association.NotLoaded{}, value) end)
+    |> Map.new(fn {key, value} -> {to_string(key), value} end)
+  end
+
+  defp read_form_data(model), do: model
+
   defp form_assign(as), do: :"#{as}_form"
   defp form_fields_assign(as), do: :"#{as}_form_fields"
+
+  defp fallback_read_fields([], live_view), do: live_view_fields(live_view)
+  defp fallback_read_fields(fields, _live_view), do: fields
+
+  defp index_meta(as, plural_as, results, page) do
+    %{
+      resource: as,
+      plural_resource: plural_as,
+      page: page,
+      count: length(results),
+      has_more?: index_has_more?(results, page)
+    }
+  end
+
+  defp index_has_more?(results, %{size: size}) when is_integer(size), do: length(results) >= size
+  defp index_has_more?(_results, _page), do: false
 
   defp form_fields(live_view, key, hidden) do
     hidden = MapSet.new(hidden)

@@ -178,6 +178,18 @@ defmodule Hawk.LiveViewTest do
     assert socket.assigns.hawk_error == %{base: ["course was not found"]}
   end
 
+  test "assign_show can load by a declared natural key" do
+    course = %Course{id: @course_id, title: "Math", school_id: @school_id}
+    Process.put({Videdal.Repo, :all_results}, [course])
+
+    socket = CourseShowLive.assign_show(socket(), Authority.system(), "Math", lookup: :title)
+
+    assert socket.assigns.course == course
+    assert_received {:videdal_repo, :all, query}
+    refute inspect(query) =~ "c0.id =="
+    assert inspect(query) =~ "c0.title == ^\"Math\""
+  end
+
   test "assign_show merges an existing filter when loading one resource" do
     course = %Course{id: @course_id, title: "Math", school_id: @school_id}
     Process.put({Videdal.Repo, :all_results}, [course])
@@ -190,6 +202,40 @@ defmodule Hawk.LiveViewTest do
     inspected = inspect(query)
     assert inspected =~ "c0.school_id == ^\"#{@school_id}\""
     assert inspected =~ "c0.id == ^\"#{@course_id}\""
+  end
+
+  test "assign_index exposes lightweight page metadata for admin tables" do
+    courses = [%Course{id: @course_id, title: "Math"}]
+    Process.put({Videdal.Repo, :all_results}, courses)
+
+    socket = CourseIndexLive.assign_index(socket(), Authority.system(), page: %{column: :title, dir: :asc, size: 1})
+
+    assert socket.assigns.hawk_index_meta == %{
+             count: 1,
+             has_more?: true,
+             page: %{column: :title, dir: :asc, size: 1},
+             resource: :course,
+             plural_resource: :courses
+           }
+  end
+
+  test "generated hawk_field_value resolves show field sources and formatters" do
+    course = %Course{id: @course_id, title: "Math"}
+
+    assert CourseIndexLive.hawk_field_value(course, %{name: :title}) == "Math"
+    assert CourseIndexLive.hawk_field_value(course, %{name: :display_title, source: :title}) == "Math"
+    assert CourseIndexLive.hawk_field_value(course, %{name: :title, format: &String.upcase/1}) == "MATH"
+  end
+
+  test "assign_read_form assigns display-only form state for read-only admin surfaces" do
+    course = %Course{id: @course_id, title: "Math"}
+
+    socket = CourseIndexLive.assign_read_form(socket(), course)
+
+    assert %Phoenix.HTML.Form{} = socket.assigns.course_form
+    assert socket.assigns.course_form.source["title"] == course.title
+    assert socket.assigns.course_form_fields == [%{name: :title, label: "Course"}]
+    assert socket.assigns.hawk_form_states.course.mode == :read
   end
 
   test "assign_new_form assigns a keyed validation form and create fields without persisting" do

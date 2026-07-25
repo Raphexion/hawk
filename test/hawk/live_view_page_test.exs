@@ -6,6 +6,11 @@ defmodule Hawk.LiveViewPageTest.CourseWorkspaceLive do
       course: [resource: Videdal.Courses],
       students: [resource: Videdal.Students],
       grades: [resource: Videdal.Grades]
+    ],
+    sections: [
+      basics: [label: "Basics", path: "/courses/:id"],
+      students: [label: "Students", path: "/courses/:id/students"],
+      grades: [label: "Grades", path: "/courses/:id/grades"]
     ]
 end
 
@@ -75,6 +80,20 @@ defmodule Hawk.LiveViewPageTest do
 
     assert_received {:videdal_repo, :all, grade_query}
     assert inspect(grade_query) =~ "g0.course_id == ^\"#{@course_id}\""
+  end
+
+  test "page modules expose workspace navigation metadata" do
+    assert CourseWorkspaceLive.hawk_page_sections() == [
+             %{id: :basics, label: "Basics", path: "/courses/:id"},
+             %{id: :students, label: "Students", path: "/courses/:id/students"},
+             %{id: :grades, label: "Grades", path: "/courses/:id/grades"}
+           ]
+
+    assert CourseWorkspaceLive.hawk_page_section(:students) == %{
+             id: :students,
+             label: "Students",
+             path: "/courses/:id/students"
+           }
   end
 
   test "assign_page records per-resource errors without stopping other resources" do

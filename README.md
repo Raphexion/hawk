@@ -172,7 +172,13 @@ end
 the LiveView adapter when present, then falls back to model-based convention.
 Generated LiveView event handlers follow resource capabilities; for example,
 read-only resources with `writer: false` do not get the default `"hawk:delete"`
-handler. LiveView index params are caller-provided narrowing/presentation only;
+handler. Show pages can load by natural keys when the reader declares the filter:
+
+```elixir
+socket = CourseLive.assign_show(socket, authority, short_id, lookup: :short_id)
+```
+
+LiveView index params are caller-provided narrowing/presentation only;
 pass them as `params: %{"filter" => ..., "search" => ..., "sort" => ..., "page" => ...}`
 to `assign_index/3`. Hawk accepts only filters/searches/sorts declared in the
 LiveView adapter and validated against the Reader. Search declarations can turn a
@@ -191,7 +197,10 @@ socket = CourseLive.assign_edit_form(socket, course, authority)
 
 These assign `:course_form` and `:course_form_fields` by default and track form
 state under `:hawk_form_states`. `create_form` fields are assigned for new forms;
-`update_form` fields are assigned for edit forms. Label metadata can use
+`update_form` fields are assigned for edit forms. Read-only/admin display forms can use
+`assign_read_form(socket, course)`; it assigns the update-form fields when present,
+falls back to show fields, and records `mode: :read` without generating save or
+validation behavior. Label metadata can use
 `gettext("...")` or `dgettext("domain", "...")` descriptors without translating
 at compile time. Hawk does not own UI translation; by default `hawk_field_label/1`
 returns the descriptor's message id or a humanized field name. Apps that want a
@@ -213,6 +222,10 @@ use Hawk.LiveView,
 ```heex
 <.input field={@course_form[field.name]} label={hawk_field_label(field)} />
 ```
+
+For read/show surfaces, `hawk_field_value(model, field)` resolves `:source` and
+applies optional formatter functions, so templates can keep display projections
+near the LiveView adapter metadata.
 
 Hawk also generates `hawk_validate/2` and `hawk_save/2,3`.
 Default `handle_event("hawk:validate", ...)` and `handle_event("hawk:save", ...)`
@@ -713,9 +726,17 @@ defmodule MyAppWeb.CourseWorkspaceLive do
       course: [resource: MyApp.Courses],
       students: [resource: MyApp.Students],
       grades: [resource: MyApp.Grades]
+    ],
+    sections: [
+      basics: [label: "Basics", path: "/courses/:id"],
+      students: [label: "Students", path: "/courses/:id/students"],
+      grades: [label: "Grades", path: "/courses/:id/grades"]
     ]
 end
 ```
+
+`hawk_page_sections/0` exposes `%{id:, label:, path:}` maps for app-owned
+workspace/tab navigation. Hawk owns the metadata; your LiveView owns the markup.
 
 Then load the page with per-resource read specs:
 

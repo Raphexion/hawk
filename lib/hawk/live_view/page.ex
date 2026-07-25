@@ -16,15 +16,31 @@ defmodule Hawk.LiveView.Page do
         {key, Keyword.update!(resource_opts, :resource, &Macro.expand(&1, __CALLER__))}
       end)
 
+    sections = opts |> Keyword.get(:sections, []) |> normalize_sections()
+
     quote do
       def assign_page(socket, authority, specs) do
         Page.assign_page(socket, unquote(Macro.escape(resources)), authority, specs)
+      end
+
+      def hawk_page_sections, do: unquote(Macro.escape(sections))
+
+      def hawk_page_section(id) do
+        Enum.find(hawk_page_sections(), &(&1.id == id))
       end
 
       def handle_event("hawk:delete", params, socket) do
         Page.handle_delete(socket, unquote(Macro.escape(resources)), params)
       end
     end
+  end
+
+  defp normalize_sections(sections) do
+    Enum.map(sections, fn {id, opts} ->
+      opts
+      |> Map.new()
+      |> Map.put(:id, id)
+    end)
   end
 
   def assign_page(socket, resources, authority, specs) when is_list(specs) do
