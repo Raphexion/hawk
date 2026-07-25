@@ -164,35 +164,31 @@ defmodule Hawk.JsonApi.Controller do
     end
   end
 
-  def index(conn, resource, model, params, public? \\ false) do
-    telemetry_span(conn, resource, model, :index, %{}, fn ->
-      with_error_boundary(conn, fn ->
-        authority = authority!(conn, public?)
-        fields = Request.sparse_fieldsets(params)
+  def index(conn, resource, _model, params, public? \\ false) do
+    with_error_boundary(conn, fn ->
+      authority = authority!(conn, public?)
+      fields = Request.sparse_fieldsets(params)
 
-        opts =
-          params
-          |> Request.request_options(reader: controller_reader(resource))
-          |> Keyword.put(:authority, authority)
-          |> Keyword.put(:context, request_context(conn))
+      opts =
+        params
+        |> Request.request_options(reader: controller_reader(resource))
+        |> Keyword.put(:authority, authority)
+        |> Keyword.put(:context, request_context(conn))
 
-        document =
-          Document.document(resource.all(opts),
-            preloads: Keyword.get(opts, :preloads, []),
-            context: Keyword.get(opts, :context, %{}),
-            page: Keyword.get(opts, :page),
-            fields: fields
-          )
+      document =
+        Document.document(resource.all(opts),
+          preloads: Keyword.get(opts, :preloads, []),
+          context: Keyword.get(opts, :context, %{}),
+          page: Keyword.get(opts, :page),
+          fields: fields
+        )
 
-        json(conn, 200, document)
-      end)
+      json(conn, 200, document)
     end)
   end
 
   def show(conn, resource, model, %{"id" => id} = params, public? \\ false) do
-    telemetry_span(conn, resource, model, :show, %{id_kind: id_kind(id)}, fn ->
-      do_show(conn, resource, model, id, params, public?)
-    end)
+    do_show(conn, resource, model, id, params, public?)
   end
 
   defp do_show(conn, resource, _model, id, params, public?) do
@@ -255,24 +251,20 @@ defmodule Hawk.JsonApi.Controller do
   defp model_module(%module{}), do: module
 
   def create(conn, resource, model, params, public? \\ false) do
-    telemetry_span(conn, resource, model, :create, %{}, fn ->
-      with_error_boundary(conn, fn ->
-        authority = authority!(conn, public?)
+    with_error_boundary(conn, fn ->
+      authority = authority!(conn, public?)
 
-        Request.validate_document!(params, model, :creatable)
+      Request.validate_document!(params, model, :creatable)
 
-        params
-        |> Request.attributes(model, :creatable)
-        |> resource.create(authority)
-        |> respond(conn, resource, model, 201)
-      end)
+      params
+      |> Request.attributes(model, :creatable)
+      |> resource.create(authority)
+      |> respond(conn, resource, model, 201)
     end)
   end
 
   def update(conn, resource, model, %{"id" => id} = params, public? \\ false) do
-    telemetry_span(conn, resource, model, :update, %{id_kind: id_kind(id)}, fn ->
-      do_update(conn, resource, model, id, params, public?)
-    end)
+    do_update(conn, resource, model, id, params, public?)
   end
 
   defp do_update(conn, resource, model, id, params, public?) do
@@ -295,10 +287,8 @@ defmodule Hawk.JsonApi.Controller do
     end)
   end
 
-  def delete(conn, resource, model, %{"id" => id}, public? \\ false) do
-    telemetry_span(conn, resource, model, :delete, %{id_kind: id_kind(id)}, fn ->
-      do_delete(conn, resource, id, public?)
-    end)
+  def delete(conn, resource, _model, %{"id" => id}, public? \\ false) do
+    do_delete(conn, resource, id, public?)
   end
 
   defp do_delete(conn, resource, id, public?) do
@@ -324,13 +314,11 @@ defmodule Hawk.JsonApi.Controller do
   def action(
         conn,
         resource,
-        model,
+        _model,
         %{"id" => id, "action" => action_name} = params,
         public? \\ false
       ) do
-    telemetry_span(conn, resource, model, :action, %{id_kind: id_kind(id)}, fn ->
-      do_action(conn, resource, id, action_name, params, public?)
-    end)
+    do_action(conn, resource, id, action_name, params, public?)
   end
 
   defp do_action(conn, resource, id, action_name, params, public?) do
@@ -355,9 +343,7 @@ defmodule Hawk.JsonApi.Controller do
         %{"id" => id, "relationship" => relationship_name},
         public? \\ false
       ) do
-    telemetry_span(conn, resource, model, :relationship, %{id_kind: id_kind(id)}, fn ->
-      do_relationship(conn, resource, model, id, relationship_name, public?)
-    end)
+    do_relationship(conn, resource, model, id, relationship_name, public?)
   end
 
   defp do_relationship(conn, resource, model, id, relationship_name, public?) do
@@ -395,9 +381,7 @@ defmodule Hawk.JsonApi.Controller do
         %{"id" => id, "relationship" => relationship_name} = params,
         public? \\ false
       ) do
-    telemetry_span(conn, resource, model, :related, %{id_kind: id_kind(id)}, fn ->
-      do_related(conn, resource, model, id, relationship_name, params, public?)
-    end)
+    do_related(conn, resource, model, id, relationship_name, params, public?)
   end
 
   defp do_related(conn, resource, model, id, relationship_name, params, public?) do
@@ -427,45 +411,6 @@ defmodule Hawk.JsonApi.Controller do
       end
     end)
   end
-
-  defp telemetry_span(_conn, resource, model, action, metadata, fun) when is_function(fun, 0) do
-    start_metadata =
-      metadata
-      |> Map.merge(%{action: action, resource: resource, model: model})
-      |> Map.reject(fn {_key, value} -> is_nil(value) end)
-
-    :telemetry.span([:hawk, :json_api, :controller, action], start_metadata, fn ->
-      conn = fun.()
-      {conn, Map.merge(start_metadata, telemetry_stop_metadata(conn))}
-    end)
-  end
-
-  defp telemetry_stop_metadata(conn) do
-    status = Map.get(conn, :status)
-
-    %{
-      status: status,
-      result: telemetry_result(status)
-    }
-  end
-
-  defp telemetry_result(status) when status in 200..299, do: :ok
-  defp telemetry_result(400), do: :bad_request
-  defp telemetry_result(403), do: :not_authorized
-  defp telemetry_result(404), do: :not_found
-  defp telemetry_result(422), do: :invalid
-  defp telemetry_result(status) when is_integer(status) and status >= 500, do: :error
-  defp telemetry_result(_status), do: :unknown
-
-  defp id_kind(id) when is_binary(id) do
-    cond do
-      match?({:ok, _uuid}, Ecto.UUID.cast(id)) -> :uuid
-      Regex.match?(~r/\A[0-9a-fA-F]{8}\z/, id) -> :short_id
-      true -> :invalid
-    end
-  end
-
-  defp id_kind(_id), do: :invalid
 
   defp respond_action(conn, resource, action_name, existing, params, authority) do
     case Hawk.Actions.dispatch(

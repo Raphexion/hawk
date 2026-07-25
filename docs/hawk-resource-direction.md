@@ -155,14 +155,7 @@ This keeps human-friendly URLs without making writes ambiguous.
 
 ## Telemetry
 
-Phoenix request metrics already cover endpoint-level latency/status. Hawk telemetry is only valuable when it adds resource semantics Phoenix cannot know:
-
-- Hawk resource
-- action
-- result category
-- ID kind (`:uuid`, `:short_id`, `:invalid`)
-
-Telemetry should avoid raw IDs, request params, mutation attrs, and sensitive payloads by default.
+Hawk does not emit its own controller telemetry. Generated JSON:API controllers run behind standard Phoenix endpoints, so request-level latency and status come from Phoenix's built-in `[:phoenix, :endpoint, ...]` and `[:phoenix, :router_dispatch, ...]` events. Rely on those rather than adding a parallel Hawk event stream.
 
 ## Route and capability consistency
 
