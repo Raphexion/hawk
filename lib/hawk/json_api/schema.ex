@@ -14,7 +14,15 @@ defmodule Hawk.JsonApi.Schema do
   conventional `Resource.JsonApi` module. When a resource has no JSON:API
   surface (no adapter), a type-only default is returned so relationship type
   resolution and error messages keep working.
+
+  `metadata/1` is memoized in `:persistent_term` (keyed by module) in `:prod`
+  and `:test`, since the JSON:API shape is invariant after compile. It is left
+  uncached in `:dev` so adapter edits in a running consumer dev server stay
+  fresh without a restart.
   """
+
+  @metadata_cache_key {__MODULE__, :metadata}
+  @metadata_cache_enabled Mix.env() in [:prod, :test]
 
   @doc """
   Resolves JSON:API metadata for a model struct or module.
@@ -24,10 +32,24 @@ defmodule Hawk.JsonApi.Schema do
   def metadata(%module{}), do: metadata(module)
 
   def metadata(module) when is_atom(module) do
-    module
-    |> discovered_metadata()
-    |> normalize_metadata()
+    if @metadata_cache_enabled do
+      key = {@metadata_cache_key, module}
+
+      case :persistent_term.get(key, :not_found) do
+        :not_found ->
+          result = compute_metadata(module)
+          :persistent_term.put(key, result)
+          result
+
+        cached ->
+          cached
+      end
+    else
+      compute_metadata(module)
+    end
   end
+
+  defp compute_metadata(module), do: module |> discovered_metadata() |> normalize_metadata()
 
   @doc """
   Returns the Ecto schema module backing a struct.
