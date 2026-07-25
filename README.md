@@ -563,6 +563,14 @@ Bare values become equality filters, and supported operators use one nested key:
 /api/v1/courses?filter[school_id]=school-1&filter[active][eq]=true&filter[name][ilike]=%25math%25
 ```
 
+Sparse fieldsets use standard JSON:API `fields[type]` params on collection,
+member, and related-resource responses. Fieldsets apply independently per
+resource type, including included resources:
+
+```text
+/api/v1/courses?include=teacher&fields[courses]=title,teacher&fields[teachers]=name
+```
+
 ### Telemetry
 
 Hawk emits standard `:telemetry.span/3` events for generated JSON:API controller

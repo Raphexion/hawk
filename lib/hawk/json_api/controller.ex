@@ -168,6 +168,7 @@ defmodule Hawk.JsonApi.Controller do
     telemetry_span(conn, resource, model, :index, %{}, fn ->
       with_error_boundary(conn, fn ->
         authority = authority!(conn, public?)
+        fields = Request.sparse_fieldsets(params)
 
         opts =
           params
@@ -175,46 +176,48 @@ defmodule Hawk.JsonApi.Controller do
           |> Keyword.put(:authority, authority)
           |> Keyword.put(:context, request_context(conn))
 
-        json(
-          conn,
-          200,
+        document =
           Document.document(resource.all(opts),
             preloads: Keyword.get(opts, :preloads, []),
             context: Keyword.get(opts, :context, %{}),
-            page: Keyword.get(opts, :page)
+            page: Keyword.get(opts, :page),
+            fields: fields
           )
-        )
+
+        json(conn, 200, document)
       end)
     end)
   end
 
-  def show(conn, resource, model, %{"id" => id}, public? \\ false) do
+  def show(conn, resource, model, %{"id" => id} = params, public? \\ false) do
     telemetry_span(conn, resource, model, :show, %{id_kind: id_kind(id)}, fn ->
-      do_show(conn, resource, model, id, public?)
+      do_show(conn, resource, model, id, params, public?)
     end)
   end
 
-  defp do_show(conn, resource, _model, id, public?) do
+  defp do_show(conn, resource, _model, id, params, public?) do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
       context = request_context(conn)
+      fields = Request.sparse_fieldsets(params)
 
       case Request.member_id!(id) do
-        {:uuid, uuid} -> show_by_uuid(conn, resource, authority, context, uuid)
-        {:short_id, prefix} -> show_by_short_id(conn, resource, authority, context, prefix)
+        {:uuid, uuid} -> show_by_uuid(conn, resource, authority, context, uuid, fields)
+        {:short_id, prefix} -> show_by_short_id(conn, resource, authority, context, prefix, fields)
       end
     end)
   end
 
-  defp show_by_uuid(conn, resource, authority, context, uuid) do
+  defp show_by_uuid(conn, resource, authority, context, uuid, fields) do
     case resource.one(authority: authority, context: context, filter: %{id: uuid}) do
       {:ok, model} ->
         json(
           conn,
           200,
           Document.document(model,
-            context: request_context(conn),
-            links: true
+            context: context,
+            links: true,
+            fields: fields
           )
         )
 
@@ -223,7 +226,7 @@ defmodule Hawk.JsonApi.Controller do
     end
   end
 
-  defp show_by_short_id(conn, resource, authority, context, prefix) do
+  defp show_by_short_id(conn, resource, authority, context, prefix, fields) do
     case resource.all(
            authority: authority,
            context: context,
@@ -235,8 +238,9 @@ defmodule Hawk.JsonApi.Controller do
           conn,
           200,
           Document.document(model,
-            context: request_context(conn),
-            links: true
+            context: context,
+            links: true,
+            fields: fields
           )
         )
 
@@ -388,18 +392,19 @@ defmodule Hawk.JsonApi.Controller do
         conn,
         resource,
         model,
-        %{"id" => id, "relationship" => relationship_name},
+        %{"id" => id, "relationship" => relationship_name} = params,
         public? \\ false
       ) do
     telemetry_span(conn, resource, model, :related, %{id_kind: id_kind(id)}, fn ->
-      do_related(conn, resource, model, id, relationship_name, public?)
+      do_related(conn, resource, model, id, relationship_name, params, public?)
     end)
   end
 
-  defp do_related(conn, resource, model, id, relationship_name, public?) do
+  defp do_related(conn, resource, model, id, relationship_name, params, public?) do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
       context = request_context(conn)
+      fields = Request.sparse_fieldsets(params)
 
       relationship =
         Schema.relationship_key!(model, relationship_name)
@@ -414,7 +419,7 @@ defmodule Hawk.JsonApi.Controller do
           json(
             conn,
             200,
-            Document.related_document(model, relationship_name)
+            Document.related_document(model, relationship_name, fields: fields)
           )
 
         :not_found ->

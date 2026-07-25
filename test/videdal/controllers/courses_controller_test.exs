@@ -92,6 +92,54 @@ defmodule Videdal.Controllers.CoursesControllerTest do
            }
   end
 
+  test "index applies sparse fieldsets from controller params" do
+    course = %Course{
+      id: @course_id,
+      title: "Math",
+      school_id: @school_id,
+      teacher_id: @teacher_id,
+      registration_state: "draft",
+      seat_count: 0,
+      waitlist_count: 0
+    }
+
+    Process.put({Videdal.Repo, :all_results}, [course])
+
+    conn =
+      CoursesController.index(conn(@school_admin), %{
+        "fields" => %{"courses" => "title,teacher"}
+      })
+
+    assert conn.status == 200
+    assert [resource] = resp(conn).data
+    assert resource.attributes == %{title: "Math"}
+    assert resource.relationships == %{teacher: %{data: %{type: "teachers", id: @teacher_id}}}
+  end
+
+  test "show applies sparse fieldsets from controller params" do
+    course = %Course{
+      id: @course_id,
+      title: "Math",
+      school_id: @school_id,
+      teacher_id: @teacher_id,
+      registration_state: "draft",
+      seat_count: 0,
+      waitlist_count: 0
+    }
+
+    Process.put({Videdal.Repo, :all_results}, [course])
+
+    conn =
+      CoursesController.show(conn(@school_admin), %{
+        "id" => @course_id,
+        "fields" => %{"courses" => "title"}
+      })
+
+    assert conn.status == 200
+    assert resp(conn).data.attributes == %{title: "Math"}
+    assert resp(conn).data.relationships == %{}
+  end
+
   test "show returns a JSON:API error when missing" do
     Process.put({Videdal.Repo, :all_results}, [])
 

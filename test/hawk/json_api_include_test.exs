@@ -12,6 +12,7 @@ defmodule Hawk.JsonApiIncludeTest do
   alias Videdal.Controllers.InvalidIncludeCoursesController
   alias Videdal.Course
   alias Videdal.Grade
+  alias Videdal.Teacher
 
   @course_id Videdal.course_id()
   @grade_id Videdal.grade_id()
@@ -61,6 +62,34 @@ defmodule Hawk.JsonApiIncludeTest do
                  student: %{data: nil},
                  course: %{data: %{type: "courses", id: @course_id}}
                }
+             }
+           ]
+  end
+
+  test "documents apply sparse fieldsets to included resource objects" do
+    course = %Course{
+      id: @course_id,
+      title: "Math",
+      school_id: @school_id,
+      teacher_id: @teacher_id,
+      teacher: %Teacher{id: @teacher_id, name: "Ms. Curie", school_id: @school_id}
+    }
+
+    document =
+      Hawk.JsonApi.Document.document(course,
+        preloads: [:teacher],
+        fields: %{"courses" => MapSet.new(["title", "teacher"]), "teachers" => MapSet.new(["name"])}
+      )
+
+    assert document.data.attributes == %{title: "Math"}
+    assert document.data.relationships == %{teacher: %{data: %{type: "teachers", id: @teacher_id}}}
+
+    assert document.included == [
+             %{
+               type: "teachers",
+               id: @teacher_id,
+               attributes: %{name: "Ms. Curie"},
+               relationships: %{}
              }
            ]
   end

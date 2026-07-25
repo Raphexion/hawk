@@ -190,6 +190,24 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest do
     assert query_count == 2
   end
 
+  test "related endpoint applies sparse fieldsets to related resources" do
+    %{course: course} = seed_courses_with_grades(4)
+
+    {conn, _query_count} =
+      count_queries(fn ->
+        CoursesController.related(conn(Authority.system()), %{
+          "id" => course.id,
+          "relationship" => "teacher",
+          "fields" => %{"teachers" => "name"}
+        })
+      end)
+
+    assert conn.status == 200
+    assert resp(conn).data.type == "teachers"
+    assert resp(conn).data.attributes == %{name: "Ms. Curie"}
+    assert resp(conn).data.relationships == %{}
+  end
+
   test "related to-many endpoint uses one root query and one batched preload query" do
     %{course: course} = seed_courses_with_grades(4)
 
