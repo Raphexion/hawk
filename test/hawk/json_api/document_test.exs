@@ -12,12 +12,37 @@ defmodule Hawk.JsonApi.DocumentTest do
     document = Document.document(courses, preloads: [:teacher])
 
     assert Enum.map(document.data, & &1.type) == ["courses", "courses"]
-    assert Enum.map(document.data, & &1.id) == ["00000000-0000-0000-0000-000000000007", "00000000-0000-0000-0000-000000000012"]
+
+    assert Enum.map(document.data, & &1.id) == [
+             "00000000-0000-0000-0000-000000000007",
+             "00000000-0000-0000-0000-000000000012"
+           ]
+
     assert Enum.map(document.data, & &1.attributes.title) == ["Math", "History"]
   end
 
+  test "renders sparse fieldsets for attributes and relationships" do
+    course = %Videdal.Course{
+      id: "00000000-0000-0000-0000-000000000007",
+      title: "Math",
+      registration_state: "open",
+      school_id: "7",
+      teacher_id: "12"
+    }
+
+    document = Document.document(course, fields: %{"courses" => MapSet.new(["title", "teacher"])})
+
+    assert document.data.attributes == %{title: "Math"}
+    assert document.data.relationships == %{teacher: %{data: %{type: "teachers", id: "12"}}}
+  end
+
   test "renders a single resource without a json_api_by_model override" do
-    course = %Videdal.Course{id: "00000000-0000-0000-0000-000000000007", title: "Math", school_id: "7", teacher_id: "12"}
+    course = %Videdal.Course{
+      id: "00000000-0000-0000-0000-000000000007",
+      title: "Math",
+      school_id: "7",
+      teacher_id: "12"
+    }
 
     document = Document.document(course, links: true)
 

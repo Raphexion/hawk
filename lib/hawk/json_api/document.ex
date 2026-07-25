@@ -84,9 +84,23 @@ defmodule Hawk.JsonApi.Document do
   end
 
   defp resource_attributes(model, json_api, opts) do
-    Map.new(json_api.attributes, fn {name, metadata} ->
+    json_api.attributes
+    |> filter_sparse_fields(json_api, opts)
+    |> Map.new(fn {name, metadata} ->
       {name, resource_attribute(model, name, metadata, opts)}
     end)
+  end
+
+  defp filter_sparse_fields(fields, json_api, opts) do
+    fieldsets = Keyword.get(opts, :fields, %{})
+
+    case Map.get(fieldsets, json_api.type) do
+      nil ->
+        fields
+
+      allowed ->
+        Map.filter(fields, fn {name, _metadata} -> MapSet.member?(allowed, to_string(name)) end)
+    end
   end
 
   defp resource_attribute(model, _name, %{resolver: resolver}, opts)
@@ -105,7 +119,9 @@ defmodule Hawk.JsonApi.Document do
   defp resource_relationships(model, json_api, opts) do
     preloads = Keyword.get(opts, :preloads, [])
 
-    Map.new(json_api.relationships, fn {name, metadata} ->
+    json_api.relationships
+    |> filter_sparse_fields(json_api, opts)
+    |> Map.new(fn {name, metadata} ->
       source = Map.get(metadata, :source, name)
       relationship = %{data: relationship_data(model, source, preloads)}
 

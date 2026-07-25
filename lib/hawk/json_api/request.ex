@@ -109,6 +109,11 @@ defmodule Hawk.JsonApi.Request do
     |> put_sort(Map.get(params, "sort"))
   end
 
+  @doc """
+  Parses JSON:API sparse fieldsets from `fields[type]=field,other_field` params.
+  """
+  def sparse_fieldsets(params) when is_map(params), do: parse_fields(Map.get(params, "fields"))
+
   defp request_data!(params) do
     case Map.get(params, "data") do
       data when is_map(data) -> data
@@ -324,6 +329,23 @@ defmodule Hawk.JsonApi.Request do
 
   defp put_page_value(page, key, value) when is_binary(value),
     do: Map.put(page, key, String.to_integer(value))
+
+  defp parse_fields(nil), do: %{}
+  defp parse_fields(fields) when fields == %{}, do: %{}
+
+  defp parse_fields(fields) when is_map(fields) do
+    Map.new(fields, fn {type, fieldset} ->
+      fields =
+        fieldset
+        |> to_string()
+        |> String.split(",", trim: true)
+        |> Enum.map(&String.trim/1)
+        |> Enum.reject(&(&1 == ""))
+        |> MapSet.new()
+
+      {to_string(type), fields}
+    end)
+  end
 
   defp parse_filter(nil), do: :all
   defp parse_filter(filter) when filter == %{}, do: :all
