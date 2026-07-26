@@ -1,0 +1,264 @@
+# Hawk Improvement Suggestions
+
+Notes from building a resource generator on top of Hawk. Each item is grounded in
+something that repeatedly cost time or forced a workaround; each suggests a
+concrete, framework-level change. Ordered by impact: the first item caused the
+most debugging time, the last is polish.
+
+These are suggestions, not blockers. Hawk's compile-time validation catches
+real bugs (subset enforcement, missing siblings, contract drift) — that
+validation is valuable. The notes below are about *timing* and *ergonomics*,
+not about removing the safety.
+
+---
+
+## 1. Deferred validation / official scaffold mode (highest impact)
+
+`use Hawk.Resource` calls `Validation.validate!/1` at compile time, which
+checks that the model, reader, writer, policy, json_api, and live_view modules
+all exist and compile. This is the right invariant to enforce, but the
+*timing* is hostile to code generation and incremental development:
+
+- A generator that writes the facade before its siblings triggers
+  `"Hawk resource reader module X is not available"` mid-write.
+- Mix recompiles eagerly when new files appear, so a half-written resource
+  set fails to compile and poisons subsequent runs.
+- The only robust ordering is "write the facade last," which a generator has
+  to discover by trial and error.
+
+### Suggested
+
+Add a deferred-validation mode and/or an official generator:
+
+```elixir
+use Hawk.Resource, model: MyApp.Course, defer_validation: true
+```
+
+With `defer_validation: true`, `__using__` skips the `validate!` call and
+instead emits a `@before_compile` hook (or a `Hawk.validate_resource/1` the
+app calls explicitly at boot / in a test). This lets a generator write all
+files in any order and let the whole app compile, then validate once.
+
+Even better: ship `mix hawk.gen.resource` that owns the write order and the
+validation timing, so downstream generators don't reinvent it.
+
+This is the difference between "Hawk is codegen-friendly" and "Hawk is
+codegen-hostile until you work around it." It was the single largest source
+of debugging time in building a generator.
+
+---
+
+## 2. Introspectable resource contract
+
+A generator currently has to read Hawk's source to discover: which sibling
+modules are required, which macro options exist, what `__using__` registers,
+and what `__hawk_*__` functions adapters expose. There is no
+`Hawk.Resource.__contract__/0`.
+
+### Suggested
+
+Expose the contract as data:
+
+```elixir
+Hawk.Resource.__contract__()
+# => %{
+#   required_modules: [:model, :reader, :policy, :writer, :json_api, :live_view],
+#   optional_modules: [:actions],
+#   model_opts: [:source, :primary_key, :view],
+#   writer_macros: [:create, :update, :delete],
+#   json_api_macros: [:type, :tag, :group, :doc, :attribute, :relationship],
+#   live_view_macros: [:as, :plural_as, :index, :show, :create_form, :update_form],
+#   reader_macros: [:filter, :sort, :preload, :attach],
+#   policy_macros: [:read, :write]
+# }
+```
+
+Tooling (generators, LSP, docs, validators) can then target the surface
+programmatically instead of reverse-engineering it. This turns "a generator
+that happens to target Hawk" into "Hawk-supported tooling."
+
+---
+
+## 3. `unique_constraint` as a top-level writer macro
+
+Ecto exposes `unique_constraint/2` as a top-level changeset macro. In Hawk it
+must be wrapped in a `validate_changeset(&__MODULE__.foo/1)` callback:
+
+```elixir
+create do
+  cast([:email, :user_id])
+  validate_required([:email])
+  validate_changeset(&__MODULE__.validate_business_rules/1)
+end
+
+def validate_business_rules(changeset) do
+  changeset |> Ecto.Changeset.unique_constraint(:email, name: :email_user_id_unique)
+end
+```
+
+This is a real ergonomics gap: a user reaches for `unique_constraint` where
+Ecto puts it (in the cast block), gets a compile error, and has to learn the
+callback indirection by reading existing resources.
+
+### Suggested
+
+Accept `unique_constraint` (and probably `foreign_key_constraint`,
+`assoc_constraint`) as top-level writer-step macros that desugar into the
+`validate_changeset` callback:
+
+```elixir
+create do
+  cast([:email, :user_id])
+  validate_required([:email])
+  unique_constraint(:email, name: :email_user_id_unique)
+end
+```
+
+---
+
+## 4. Enum / custom type integration
+
+`structure.sql` carries enum types (`public.currency`, `public.booking_flow`)
+and Rails models declare `attribute :provider, AuthenticationProvider`. In a
+Hawk model these all collapse to `:string` because `Hawk.Model` has no enum
+story. The cleanup pass has to fill these in by hand, and the JSON:API/OpenAPI
+output loses the value set.
+
+### Suggested
+
+Add an `Ecto.Enum`-backed declaration to the model DSL and a JSON:API enum
+shape so OpenAPI emits an enum schema:
+
+```elixir
+model "bookings" do
+  field(:state, :string)
+  enum(:currency, values: [:DKK, :EUR, :SEK, :NOK])
+  enum(:flow, values: [:platform, :inquiry, :travel_agency])
+end
+```
+
+A generator can populate `values` by parsing `CREATE TYPE ... AS ENUM (...)`
+from `structure.sql` when present (Postgres enums) or from the Rails model's
+`attribute :x, EnumType` / `enums do ... end`.
+
+---
+
+## 5. First-class view / projection / ID-less resources
+
+Materialized views, denormalized projections, and reporting tables often have
+no `id` column and no `inserted_at`/`updated_at`. Today they require
+hand-rolled special-casing across every adapter:
+
+- the model must not emit `field(:id, ...)`,
+- the reader must not emit `filter(:id)` / `sort(:id)`,
+- the live_view must not reference `:id`,
+- and `timestamps/1` must be skipped.
+
+Each of these is a separate failure mode the user discovers at compile time or
+runtime. Hawk's own `@primary_key {:id, :binary_id, autogenerate: true}` is
+hardcoded.
+
+### Suggested
+
+A `view: true` (or `primary_key: false`, `timestamps: false`) option on
+`Hawk.Model` that downstream adapters honor:
+
+```elixir
+model "enriched_bookings", view: true do
+  field(:booking_id, :binary_id)
+  # no :id, no timestamps, no primary key
+end
+```
+
+Reader/live_view/json_api then auto-skip `:id` and timestamp filters/sorts/
+attributes when the model declares `view: true`, instead of every generator
+and every hand-written view reinventing the skip.
+
+---
+
+## 6. LiveView ⊆ Reader: help compute the subset
+
+Hawk enforces that every `filter`/`sort` declared in the LiveView adapter is
+also declared by the Reader — good check, catches real drift. But it gives no
+help *computing* the subset, so a generator (or a human) that picks
+LiveView filters independently will hit `"live_view filter :x must be declared
+by reader"` repeatedly. This is an especially easy mistake for ID-less
+tables and for sort columns the Reader doesn't declare.
+
+### Suggested
+
+One of:
+
+- `import_filters from: Reader` / `import_sorts from: Reader` in the
+  LiveView DSL, so the LiveView inherits the Reader's set and only *overrides*
+  what it wants to change; or
+- a `Hawk.LiveView.derive_from(reader)` helper that builds a default LiveView
+  filter/sort set as a subset of the Reader's, which a generator can call and
+  then trim.
+
+Either removes the "pick independently and hope they align" failure mode.
+
+---
+
+## 7. Resolve `relationship` targets automatically for OpenAPI
+
+`relationship(:parent, writable: true)` compiles, but OpenAPI needs the target
+resource to render the relationship schema. Today the user must remember
+`relationship(:parent, resource: MyApp.Parent, writable: true)` — easy to
+forget, and the failure is a worse OpenAPI spec, not a compile error.
+
+### Suggested
+
+When `resource:` is omitted, resolve the target from the model's schema
+association (`assoc(:parent).__struct__` or the `belongs_to`/`has_many`
+reflection) and derive the resource module by convention. Emit the
+`resource:` automatically so OpenAPI works without the user spelling it out.
+
+---
+
+## 8. Reader: a principled default filter/sort surface
+
+There is tension between two conventions: hand-written readers are *selective*
+(~5–10 columns chosen by what the UI actually filters on), while a generator
+can only *include everything* or *guess* by type/name. A type-based heuristic
+measured against a corpus of hand-written readers over-includes junk and
+under-includes columns the team filters on (often date columns) — so the
+heuristic was reverted and selection stayed a manual cleanup step.
+
+### Suggested
+
+Give the Reader DSL a way to express "the useful default" without forcing
+manual selection of every column, and a way to express exclusion concisely:
+
+```elixir
+use Hawk.Reader.Resource, schema: MyApp.Course
+
+# Derive a default filter/sort set from the schema (skip known-junk types),
+# then narrow:
+auto_filters(except: [:internal_token, :search_blob])
+auto_sorts(except: [:search_blob])
+```
+
+`auto_filters` would emit filters for scalar columns (string/enum/boolean/
+date/integer/uuid), skip json/array/text/decimal, and let the user trim with
+`except`. This gives a generator a defensible default and a hand-written reader
+a one-line way to say "all the obvious ones, minus these."
+
+---
+
+## What Hawk gets right (so this isn't all criticism)
+
+- Compile-time validation catches real drift: missing siblings, subset
+  violations, contract mismatches. The failures are loud, not silent.
+- The Reader / Writer / Policy / JsonApi / LiveView split is a clean separation
+  that makes a resource tractable as data, not as a pile of Phoenix context
+  modules.
+- `Hawk.ResourceContractCase` exists at all — contract tests for a resource
+  shape are genuinely valuable and rare in this space.
+- The DSL is compact and consistent across adapters; a generator can target it
+  with simple string templates, no AST manipulation.
+- The adapter discovery convention (sibling `JsonApi`, `LiveView`, `Reader`)
+  means a facade stays one line.
+
+The suggestions above are about making the framework a good *target for
+tooling*, not about changing what it is.
