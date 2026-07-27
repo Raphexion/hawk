@@ -98,7 +98,7 @@ defmodule Hawk.OpenApi do
     do: write_operation(resource, :creatable, "Create #{resource_name(resource)}", 201)
 
   defp route_operation(resource, %{action: :update}) do
-    write_operation(resource, :updatable, "Update #{resource_name(resource)}", 200, parameters: [id_parameter()])
+    write_operation(resource, :updatable, "Update #{resource_name(resource)}", 200, parameters: [uuid_id_parameter()])
   end
 
   defp route_operation(resource, %{action: :delete}), do: delete_operation(resource)
@@ -124,7 +124,7 @@ defmodule Hawk.OpenApi do
     |> operation_metadata()
     |> Map.merge(%{
       summary: "Show #{resource_name(resource)}",
-      parameters: [id_parameter()],
+      parameters: [show_id_parameter()],
       responses: responses(resource, 200, data_schema(resource))
     })
   end
@@ -145,7 +145,7 @@ defmodule Hawk.OpenApi do
     |> operation_metadata()
     |> Map.merge(%{
       summary: "Delete #{resource_name(resource)}",
-      parameters: [id_parameter()],
+      parameters: [uuid_id_parameter()],
       responses: responses(resource, 204, nil)
     })
   end
@@ -155,7 +155,7 @@ defmodule Hawk.OpenApi do
     |> operation_metadata()
     |> Map.merge(%{
       summary: "Show #{resource_name(resource)} relationship linkage",
-      parameters: [id_parameter(), relationship_parameter(resource)],
+      parameters: [uuid_id_parameter(), relationship_parameter(resource)],
       responses: responses(resource, 200, relationship_document_schema())
     })
   end
@@ -165,7 +165,7 @@ defmodule Hawk.OpenApi do
     |> operation_metadata()
     |> Map.merge(%{
       summary: "Show #{resource_name(resource)} related resource",
-      parameters: [id_parameter(), relationship_parameter(resource)],
+      parameters: [uuid_id_parameter(), relationship_parameter(resource)],
       responses: responses(resource, 200, data_schema(resource))
     })
   end
@@ -176,7 +176,7 @@ defmodule Hawk.OpenApi do
     |> Map.merge(%{
       summary: "Run #{name} for #{resource_name(resource)}",
       description: metadata[:doc],
-      parameters: [id_parameter()],
+      parameters: [uuid_id_parameter()],
       requestBody: action_request_body(metadata),
       responses: responses(resource, 200, data_schema(resource))
     })
@@ -216,8 +216,18 @@ defmodule Hawk.OpenApi do
     }
   end
 
-  defp id_parameter do
-    %{name: "id", in: "path", required: true, schema: %{type: "string"}}
+  defp show_id_parameter do
+    %{
+      name: "id",
+      in: "path",
+      required: true,
+      schema: %{type: "string"},
+      description: "Full UUID, or the first 8 hex characters of a UUID (short id) for read-only member lookups."
+    }
+  end
+
+  defp uuid_id_parameter do
+    %{name: "id", in: "path", required: true, schema: %{type: "string", format: "uuid"}}
   end
 
   defp relationship_parameter(resource) do

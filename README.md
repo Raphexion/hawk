@@ -359,6 +359,16 @@ raises on multiple matches), and a non-indexed identity makes the short-id
 range query scan. Resources that cannot offer a unique member key should keep
 the surrogate `:id`.
 
+`belongs_to` relationship linkage is rendered from the foreign key value, so the
+related resource's declared identity must equal the association's `related_key`
+(the default `:id`). The common cases satisfy this: a belongs_to to a default
+`:id` resource, or to a declared-identity resource whose foreign key is named
+after the identity (e.g. `course_id` → a `CourseRosters` resource with
+`identity: :course_id`). Divergence fails at compile time with a clear message,
+because Hawk renders JSON:API relationship linkage as pure data and cannot load
+the related record to read a non-FK identity — model such relationships as an
+explicit writer/action workflow instead.
+
 ### Policy
 
 ```elixir
@@ -653,6 +663,11 @@ identifiers. A short ID lookup resolves through an indexed UUID range, bounded t
 2 rows: no match returns `404`, exactly one match returns that resource, and
 multiple matches return `400` with an ambiguous-prefix error. Mutating through a
 prefix would make ambiguity dangerous, so write paths require full UUIDs.
+
+The OpenAPI contract reflects this split: the `show` `id` parameter documents
+that it accepts short IDs, while `PATCH`/`DELETE`/`-actions`/relationship/
+related operations declare `id` with `format: "uuid"`, so clients know which
+lookups are lenient and which are strict.
 
 The range lookup is designed for PostgreSQL UUID primary keys: Hawk turns the
 8-character prefix into a lower/upper UUID bound and queries the `id` field with

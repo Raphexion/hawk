@@ -21,7 +21,7 @@ not about removing the safety.
 | 5 | First-class view / projection / ID-less resources | **Shipped** (smarter version) |
 | 6 | LiveView ⊆ Reader: help compute the subset | Open |
 | 7 | Resolve `relationship` targets automatically for OpenAPI | **Shipped** (smarter version) |
-| 8 | Reader: a principled default filter/sort surface | Open |
+| 8 | Reader: a principled default filter/sort surface | **Won't ship** |
 
 Shipped items are noted inline below with what actually landed and where the
 implementation differs from the original suggestion. Open items remain as
@@ -384,6 +384,34 @@ auto_sorts(except: [:search_blob])
 date/integer/uuid), skip json/array/text/decimal, and let the user trim with
 `except`. This gives a generator a defensible default and a hand-written reader
 a one-line way to say "all the obvious ones, minus these."
+
+### Won't ship
+
+The team already empirically rejected a type-based heuristic once (over-included
+junk, under-included the date columns teams actually filter on).
+`auto_filters(except: [...])` is the *same heuristic with an escape hatch* — and
+`except:` only solves over-inclusion. The under-inclusion (the columns teams
+filter on that a heuristic can't predict) is the half that killed it, and
+`except:` does nothing for it; you'd still hand-add those filters, which is the
+current manual state.
+
+The deciding factor for reader filter selection is a product question — "does
+the UI narrow by this column?" — not a type question. The Videdal readers prove
+this: `:title` (string) is a filter on `Courses` but `:name` (string) is not a
+filter on `Students`; `:active` (boolean) is a filter on `Students`; `:score`
+(integer) is not a filter on `Grades`. A schema cannot answer that question.
+
+The reader is also the security-relevant surface (it defines what callers can
+narrow on), so deliberate selection is the right default — an over-included
+reader isn't just noisy, it widens the queryable surface.
+
+The one slice with real value is *generator-side discovery*, not a framework
+DSL: `mix hawk.gen.resource` could emit a commented `# candidate filters:`
+block from the schema's scalar columns as a menu to uncomment, delivering the
+discovery benefit without shipping an over-included reader. That's a generator
+enhancement, not a reader DSL feature, and small enough to defer until a real
+generator consumer asks for it. The framework's stance stays: readers are
+deliberate, filters are added one line at a time as the UI requires them.
 
 ---
 

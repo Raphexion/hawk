@@ -190,6 +190,11 @@ defmodule Hawk.JsonApi.Document do
     id = Map.get(model, association.owner_key)
     type = Schema.metadata(association.related).type
 
+    # The FK value is the related resource's identity iff the association's
+    # related_key equals the related resource's declared identity. The default
+    # (:id PK) and the common declared-identity case (FK named after the
+    # identity) both satisfy this. Divergence is caught at compile time by
+    # Hawk.Resource.Validation, so this branch stays a pure read of the FK.
     if is_nil(id), do: nil, else: %{type: type, id: to_string(id)}
   end
 

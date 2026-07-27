@@ -164,11 +164,14 @@ defmodule Hawk.Resource.Validation do
 
     Enum.each(Map.get(json_api, :relationships, %{}), fn {name, metadata} ->
       source = Map.get(metadata, :source, name)
+      association = model.__schema__(:association, source)
 
-      if is_nil(model.__schema__(:association, source)) do
+      if is_nil(association) do
         raise ArgumentError,
               "Hawk resource json_api module #{inspect(json_api_module)} relationship #{inspect(name)} source #{inspect(source)} must reference an association on #{inspect(model)}"
       end
+
+      validate_belongs_to_identity!(json_api_module, model, name, source, association)
     end)
 
     validate_json_api_capability!(json_api_module, json_api, :creatable)
@@ -226,6 +229,25 @@ defmodule Hawk.Resource.Validation do
       raise ArgumentError,
             "Hawk resource json_api module #{inspect(json_api_module)} relationship #{inspect(name)} is writable but references a #{inspect(association.cardinality)} association on #{inspect(model)}; only belongs_to relationships can be mapped to writer attrs"
     end
+  end
+
+  defp validate_belongs_to_identity!(json_api_module, _model, name, source, %Ecto.Association.BelongsTo{} = association) do
+    related = association.related
+    related_identity = Hawk.JsonApi.Schema.identity(related)
+
+    unless association.related_key == related_identity do
+      raise ArgumentError,
+            "Hawk resource json_api module #{inspect(json_api_module)} relationship #{inspect(name)} (source #{inspect(source)}) is a belongs_to whose related key " <>
+              "#{inspect(association.related_key)} does not match the related resource #{inspect(related)} identity " <>
+              "#{inspect(related_identity)}. Hawk renders belongs_to linkage from the foreign key " <>
+              "value, so the foreign key must be the related resource's identity field. " <>
+              "Either rename the foreign key to match the identity, or expose the relationship " <>
+              "through a writer/action workflow that loads the related record."
+    end
+  end
+
+  defp validate_belongs_to_identity!(_json_api_module, _model, _name, _source, _association) do
+    :ok
   end
 
   defp validate_live_view_contract!(_model, _reader, false), do: :ok

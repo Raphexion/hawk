@@ -119,7 +119,7 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
     assert open_registration.tags == ["Academics"]
 
     assert open_registration.parameters == [
-             %{name: "id", in: "path", required: true, schema: %{type: "string"}}
+             %{name: "id", in: "path", required: true, schema: %{type: "string", format: "uuid"}}
            ]
 
     assert open_registration.responses["200"].content["application/vnd.api+json"].schema == %{

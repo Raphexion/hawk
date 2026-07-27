@@ -423,6 +423,121 @@ defmodule Hawk.ResourceTest do
                  end
   end
 
+  test "belongs_to relationships whose related key diverges from the related identity fail at compile time" do
+    # The FK value is rendered as the relationship id, so the related resource's
+    # identity must equal the association's related_key. Here the related model
+    # declares identity: :course_id but the belongs_to uses the default related_key :id,
+    # so the FK cannot render the related identity.
+    assert_raise ArgumentError,
+                 ~r/relationship :roster .* is a belongs_to whose related key :id does not match the related resource .* identity :course_id/,
+                 fn ->
+                   Code.compile_string("""
+                   defmodule Hawk.ResourceTest.DivergentIdentity.Roster do
+                     use Ecto.Schema
+                     @primary_key {:course_id, :binary_id, autogenerate: true}
+                     @foreign_key_type :binary_id
+                     schema "divergent_rosters" do
+                       field(:title, :string)
+                     end
+                   end
+
+                   defmodule Hawk.ResourceTest.DivergentIdentity.Rosters.JsonApi do
+                     use Hawk.JsonApi.Resource
+                     type("divergent-rosters")
+                     attribute(:title, writable: true)
+                   end
+
+                   defmodule Hawk.ResourceTest.DivergentIdentity.Rosters.Policy do
+                     use Hawk.Policy
+                     read do
+                       role(:system, :all)
+                     end
+                     write(roles: [:system])
+                   end
+
+                   defmodule Hawk.ResourceTest.DivergentIdentity.Rosters.Reader do
+                     use Hawk.Reader.Resource,
+                       repo: Videdal.Repo,
+                       schema: Hawk.ResourceTest.DivergentIdentity.Roster
+                     filter(:course_id)
+                   end
+
+                   defmodule Hawk.ResourceTest.DivergentIdentity.Rosters.Writer do
+                     use Hawk.Writer.Resource,
+                       model: Hawk.ResourceTest.DivergentIdentity.Roster,
+                       repo: Videdal.Repo,
+                       policy: Hawk.ResourceTest.DivergentIdentity.Rosters.Policy
+                     create do
+                       cast([:title])
+                     end
+                     update do
+                       cast([:title])
+                     end
+                     delete(:default)
+                   end
+
+                   defmodule Hawk.ResourceTest.DivergentIdentity.Rosters do
+                     use Hawk.Resource,
+                       model: Hawk.ResourceTest.DivergentIdentity.Roster,
+                       identity: :course_id,
+                       live_view: false
+                   end
+
+                   defmodule Hawk.ResourceTest.DivergentIdentity.Model do
+                     use Ecto.Schema
+                     @primary_key {:id, :binary_id, autogenerate: true}
+                     @foreign_key_type :binary_id
+                     schema "divergent_models" do
+                       field(:name, :string)
+                       belongs_to(:roster, Hawk.ResourceTest.DivergentIdentity.Roster)
+                     end
+                   end
+
+                   defmodule Hawk.ResourceTest.DivergentIdentity.Models.JsonApi do
+                     use Hawk.JsonApi.Resource
+                     type("divergent-models")
+                     attribute(:name, writable: true)
+                     relationship(:roster, writable: true)
+                   end
+
+                   defmodule Hawk.ResourceTest.DivergentIdentity.Models.Policy do
+                     use Hawk.Policy
+                     read do
+                       role(:system, :all)
+                     end
+                     write(roles: [:system])
+                   end
+
+                   defmodule Hawk.ResourceTest.DivergentIdentity.Models.Reader do
+                     use Hawk.Reader.Resource,
+                       repo: Videdal.Repo,
+                       schema: Hawk.ResourceTest.DivergentIdentity.Model
+                     filter(:id)
+                   end
+
+                   defmodule Hawk.ResourceTest.DivergentIdentity.Models.Writer do
+                     use Hawk.Writer.Resource,
+                       model: Hawk.ResourceTest.DivergentIdentity.Model,
+                       repo: Videdal.Repo,
+                       policy: Hawk.ResourceTest.DivergentIdentity.Models.Policy
+                     create do
+                       cast([:name])
+                     end
+                     update do
+                       cast([:name])
+                     end
+                     delete(:default)
+                   end
+
+                   defmodule Hawk.ResourceTest.DivergentIdentity.Models do
+                     use Hawk.Resource,
+                       model: Hawk.ResourceTest.DivergentIdentity.Model,
+                       live_view: false
+                   end
+                   """)
+                 end
+  end
+
   test "live_view fields must reference model fields" do
     assert_raise ArgumentError,
                  ~r/Hawk resource live_view module Hawk.ResourceTest.BadLiveField.LiveView show field :headline source :missing_title must reference a field on Hawk.ResourceTest.Course/,

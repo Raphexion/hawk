@@ -107,4 +107,29 @@ defmodule Hawk.OpenApiResourceAdapterTest do
     assert Map.has_key?(spec.paths, "/course-catalog/{id}/relationships/{relationship}")
     assert Map.has_key?(spec.paths, "/course-catalog/{id}/{relationship}")
   end
+
+  test "show id parameter documents short ids; mutations/actions/relationships require full UUIDs" do
+    spec = Hawk.OpenApi.spec([Videdal.Courses])
+
+    show_param = hd(spec.paths["/courses/{id}"].get.parameters)
+    assert show_param.name == "id"
+    assert show_param.schema == %{type: "string"}
+    assert show_param[:description] =~ "short id"
+    refute Map.has_key?(show_param.schema, :format)
+
+    for {method, path} <- [
+          {:patch, "/courses/{id}"},
+          {:delete, "/courses/{id}"},
+          {:post, "/courses/{id}/-actions/open-registration"},
+          {:post, "/courses/{id}/-actions/close-registration"},
+          {:get, "/courses/{id}/relationships/{relationship}"},
+          {:get, "/courses/{id}/{relationship}"}
+        ] do
+      id_param = hd(spec.paths[path][method].parameters)
+      assert id_param.name == "id"
+      assert id_param.schema == %{type: "string", format: "uuid"},
+             "expected #{method} #{path} id parameter to require a full UUID"
+      refute Map.has_key?(id_param, :description)
+    end
+  end
 end
