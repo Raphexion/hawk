@@ -32,21 +32,25 @@ defmodule Hawk.JsonApi.Schema do
   def metadata(%module{}), do: metadata(module)
 
   def metadata(module) when is_atom(module) do
-    if @metadata_cache_enabled do
-      key = {@metadata_cache_key, module}
+    metadata_cached(module, @metadata_cache_enabled)
+  end
 
-      case :persistent_term.get(key, :not_found) do
-        :not_found ->
-          result = compute_metadata(module)
-          :persistent_term.put(key, result)
-          result
+  def metadata_cached(module, true) do
+    key = {@metadata_cache_key, module}
 
-        cached ->
-          cached
-      end
-    else
-      compute_metadata(module)
+    case :persistent_term.get(key, :not_found) do
+      :not_found ->
+        result = compute_metadata(module)
+        :persistent_term.put(key, result)
+        result
+
+      cached ->
+        cached
     end
+  end
+
+  def metadata_cached(module, false) do
+    compute_metadata(module)
   end
 
   defp compute_metadata(module), do: module |> discovered_metadata() |> normalize_metadata()
