@@ -101,12 +101,25 @@ fails fast — that is real contract drift, not a write-order artifact.
 
 `mix hawk.validate` is the authoritative, order-independent gate. It validates
 every discovered Hawk resource in strict mode (missing siblings raise) and runs
-the full `Hawk.ResourceContract` cross-checks. Wire it into CI or `mix test`
-setup:
+the full `Hawk.ResourceContract` cross-checks. The `mix test` alias runs it
+first, so `mix test` is the complete local gate — contract validation plus the
+suite, same path CI takes:
 
 ```bash
-mix hawk.validate                  # discover and validate all Hawk resources
-mix hawk.validate MyApp.Courses   # validate explicit resource(s)
+mix test                          # mix hawk.validate + the test suite
+mix hawk.validate                # discover and validate all Hawk resources
+mix hawk.validate MyApp.Courses  # validate explicit resource(s)
+```
+
+`mix hawk.openapi` writes an OpenAPI spec from every discovered Hawk facade
+(`json_api: false` resources are omitted by `Hawk.OpenApi.spec/2`), so the spec
+stays in sync with the resources that actually exist — no hand-maintained list
+to drift:
+
+```bash
+mix hawk.openapi -o tmp/openapi.json --title "My API" --version 1.0.0 \
+  --path-prefix /api/v1
+mix hawk.openapi MyApp.Courses -o spec.json   # override discovery
 ```
 
 ### JSON:API adapter

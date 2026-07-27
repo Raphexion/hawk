@@ -65,6 +65,9 @@ defmodule Hawk.MixProject do
         "run -e \"Videdal.DatabaseCase.start_repo!(); Videdal.DatabaseCase.reset_schema!()\""
       ],
       "ecto.reset": ["ecto.drop --quiet", "ecto.setup"],
+      # `mix test` is the complete local gate: validate every Hawk resource's
+      # contract, then run the suite. Same path CI takes.
+      test: ["hawk.validate", "test"],
       "test.database": ["ecto.setup", "test"]
     ]
   end

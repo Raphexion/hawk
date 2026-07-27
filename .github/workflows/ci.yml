@@ -88,28 +88,12 @@ jobs:
       - name: Dialyzer
         run: mix dialyzer
 
-      - name: Generate OpenAPI spec
+      - name: Generate OpenAPI spec from discovered Hawk resources
         run: |
           mkdir -p tmp/openapi
-          mix run -e '
-            resources = [
-              Videdal.CourseGradeSummary,
-              Videdal.Course,
-              Videdal.Enrollment,
-              Videdal.Grade,
-              Videdal.Parent,
-              Videdal.School,
-              Videdal.Student,
-              Videdal.Teacher
-            ]
-
-            spec = Hawk.OpenApi.spec(resources,
-              title: "Videdal API",
-              version: "1.0.0"
-            )
-
-            File.write!("tmp/openapi/openapi.json", Jason.encode!(spec))
-          '
+          mix hawk.openapi -o tmp/openapi/openapi.json \
+            --title "Videdal API" \
+            --version "1.0.0"
 
       - name: Validate OpenAPI spec
         run: npm exec --yes --package=@redocly/cli -- redocly lint tmp/openapi/openapi.json
