@@ -1,10 +1,69 @@
+defmodule Hawk.WriterTest.DslProbe.Repo do
+  @moduledoc false
+  alias Ecto.Changeset
+
+  def insert(%Changeset{} = cs, _opts) do
+    case Process.get({__MODULE__, :unique_violation}) do
+      true ->
+        {:error,
+         Changeset.add_error(cs, :email, "has already been taken",
+           constraint: :unique,
+           name: :dsl_probe_email_idx
+         )}
+
+      _ ->
+        {:ok, Changeset.apply_changes(cs)}
+    end
+  end
+
+  def transaction(fun), do: {:ok, fun.()}
+end
+
+defmodule Hawk.WriterTest.DslProbe.Policy do
+  @moduledoc false
+  use Hawk.Policy
+
+  read do
+    role(:system, :all)
+  end
+
+  write(roles: [:system])
+end
+
+defmodule Hawk.WriterTest.DslProbe.Model do
+  @moduledoc false
+  use Ecto.Schema
+  @primary_key {:id, :binary_id, autogenerate: true}
+  schema "dsl_probe" do
+    field(:email, :string)
+  end
+end
+
+defmodule Hawk.WriterTest.DslProbe.Writer do
+  @moduledoc false
+  use Hawk.Writer.Resource,
+    model: Hawk.WriterTest.DslProbe.Model,
+    repo: Hawk.WriterTest.DslProbe.Repo,
+    policy: Hawk.WriterTest.DslProbe.Policy
+
+  create do
+    cast([:email])
+    validate_required([:email])
+    constraint(:unique, :email, name: :dsl_probe_email_idx, message: "already exists")
+  end
+
+  update do
+    cast([:email])
+  end
+
+  delete(:default)
+end
+
 defmodule Hawk.WriterTest do
   use ExUnit.Case, async: true
 
   alias Ecto.Changeset
-  alias Hawk.Authority
-  alias Hawk.MutationContext
-  alias Hawk.Writer
+  alias Hawk.{Authority, Errors, MutationContext, Writer}
   alias Videdal.Student
 
   @school_id Videdal.school_id()
@@ -249,6 +308,85 @@ defmodule Hawk.WriterTest do
 
       assert Writer.validate(context, fn _context -> flunk("validator should not run") end) ==
                context
+    end
+  end
+
+  describe "constraint/4" do
+    test "attaches a unique constraint to the context changeset" do
+      context =
+        %Student{}
+        |> context(%{name: "Ada"})
+        |> Writer.cast([:name])
+        |> Writer.constraint(:unique, :name, name: :students_name_index, message: "already exists")
+
+      assert context.error == :none
+      assert context.changeset.constraints == [
+               %{
+                 match: :exact,
+                 type: :unique,
+                 constraint: "students_name_index",
+                 error_type: :unique,
+                 field: :name,
+                 error_message: "already exists"
+               }
+             ]
+    end
+
+    test "attaches a foreign_key constraint" do
+      context =
+        %Student{}
+        |> context(%{school_id: @school_id})
+        |> Writer.cast([:school_id])
+        |> Writer.constraint(:foreign_key, :school_id, name: :students_school_id_fkey)
+
+      assert context.error == :none
+      assert context.changeset.constraints == [
+               %{
+                 match: :exact,
+                 type: :foreign_key,
+                 constraint: "students_school_id_fkey",
+                 error_type: :foreign,
+                 field: :school_id,
+                 error_message: "does not exist"
+               }
+             ]
+    end
+
+    test "is guarded by an earlier error" do
+      context =
+        %Student{}
+        |> context(%{})
+        |> MutationContext.add_error(:name, "can't be blank")
+
+      assert Writer.constraint(context, :unique, :name, name: :idx) == context
+    end
+
+    test "rejects an unknown constraint kind" do
+      context = %Student{} |> context(%{name: "Ada"}) |> Writer.cast([:name])
+
+      assert_raise KeyError, fn -> Writer.constraint(context, :bogus, :name, []) end
+    end
+  end
+
+  describe "constraint/2 DSL step" do
+    alias Hawk.WriterTest.DslProbe.{Repo, Writer}
+
+    test "a unique violation renders through the error pipeline at the external pointer" do
+      # The DSL step desugars to validate_changeset(fn cs -> unique_constraint(cs, :email) end).
+      # The probe repo reflects a unique violation back into the changeset, proving
+      # the whole pipeline: DSL -> constraint attachment -> repo error -> Errors.to_json_api.
+      Process.put({Repo, :unique_violation}, true)
+
+      result = Writer.create(%{email: "dup@example.com"}, Authority.system())
+
+      assert {:invalid, _context} = result
+
+      assert %{errors: [error]} = Errors.to_json_api(result)
+      assert error.code == "invalid"
+      assert error.source == %{pointer: "/data/attributes/email"}
+      # The repo violation's error message ("has already been taken") overrides the
+      # constraint's declared message ("already exists"); that's standard Ecto behavior.
+      assert error.detail =~ "already been taken"
     end
   end
 

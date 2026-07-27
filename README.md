@@ -495,10 +495,28 @@ LiveView form helpers use for live validation errors. `create/2` and `update/3`
 keep owning persistence through the repository boundary. `delete(:default)`
 generates a policy-checked `delete/2` that crosses the same repository boundary.
 Supported create/update DSL steps are `defaults/1`, `cast/1`, `validate_required/1,2`,
-`validate/1`, and `validate_changeset/1`. Custom `validate/1` functions can be
-reused in create and update pipelines when domain validation is not just standard
-Ecto changeset validation. Hand-written writers can expose the same form boundary
-with `change_create/2` and `change_update/3` when they need custom pipelines.
+`validate/1`, `validate_changeset/1`, and `constraint/2`. Custom `validate/1` functions
+can be reused in create and update pipelines when domain validation is not just
+standard Ecto changeset validation. Hand-written writers can expose the same form
+boundary with `change_create/2` and `change_update/3` when they need custom
+pipelines.
+
+`constraint/2` is the one-step way to declare the most common database constraints
+without the `validate_changeset(fn cs -> ... end)` indirection. It desugars to the
+matching `Ecto.Changeset` constraint validator and renders through the error
+pipeline at the external JSON:API pointer:
+
+```elixir
+create do
+  cast([:email, :user_id])
+  validate_required([:email])
+  constraint(:unique, :email, name: :email_user_id_unique)
+  constraint(:foreign_key, :user_id, name: :enrollments_user_id_fkey)
+end
+```
+
+`kind` is one of `:unique`, `:foreign_key`, `:assoc`, `:check`, or `:exclusion`;
+`opts` are passed straight through to the Ecto constraint function.
 
 ### Actions
 

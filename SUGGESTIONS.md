@@ -16,7 +16,7 @@ not about removing the safety.
 |---|---|---|
 | 1 | Deferred validation / official scaffold mode | **Shipped** (smarter version) |
 | 2 | Introspectable resource contract | Open |
-| 3 | `unique_constraint` as a top-level writer macro | Open |
+| 3 | `unique_constraint` as a top-level writer macro | **Shipped** (bounded `constraint/2`) |
 | 4 | Enum / custom type integration | Open |
 | 5 | First-class view / projection / ID-less resources | **Shipped** (smarter version) |
 | 6 | LiveView ⊆ Reader: help compute the subset | Open |
@@ -162,6 +162,37 @@ create do
   unique_constraint(:email, name: :email_user_id_unique)
 end
 ```
+
+### Shipped (bounded as `constraint/2`)
+
+Added a single generic `constraint/2` step rather than enumerating five
+separate `*_constraint` macros. `kind` selects the constraint type and the step
+desugars to `validate_changeset(fn cs -> Ecto.Changeset.<kind>_constraint(cs, field, opts) end)`:
+
+```elixir
+create do
+  cast([:email, :user_id])
+  validate_required([:email])
+  constraint(:unique, :email, name: :email_user_id_unique)
+  constraint(:foreign_key, :user_id, name: :enrollments_user_id_fkey)
+end
+```
+
+`kind` is one of `:unique`, `:foreign_key`, `:assoc`, `:check`, or `:exclusion`.
+
+Notes on the implementation vs. the original suggestion:
+
+- The literal suggestion (a `unique_constraint` macro) doesn't stop there — the
+  same argument applies to `foreign_key_constraint`, `assoc_constraint`,
+  `check_constraint`, `exclusion_constraint`. Adding one without the others is
+  arbitrary; adding all five doubles the writer DSL's step count for pure
+  ergonomics. One `constraint/2` step covers all five with a single new entry.
+- The inline `validate_changeset(fn cs -> Ecto.Changeset.unique_constraint(cs, :field) end)` form already compiled and worked before this change (verified); the gap
+  was verbosity on the most common case, not a missing feature or a correctness
+  bug. `constraint/2` is pure ergonomics with no new semantics.
+- Constraint violations render through the existing error pipeline at the
+  external JSON:API pointer (see the `source.pointer` fix), so `unique_constraint`
+  errors already map to `/data/attributes/{external}`.
 
 ---
 

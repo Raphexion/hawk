@@ -12,7 +12,7 @@ defmodule Hawk.Writer.Resource do
     policy = Keyword.fetch!(opts, :policy)
 
     quote do
-      import Hawk.Writer.Resource, only: [create: 1, delete: 1, update: 1]
+      import Hawk.Writer.Resource, only: [constraint: 2, create: 1, delete: 1, update: 1]
 
       @hawk_writer_model unquote(model)
       @hawk_writer_repo unquote(repo)
@@ -39,6 +39,44 @@ defmodule Hawk.Writer.Resource do
       @hawk_writer_delete :default
     end
   end
+
+  @constraints ~w(unique foreign_key assoc check exclusion)a
+
+  @doc """
+  Adds a database constraint as a writer step.
+
+  Desugars to the matching `Ecto.Changeset` constraint validator
+  (`unique_constraint/3`, `foreign_key_constraint/3`, `assoc_constraint/3`,
+  `check_constraint/3`, `exclusion_constraint/3`) wrapped in a
+  `validate_changeset/1` call. This is the inline, one-step way to declare the
+  most common DB constraints without the `validate_changeset(fn cs -> ... end)`
+  indirection:
+
+      create do
+        cast([:email, :user_id])
+        validate_required([:email])
+        constraint(:unique, :email, name: :email_user_id_unique)
+        constraint(:foreign_key, :user_id, name: :enrollments_user_id_fkey)
+      end
+
+  The desugar is pure-local: `constraint(:unique, :email, name: ...)` becomes
+  `validate_changeset(fn cs -> Ecto.Changeset.unique_constraint(cs, :email, name: ...) end)`.
+  """
+  defmacro constraint(kind, field, opts \\ []) when kind in @constraints and is_atom(field) and is_list(opts) do
+    validator = constraint_validator(kind)
+
+    quote do
+      validate_changeset(fn cs ->
+        Ecto.Changeset.unquote(validator)(cs, unquote(field), unquote(opts))
+      end)
+    end
+  end
+
+  defp constraint_validator(:unique), do: :unique_constraint
+  defp constraint_validator(:foreign_key), do: :foreign_key_constraint
+  defp constraint_validator(:assoc), do: :assoc_constraint
+  defp constraint_validator(:check), do: :check_constraint
+  defp constraint_validator(:exclusion), do: :exclusion_constraint
 
   defmacro __before_compile__(env) do
     create_block = Module.get_attribute(env.module, :hawk_writer_create)
@@ -184,6 +222,21 @@ defmodule Hawk.Writer.Resource do
     quote do
       unquote(acc)
       |> Hawk.Writer.validate_changeset(unquote(validator))
+    end
+  end
+
+  defp quote_step({:constraint, _meta, [kind, field]}, acc) when kind in @constraints do
+    quote do
+      unquote(acc)
+      |> Hawk.Writer.constraint(unquote(kind), unquote(field))
+    end
+  end
+
+  defp quote_step({:constraint, _meta, [kind, field, opts]}, acc)
+       when kind in @constraints and is_list(opts) do
+    quote do
+      unquote(acc)
+      |> Hawk.Writer.constraint(unquote(kind), unquote(field), unquote(opts))
     end
   end
 

@@ -97,6 +97,32 @@ defmodule Hawk.Writer do
     end)
   end
 
+  @constraint_validators %{
+    unique: :unique_constraint,
+    foreign_key: :foreign_key_constraint,
+    assoc: :assoc_constraint,
+    check: :check_constraint,
+    exclusion: :exclusion_constraint
+  }
+
+  @doc """
+  Adds a database constraint to the context changeset.
+
+  `kind` is one of `:unique`, `:foreign_key`, `:assoc`, `:check`, or
+  `:exclusion`, desugaring to the matching `Ecto.Changeset` constraint
+  validator. This is the runtime helper behind the writer DSL `constraint/2`
+  step; it is rarely called directly.
+  """
+  @spec constraint(MutationContext.t(), atom(), atom(), keyword()) :: MutationContext.t()
+  def constraint(%MutationContext{} = context, kind, field, opts \\ [])
+      when is_atom(kind) and is_atom(field) and is_list(opts) do
+    validator = Map.fetch!(@constraint_validators, kind)
+
+    validate_changeset(context, fn changeset ->
+      apply(Changeset, validator, [changeset, field, opts])
+    end)
+  end
+
   @doc """
   Normalizes changed string fields with the default string normalizer.
   """
