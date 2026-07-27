@@ -48,6 +48,29 @@ defmodule Hawk.Error do
   end
 
   @doc """
+  Builds a `422` validation error with an explicit JSON:API pointer.
+
+  Use this when mapping an internal changeset field back to the external
+  JSON:API name a client sent (see `Hawk.JsonApi.Schema.external_pointer/2`).
+  The title reflects whether the pointer targets an attribute or a relationship.
+  """
+  @spec invalid(String.t(), String.t()) :: t()
+  def invalid(pointer, detail) when is_binary(pointer) and is_binary(detail) do
+    title =
+      if String.starts_with?(pointer, "/data/relationships/"),
+        do: "Invalid relationship",
+        else: "Invalid attribute"
+
+    %__MODULE__{
+      status: 422,
+      code: :invalid,
+      title: title,
+      detail: detail,
+      source: %{pointer: pointer}
+    }
+  end
+
+  @doc """
   Builds a generic `500 Error`.
   """
   @spec error(String.t()) :: t()

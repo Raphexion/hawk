@@ -57,4 +57,33 @@ defmodule Hawk.JsonApi.SchemaTest do
       assert Schema.relationship_key!(Videdal.Course, "teacher") == :teacher
     end
   end
+
+  describe "external_pointer/2" do
+    test "maps a plain attribute to its external pointer" do
+      assert Schema.external_pointer(Videdal.Course, :title) == "/data/attributes/title"
+    end
+
+    test "maps a source-renamed attribute to the external name a client sent" do
+      # ExternalCourses declares attribute(:name, source: :title).
+      assert Schema.external_pointer(Videdal.ExternalCourse, :title) ==
+               "/data/attributes/name"
+    end
+
+    test "maps a belongs_to foreign key to the external relationship pointer" do
+      # Grades: relationship(:course) is backed by belongs_to with owner_key :course_id.
+      assert Schema.external_pointer(Videdal.Grade, :course_id) ==
+               "/data/relationships/course"
+    end
+
+    test "falls back to the field name when it has no external surface" do
+      # school_id is an internal-only column on Grade (no attribute, no relationship).
+      assert Schema.external_pointer(Videdal.Grade, :school_id) ==
+               "/data/attributes/school_id"
+    end
+
+    test "accepts a struct or a module" do
+      assert Schema.external_pointer(%Videdal.ExternalCourse{}, :title) ==
+               "/data/attributes/name"
+    end
+  end
 end

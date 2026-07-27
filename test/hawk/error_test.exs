@@ -4,7 +4,7 @@ defmodule Hawk.ErrorTest do
   alias Hawk.Authority
   alias Hawk.Errors
   alias Hawk.MutationContext
-  alias Videdal.{Grade, Grades, Student}
+  alias Videdal.{Grade, Grades, Student, ExternalCourse}
 
   @course_id Videdal.course_id()
   @grade_id Videdal.grade_id()
@@ -74,8 +74,25 @@ defmodule Hawk.ErrorTest do
     assert %{errors: [error]} = Errors.to_json_api(result)
     assert error.status == "422"
     assert error.code == "invalid"
-    assert error.source == %{pointer: "/data/attributes/course_id"}
+    # course_id is the foreign key of the `:course` relationship, so the pointer
+    # targets the external relationship name a client sent, not the internal FK.
+    assert error.source == %{pointer: "/data/relationships/course"}
+    assert error.title == "Invalid relationship"
     assert error.detail =~ "can't be blank"
+  end
+
+  test "invalid results map a source-renamed attribute to its external pointer" do
+    # Videdal.ExternalCourses declares attribute(:name, source: :title). A
+    # changeset error on the internal :title must render at /data/attributes/name
+    # — the pointer the client can actually see in the spec.
+    context =
+      %ExternalCourse{}
+      |> MutationContext.create(%{}, Authority.system())
+      |> MutationContext.add_error(:title, "can't be blank")
+
+    assert %{errors: [error]} = Errors.to_json_api({:invalid, context})
+    assert error.source == %{pointer: "/data/attributes/name"}
+    assert error.title == "Invalid attribute"
   end
 
   test "invalid results convert to LiveView-friendly errors" do

@@ -52,9 +52,65 @@ defmodule Hawk.JsonApi.Schema do
   defp compute_metadata(module), do: module |> discovered_metadata() |> normalize_metadata()
 
   @doc """
-  Returns the Ecto schema module backing a struct.
+  Returns the Ecto schema module backing a struct, or the module itself.
   """
   def schema_module(%module{}), do: module
+  def schema_module(module) when is_atom(module), do: module
+
+  @doc """
+  Resolves the JSON:API error `source.pointer` for an internal model field.
+
+  Writer changeset errors are keyed by internal Ecto fields, but a client sent
+  external JSON:API attribute/relationship names. This maps an internal field
+  back to the external name so error pointers stay client-visible:
+
+    * an attribute whose `source:` (or own name) matches the field renders as
+      `/data/attributes/{external}`
+    * a `belongs_to` foreign key renders as `/data/relationships/{external}`
+    * a field with no external surface (e.g. an internal-only filter column)
+      falls back to `/data/attributes/{field}`, preserving prior behavior
+
+  This closes the gap where `attribute(:name, source: :title)` rendered a
+  validation error at `/data/attributes/title` — a pointer the client never
+  sent because the spec exposes the field as `name`.
+  """
+  @spec external_pointer(struct() | module(), atom()) :: String.t()
+  def external_pointer(model, field) when is_atom(field) do
+    module = schema_module(model)
+    json_api = metadata(module)
+
+    case attribute_external_name(json_api, field) do
+      {:ok, name} -> "/data/attributes/#{name}"
+      :error -> relationship_external_pointer(module, json_api, field)
+    end
+  end
+
+  defp attribute_external_name(json_api, field) do
+    Enum.find_value(json_api.attributes, fn {name, metadata} ->
+      source = Map.get(metadata, :source, name)
+      if source == field, do: name
+    end)
+    |> case do
+      nil -> :error
+      name -> {:ok, name}
+    end
+  end
+
+  defp relationship_external_pointer(module, json_api, field) do
+    Enum.find_value(json_api.relationships, fn {name, metadata} ->
+      source = Map.get(metadata, :source, name)
+      association = module.__schema__(:association, source)
+
+      case association do
+        %Ecto.Association.BelongsTo{owner_key: ^field} -> name
+        _ -> nil
+      end
+    end)
+    |> case do
+      nil -> "/data/attributes/#{field}"
+      name -> "/data/relationships/#{name}"
+    end
+  end
 
   @doc """
   Resolves an external relationship name to its `{name, source}` mapping.

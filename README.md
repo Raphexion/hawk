@@ -599,6 +599,13 @@ JSON:API documents at the adapter boundary:
 - validation failure: `422`
 - successful deletion: `204 No Content` with an empty body
 
+Validation error `source.pointer` values map back to the external JSON:API name
+a client sent. An attribute declared with `source:` (e.g. `attribute(:name,
+source: :title)`) renders a validation error at `/data/attributes/name`, not the
+internal `/data/attributes/title`; a `belongs_to` foreign key renders at
+`/data/relationships/{external}`. `Hawk.JsonApi.Schema.external_pointer/2` owns
+that reverse mapping.
+
 Controller member routes validate path IDs as UUIDs before querying the reader.
 Create requests must include `data.type` matching the resource type. Update
 requests may omit `data.type` for small PATCH bodies, but when present it must

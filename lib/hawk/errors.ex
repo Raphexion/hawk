@@ -18,7 +18,8 @@ defmodule Hawk.Errors do
   end
 
   def to_errors({:invalid, %MutationContext{} = context}) do
-    Enum.map(context.changeset.errors, &validation_error/1)
+    model = context.model
+    Enum.map(context.changeset.errors, &validation_error(&1, model))
   end
 
   def to_errors({:error, message}) when is_binary(message), do: [Error.error(message)]
@@ -44,8 +45,9 @@ defmodule Hawk.Errors do
     |> put_optional(:source, error.source)
   end
 
-  defp validation_error({field, {message, opts}}) do
-    Error.invalid_attribute(field, interpolate(message, opts))
+  defp validation_error({field, {message, opts}}, model) do
+    pointer = Hawk.JsonApi.Schema.external_pointer(model, field)
+    Error.invalid(pointer, interpolate(message, opts))
   end
 
   defp put_optional(map, _key, nil), do: map
