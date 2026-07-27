@@ -184,25 +184,91 @@ defmodule Hawk.ResourceTest do
              Hawk.ResourceTest.CustomFacade.CustomLiveView
   end
 
-  test "conventional missing modules fail at compile time unless disabled" do
-    assert_raise ArgumentError,
-                 ~r/Hawk resource reader module Hawk.ResourceTest.Broken.Reader is not available/,
-                 fn ->
-                   Code.compile_string("""
-                   defmodule Hawk.ResourceTest.Broken.Writer do
-                     def create(attrs, _authority), do: {:ok, struct!(Hawk.ResourceTest.Course, attrs)}
-                     def update(model, attrs, _authority), do: {:ok, Map.merge(model, attrs)}
-                     def delete(_model, _authority), do: :ok
-                   end
+  test "missing conventional modules warn at compile time instead of raising" do
+    warning =
+      ExUnit.CaptureIO.capture_io(:stderr, fn ->
+        Code.compile_string("""
+        defmodule Hawk.ResourceTest.Broken.Writer do
+          def create(attrs, _authority), do: {:ok, struct!(Hawk.ResourceTest.Course, attrs)}
+          def update(model, attrs, _authority), do: {:ok, Map.merge(model, attrs)}
+          def delete(_model, _authority), do: :ok
+        end
 
-                   defmodule Hawk.ResourceTest.Broken do
-                     use Hawk.Resource,
-                       model: Hawk.ResourceTest.Course,
-                       json_api: false,
-                       live_view: false
-                   end
-                   """)
-                 end
+        defmodule Hawk.ResourceTest.Broken do
+          use Hawk.Resource,
+            model: Hawk.ResourceTest.Course,
+            json_api: false,
+            live_view: false
+        end
+        """)
+      end)
+
+    assert warning =~ "Hawk resource reader module Hawk.ResourceTest.Broken.Reader is not available yet"
+    assert warning =~ "Run `mix hawk.validate` to enforce"
+    assert function_exported?(Hawk.ResourceTest.Broken, :__hawk_resource__, 1)
+  end
+
+  test "strict validation raises on missing siblings (the mix hawk.validate gate)" do
+    modules = %{
+      model: Hawk.ResourceTest.Course,
+      reader: Hawk.ResourceTest.StrictMissing.Reader,
+      policy: Hawk.ResourceTest.Courses.Policy,
+      writer: Hawk.ResourceTest.Courses.Writer,
+      json_api: false,
+      live_view: false,
+      actions: false
+    }
+
+    assert_raise ArgumentError,
+                 ~r/Hawk resource reader module Hawk.ResourceTest.StrictMissing.Reader is not available/,
+                 fn -> Hawk.Resource.Validation.validate!(modules, :strict) end
+  end
+
+  test "mix hawk.validate passes for complete resources and fails strictly for missing siblings" do
+    ExUnit.CaptureIO.capture_io(fn ->
+      assert Mix.Tasks.Hawk.Validate.run(["Hawk.ResourceTest.Courses"]) == :ok
+    end)
+
+    ensure_broken_resource_compiled!()
+
+    stderr =
+      ExUnit.CaptureIO.capture_io(:stderr, fn ->
+        assert_raise Mix.Error, ~r/Hawk validation failed/, fn ->
+          Mix.Tasks.Hawk.Validate.run(["Hawk.ResourceTest.Broken"])
+        end
+      end)
+
+    assert stderr =~ "reader module Hawk.ResourceTest.Broken.Reader is not available"
+  end
+
+  test "mix hawk.validate discovers all compiled Hawk resources" do
+    output =
+      ExUnit.CaptureIO.capture_io(fn ->
+        assert Mix.Tasks.Hawk.Validate.run([]) == :ok
+      end)
+
+    assert output =~ "Hawk validation passed"
+  end
+
+  defp ensure_broken_resource_compiled! do
+    unless Code.ensure_loaded?(Hawk.ResourceTest.Broken) do
+      ExUnit.CaptureIO.capture_io(:stderr, fn ->
+        Code.compile_string("""
+        defmodule Hawk.ResourceTest.Broken.Writer do
+          def create(attrs, _authority), do: {:ok, struct!(Hawk.ResourceTest.Course, attrs)}
+          def update(model, attrs, _authority), do: {:ok, Map.merge(model, attrs)}
+          def delete(_model, _authority), do: :ok
+        end
+
+        defmodule Hawk.ResourceTest.Broken do
+          use Hawk.Resource,
+            model: Hawk.ResourceTest.Course,
+            json_api: false,
+            live_view: false
+        end
+        """)
+      end)
+    end
   end
 
   test "malformed adapter modules fail at compile time" do

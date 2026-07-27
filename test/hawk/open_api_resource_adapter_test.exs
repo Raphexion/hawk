@@ -18,8 +18,17 @@ defmodule Hawk.OpenApiResourceAdapterTest do
            }
 
     assert course.properties.relationships.properties.instructor == %{
-             type: "string",
-             description: "Public instructor relationship."
+             type: "object",
+             description: "Public instructor relationship.",
+             properties: %{
+               data: %{
+                 type: "object",
+                 properties: %{
+                   id: %{type: "string"},
+                   type: %{type: "string", enum: ["teachers"]}
+                 }
+               }
+             }
            }
   end
 
@@ -42,7 +51,19 @@ defmodule Hawk.OpenApiResourceAdapterTest do
            }
 
     assert create_schema.properties.data.properties.relationships.properties == %{
-             instructor: %{type: "string", description: "Public instructor relationship."}
+             instructor: %{
+               type: "object",
+               description: "Public instructor relationship.",
+               properties: %{
+                 data: %{
+                   type: "object",
+                   properties: %{
+                     id: %{type: "string"},
+                     type: %{type: "string", enum: ["teachers"]}
+                   }
+                 }
+               }
+             }
            }
   end
 

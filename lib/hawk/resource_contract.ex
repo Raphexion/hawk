@@ -54,11 +54,15 @@ defmodule Hawk.ResourceContract do
     Code.ensure_compiled(adapter)
 
     if function_exported?(adapter, :__hawk_json_api__, 0) do
-      adapter.__hawk_json_api__()
+      adapter.__hawk_json_api__() |> normalize_metadata()
     else
       raise ArgumentError,
             "Hawk resource json_api adapter #{inspect(adapter)} must define __hawk_json_api__/0"
     end
+  end
+
+  defp normalize_metadata(metadata) do
+    Map.merge(%{attributes: %{}, relationships: %{}, creatable: [], updatable: []}, metadata)
   end
 
   defp do_validate_model!(model, json_api) when is_atom(model) do
@@ -96,8 +100,11 @@ defmodule Hawk.ResourceContract do
     associations = model.__schema__(:associations) |> MapSet.new()
 
     json_api.relationships
-    |> Map.keys()
-    |> Enum.reject(&MapSet.member?(associations, &1))
+    |> Enum.reject(fn {name, metadata} ->
+      source = Map.get(metadata, :source, name)
+      MapSet.member?(associations, source)
+    end)
+    |> Enum.map(fn {name, _metadata} -> name end)
     |> raise_if_any!("JSON:API relationships must be schema associations")
   end
 
@@ -137,11 +144,11 @@ defmodule Hawk.ResourceContract do
   end
 
   defp validate_reader_preloads!(reader, json_api) do
-    relationships = json_api.relationships |> Map.keys() |> MapSet.new()
+    relationship_sources = relationship_sources(json_api)
 
     reader
     |> reader_values(:preload_keys)
-    |> Enum.reject(&MapSet.member?(relationships, &1))
+    |> Enum.reject(&MapSet.member?(relationship_sources, &1))
     |> raise_if_any!("reader preloads must be declared JSON:API relationships")
   end
 
@@ -150,10 +157,16 @@ defmodule Hawk.ResourceContract do
       preloads = reader |> reader_values(:preload_keys) |> MapSet.new()
 
       json_api.relationships
-      |> Map.keys()
+      |> Enum.map(fn {name, metadata} -> Map.get(metadata, :source, name) end)
       |> Enum.reject(&MapSet.member?(preloads, &1))
       |> raise_if_any!("JSON:API relationships must be declared reader preloads")
     end
+  end
+
+  defp relationship_sources(json_api) do
+    MapSet.new(json_api.relationships, fn {name, metadata} ->
+      Map.get(metadata, :source, name)
+    end)
   end
 
   defp validate_reader_sorts!(reader, model) do
@@ -167,7 +180,7 @@ defmodule Hawk.ResourceContract do
 
   defp validate_reader_filters!(reader, model) do
     schema_fields = model.__schema__(:fields) |> MapSet.new()
-    handlers = reader_values(reader, :filter_handlers) |> Map.keys() |> MapSet.new()
+    handlers = reader_filter_handler_keys(reader)
 
     reader
     |> reader_values(:filter_keys)
@@ -180,12 +193,19 @@ defmodule Hawk.ResourceContract do
       reader
       |> reader_values(:filter_keys)
       |> MapSet.new()
-      |> MapSet.union(reader_values(reader, :filter_handlers) |> Map.keys() |> MapSet.new())
+      |> MapSet.union(reader_filter_handler_keys(reader))
 
     policy
     |> policy_read_filters()
     |> Enum.reject(&MapSet.member?(declared_reader_filters, &1))
     |> raise_if_any!("policy read filters must be declared reader filters")
+  end
+
+  defp reader_filter_handler_keys(reader) do
+    case reader_values(reader, :filter_handlers) do
+      handlers when is_map(handlers) -> handlers |> Map.keys() |> MapSet.new()
+      _other -> MapSet.new()
+    end
   end
 
   defp policy_read_filters(policy) do

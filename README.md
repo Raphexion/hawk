@@ -31,9 +31,13 @@ end
 
 By convention Hawk expects sibling modules such as `MyApp.Courses.Reader`,
 `MyApp.Courses.Policy`, `MyApp.Courses.Writer`, `MyApp.Courses.JsonApi`, and
-`MyApp.Courses.LiveView`. Missing conventional modules fail at compile time so
-typos are caught early. Intentional absence is explicit and disables the
-corresponding adapter entrypoint:
+`MyApp.Courses.LiveView`. A *missing* conventional module emits a compile-time
+warning (so a facade can compile before its siblings during incremental edits
+or code generation), while a *present but malformed* module still fails fast.
+Run `mix hawk.validate` as the authoritative, order-independent gate once the
+whole resource set is written — it validates every discovered Hawk resource
+in strict mode (missing siblings raise) plus the full adapter contract.
+Intentional absence is explicit and disables the corresponding adapter entrypoint:
 
 ```elixir
 defmodule MyApp.CourseSummaries do
@@ -87,6 +91,23 @@ beside the generated web files. The generated LiveViews use
 can later pick up a session-backed authority. The generator is intentionally
 conservative: it gives you the standard Hawk shape, then you tighten policy,
 filters, labels, docs, and writer rules by hand.
+
+### Validation gate
+
+`use Hawk.Resource` validates at compile time, but a *missing* sibling emits a
+warning rather than raising, so a facade can compile before its siblings during
+incremental edits or code generation. A *present but malformed* sibling still
+fails fast — that is real contract drift, not a write-order artifact.
+
+`mix hawk.validate` is the authoritative, order-independent gate. It validates
+every discovered Hawk resource in strict mode (missing siblings raise) and runs
+the full `Hawk.ResourceContract` cross-checks. Wire it into CI or `mix test`
+setup:
+
+```bash
+mix hawk.validate                  # discover and validate all Hawk resources
+mix hawk.validate MyApp.Courses   # validate explicit resource(s)
+```
 
 ### JSON:API adapter
 
@@ -668,6 +689,13 @@ end
 emitted as `x-resource-group`; Hawk also emits `x-resource-type` so downstream
 clients and docs can keep related JSON:API resources together without guessing
 from path names.
+
+Relationship schemas are typed from the model association: a `belongs_to`/
+`has_one` relationship renders as a to-one `data` object whose `type` enum is
+the related resource's JSON:API type, and a `has_many`/`many_to_many`
+relationship renders as a `data` array of the same identifier shape. The target
+type is resolved from the association (or the related model's adapter by
+convention), so no per-relationship `:resource` opt is needed.
 
 Frontend teams can generate TypeScript from that OpenAPI contract with their
 preferred tooling, for example:

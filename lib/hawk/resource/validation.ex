@@ -3,44 +3,112 @@ defmodule Hawk.Resource.Validation do
   Compile-time validation for `Hawk.Resource` facade declarations.
 
   Called from `Hawk.Resource.__using__/1` after the sibling modules are
-  resolved. It fails fast with `ArgumentError` when a declared module is
-  missing, a required function is absent, or an adapter contract (JSON:API
-  sources, writable relationships, LiveView fields/filters/sorts) disagrees
-  with the model or reader.
+  resolved. It is the "do the declarations agree?" phase; code generation lives
+  in `Hawk.Resource`.
 
-  This is the "do the declarations agree?" phase; code generation lives in
-  `Hawk.Resource`.
+  Validation runs in two modes:
+
+    * `:compile` (default) — emitted from `use Hawk.Resource`. A *missing*
+      sibling module (not yet compiled) produces a warning and skips that
+      module's shape checks, so a facade can compile before its siblings
+      during incremental edits or code generation. A *present but malformed*
+      sibling still raises, because that is real contract drift, not a
+      write-order artifact.
+    * `:strict` — used by `mix hawk.validate`. Missing modules raise, so the
+      task is the authoritative gate that a generator or CI runs once the
+      whole resource set is written.
+
+  The split keeps loud drift detection (the valuable part) while removing the
+  write-order coupling that made Hawk codegen-hostile.
   """
+
+  @type mode :: :compile | :strict
 
   @doc """
   Validates the resolved module map against their contracts.
+
+  `mode` defaults to `:compile` (warn on missing siblings, raise on drift).
+  Pass `:strict` to raise on missing siblings too — used by `mix hawk.validate`.
   """
-  def validate!(modules) do
-    validate_module!(modules.model, :model)
-    validate_module!(modules.reader, :reader)
-    validate_module!(modules.policy, :policy)
-    validate_module!(modules.writer, :writer)
-    validate_module!(modules.json_api, :json_api)
-    validate_module!(modules.live_view, :live_view)
-    validate_module!(modules.actions, :actions)
+  @spec validate!(map(), mode()) :: :ok
+  def validate!(modules, mode \\ :compile) when mode in [:compile, :strict] do
+    # The model is required and every other check depends on it. Without it
+    # there is nothing useful to validate, so warn/raise on it alone and stop.
+    if available?(modules.model, :model, mode) do
+      validate_identity!(modules.model, Map.get(modules, :identity, :id))
 
-    validate_functions!(modules.reader, :reader, all: 1, one: 1)
-    validate_functions!(modules.policy, :policy, read_filter: 1)
-    validate_functions!(modules.writer, :writer, create: 2, update: 3, delete: 2)
-    validate_writer_form_contract!(modules.writer)
-    validate_functions!(modules.json_api, :json_api, __hawk_json_api__: 0)
-    validate_functions!(modules.live_view, :live_view, __hawk_live_view__: 0)
-    validate_functions!(modules.actions, :actions, __hawk_actions__: 0)
+      flags = %{
+        reader: available?(modules.reader, :reader, mode),
+        policy: available?(modules.policy, :policy, mode),
+        writer: available?(modules.writer, :writer, mode),
+        json_api: available?(modules.json_api, :json_api, mode),
+        live_view: available?(modules.live_view, :live_view, mode),
+        actions: available?(modules.actions, :actions, mode)
+      }
 
-    validate_json_api_contract!(modules.model, modules.json_api)
-    validate_live_view_contract!(modules.model, modules.reader, modules.live_view)
+      run_validations(modules, flags)
+    end
+
+    :ok
   end
 
-  defp validate_module!(false, _key), do: :ok
+  defp run_validations(modules, flags) do
+    if flags.reader, do: validate_functions!(modules.reader, :reader, all: 1, one: 1)
+    if flags.policy, do: validate_functions!(modules.policy, :policy, read_filter: 1)
 
-  defp validate_module!(module, key) when is_atom(module) do
+    if flags.writer do
+      validate_functions!(modules.writer, :writer, create: 2, update: 3, delete: 2)
+      validate_writer_form_contract!(modules.writer)
+    end
+
+    if flags.json_api do
+      validate_functions!(modules.json_api, :json_api, __hawk_json_api__: 0)
+      validate_json_api_contract!(modules.model, modules.json_api)
+    end
+
+    if flags.live_view do
+      validate_functions!(modules.live_view, :live_view, __hawk_live_view__: 0)
+    end
+
+    if flags.live_view and flags.reader do
+      validate_live_view_contract!(modules.model, modules.reader, modules.live_view)
+    end
+
+    if flags.actions, do: validate_functions!(modules.actions, :actions, __hawk_actions__: 0)
+  end
+
+  defp available?(false, _key, _mode), do: false
+
+  defp available?(module, key, :strict) when is_atom(module) do
     unless compiled?(module) do
       raise ArgumentError, "Hawk resource #{key} module #{inspect(module)} is not available"
+    end
+
+    true
+  end
+
+  defp available?(module, key, :compile) when is_atom(module) do
+    if compiled?(module) do
+      true
+    else
+      warn_missing(key, module)
+      false
+    end
+  end
+
+  defp warn_missing(key, module) do
+    IO.warn(
+      "Hawk resource #{key} module #{inspect(module)} is not available yet; " <>
+        "skipping its contract validation. Run `mix hawk.validate` to enforce."
+    )
+  end
+
+  defp validate_identity!(model, identity) when is_atom(identity) do
+    unless identity in model.__schema__(:fields) do
+      raise ArgumentError,
+            "Hawk resource identity #{inspect(identity)} must be a field on #{inspect(model)}; " <>
+              "declare it with `use Hawk.Resource, model: ..., identity: #{inspect(identity)}` " <>
+              "or pick an existing field"
     end
   end
 
