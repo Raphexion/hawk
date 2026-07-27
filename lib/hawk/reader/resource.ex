@@ -178,6 +178,11 @@ defmodule Hawk.Reader.Resource do
 
   defp quote_config_function do
     quote do
+      @doc """
+      Returns the repo module this reader is configured with.
+      """
+      def repo, do: @hawk_reader_repo
+
       defp config do
         %{
           repo: @hawk_reader_repo,
