@@ -227,7 +227,8 @@ defmodule Hawk.LiveView do
   end
 
   def assign_show(socket, resource, as, authority, id, opts, live_view) do
-    lookup = Keyword.get(opts, :lookup, :id)
+    identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
+    lookup = Keyword.get(opts, :lookup, identity)
 
     opts =
       opts
@@ -379,7 +380,9 @@ defmodule Hawk.LiveView do
         %{"id" => id, "authority" => authority},
         live_view
       ) do
-    case resource.one(authority: authority, filter: %{id: normalize_id(id)}) do
+    identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
+
+    case resource.one(authority: authority, filter: %{identity => normalize_id(id)}) do
       {:ok, model} ->
         case resource.delete(model, authority) do
           {:ok, _model} ->

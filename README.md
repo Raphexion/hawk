@@ -280,6 +280,51 @@ Association resource metadata (`:policy`, `:reader`, `:resource` opts on
 site so Hawk readers preload through the associated resource reader instead
 of duplicating preload query logic.
 
+### Resource identity
+
+Hawk assumes a resource's JSON:API `id` and member-lookup key is the model's
+`:id` by default. Resources whose backing table has no `:id` — a database
+view keyed by another column, a projection, a summary — declare a different
+identity instead of working around the assumption in every adapter:
+
+```elixir
+defmodule MyApp.CourseGradeSummaries do
+  use Hawk.Resource,
+    model: MyApp.CourseGradeSummary,
+    identity: :course_id
+end
+```
+
+Drop the surrogate primary key on the model with `primary_key: false`:
+
+```elixir
+defmodule MyApp.CourseGradeSummary do
+  use Hawk.Model
+
+  model "course_grade_summaries", primary_key: false do
+    field(:course_id, :binary_id)
+    field(:grade_count, :integer)
+    field(:average_score, :float)
+  end
+end
+```
+
+The declared identity drives the JSON:API `id` rendered by `Document`, the
+member-lookup filter and short-id UUID range in the controller, and the
+LiveView `assign_show`/delete lookup key — so a view-backed resource stops
+forcing every adapter to special-case `:id`. Identity is a single field today
+(composite keys are a future extension); the field must exist on the model,
+enforced at compile time.
+
+Hawk enforces that the identity field *exists* on the model, but uniqueness,
+non-nullability, and a UUID index on it are the resource author's
+responsibility — the same trust model Hawk already uses for the default `:id`
+(primary key). Declare `identity:` on a column that is actually a stable
+member key: a non-unique identity makes `show` ambiguous (the reader's `one`
+raises on multiple matches), and a non-indexed identity makes the short-id
+range query scan. Resources that cannot offer a unique member key should keep
+the surrogate `:id`.
+
 ### Policy
 
 ```elixir

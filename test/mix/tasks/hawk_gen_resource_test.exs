@@ -117,6 +117,28 @@ defmodule Mix.Tasks.Hawk.Gen.ResourceTest do
     assert_file(tmp, "lib/my_app/courses/json_api.ex", "relationship(:teacher, writable: true")
   end
 
+  test "generates an identity-keyed resource skeleton", %{tmp: tmp} do
+    File.cd!(tmp, fn ->
+      Resource.run([
+        "MyApp.Rosters",
+        "MyApp.Roster",
+        "--repo",
+        "MyApp.Repo",
+        "--attributes",
+        "title,enrollment_count",
+        "--identity",
+        "course_id"
+      ])
+    end)
+
+    facade = File.read!(Path.join(tmp, "lib/my_app/rosters.ex"))
+    assert facade =~ "model: MyApp.Roster"
+    assert facade =~ "identity: :course_id"
+
+    assert_file(tmp, "lib/my_app/rosters/reader.ex", "filter(:course_id)")
+    assert_file(tmp, "lib/my_app/rosters/reader.ex", "sort(:course_id)")
+  end
+
   defp assert_file(root, path, expected) do
     full_path = Path.join(root, path)
     assert File.exists?(full_path), "expected #{path} to exist"

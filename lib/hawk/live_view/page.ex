@@ -63,8 +63,9 @@ defmodule Hawk.LiveView.Page do
     end
 
     resource = fetch_resource!(resources, key)
+    identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
 
-    case resource.one(authority: authority, filter: %{id: normalize_id(id)}) do
+    case resource.one(authority: authority, filter: %{identity => normalize_id(id)}) do
       {:ok, model} ->
         case resource.delete(model, authority) do
           {:ok, _model} -> {:noreply, refresh_page(socket, resources, authority)}

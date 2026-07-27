@@ -37,6 +37,14 @@ defmodule Hawk.Resource do
               "gate writes with the policy instead (the :writer opt is not accepted)"
     end
 
+    identity = Keyword.get(opts, :identity, :id)
+
+    unless is_atom(identity) do
+      raise ArgumentError,
+            "Hawk resource :identity must be an atom naming the field used as the " <>
+              "JSON:API id and member lookup key (default :id); got: #{inspect(identity)}"
+    end
+
     modules = %{
       model: Macro.expand(model, env),
       reader: resolve_module(caller, opts, :reader, Reader, env, required?: true),
@@ -44,10 +52,11 @@ defmodule Hawk.Resource do
       writer: Module.concat(caller, Writer),
       json_api: resolve_module(caller, opts, :json_api, JsonApi, env, required?: true),
       live_view: resolve_module(caller, opts, :live_view, LiveView, env, required?: true),
-      actions: resolve_module(caller, opts, :actions, Actions, env, required?: false)
+      actions: resolve_module(caller, opts, :actions, Actions, env, required?: false),
+      identity: identity
     }
 
-    Validation.validate!(modules)
+    Validation.validate!(modules, :compile)
 
     quote do
       unquote(quote_introspection(modules))
@@ -87,15 +96,27 @@ defmodule Hawk.Resource do
       actions: modules.actions != false
     }
 
+    entries = [
+      {:model, modules.model},
+      {:reader, modules.reader},
+      {:policy, modules.policy},
+      {:writer, modules.writer},
+      {:json_api, modules.json_api},
+      {:live_view, modules.live_view},
+      {:actions, modules.actions},
+      {:identity, modules.identity},
+      {:capabilities, Macro.escape(capabilities)}
+    ]
+
+    clauses =
+      Enum.map(entries, fn {key, value} ->
+        quote do
+          def __hawk_resource__(unquote(key)), do: unquote(value)
+        end
+      end)
+
     quote do
-      def __hawk_resource__(:model), do: unquote(modules.model)
-      def __hawk_resource__(:reader), do: unquote(modules.reader)
-      def __hawk_resource__(:policy), do: unquote(modules.policy)
-      def __hawk_resource__(:writer), do: unquote(modules.writer)
-      def __hawk_resource__(:json_api), do: unquote(modules.json_api)
-      def __hawk_resource__(:live_view), do: unquote(modules.live_view)
-      def __hawk_resource__(:actions), do: unquote(modules.actions)
-      def __hawk_resource__(:capabilities), do: unquote(Macro.escape(capabilities))
+      (unquote_splicing(clauses))
     end
   end
 

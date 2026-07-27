@@ -76,7 +76,7 @@ defmodule Hawk.JsonApi.Document do
 
     %{
       type: json_api.type,
-      id: to_string(Map.get(model, :id)),
+      id: to_string(Map.get(model, Schema.identity(model))),
       attributes: resource_attributes(model, json_api, opts),
       relationships: resource_relationships(model, json_api, opts)
     }
@@ -183,7 +183,7 @@ defmodule Hawk.JsonApi.Document do
   end
 
   defp resource_path(model, json_api) do
-    "/" <> json_api.type <> "/" <> to_string(Map.get(model, :id))
+    "/" <> json_api.type <> "/" <> to_string(Map.get(model, Schema.identity(model)))
   end
 
   defp belongs_to_identifier(model, association) do
@@ -201,7 +201,7 @@ defmodule Hawk.JsonApi.Document do
     do:
       Enum.map(
         models,
-        &%{type: Schema.metadata(&1).type, id: to_string(Map.get(&1, :id))}
+        &%{type: Schema.metadata(&1).type, id: to_string(Map.get(&1, Schema.identity(&1)))}
       )
 
   defp preload_requested?(preloads, name) do

@@ -362,7 +362,7 @@ defmodule Hawk.OpenApi do
 
   defp relationship_properties(resource) do
     Map.new(resource.json_api.relationships, fn {name, metadata} ->
-      {name, relationship_schema(metadata)}
+      {name, relationship_schema(resource, name, metadata)}
     end)
   end
 
@@ -381,7 +381,9 @@ defmodule Hawk.OpenApi do
 
     resource.json_api.relationships
     |> Map.take(allowed)
-    |> Map.new(fn {name, metadata} -> {name, relationship_schema(metadata)} end)
+    |> Map.new(fn {name, metadata} ->
+      {name, relationship_schema(resource, name, metadata)}
+    end)
   end
 
   defp attribute_type(resource, name, metadata) do
@@ -389,8 +391,63 @@ defmodule Hawk.OpenApi do
     resource.model.__schema__(:type, source)
   end
 
-  defp relationship_schema(metadata) do
-    field_schema(:map, metadata)
+  defp relationship_schema(resource, name, metadata) do
+    source = Map.get(metadata, :source, name)
+
+    case resolve_relationship_target(resource, source) do
+      nil ->
+        # Association not resolvable (e.g. a projection over an internal
+        # shape); fall back to a generic object so the spec still renders.
+        field_schema(:map, metadata)
+
+      {related_type, cardinality} ->
+        resource_identifier_schema(related_type, cardinality)
+        |> put_optional(:description, metadata, :doc)
+        |> put_optional(:example, metadata, :example)
+    end
+  end
+
+  defp resolve_relationship_target(resource, source) do
+    case resource.model.__schema__(:association, source) do
+      %{related: related, cardinality: cardinality} ->
+        {Hawk.JsonApi.Schema.metadata(related).type, cardinality}
+
+      _no_association ->
+        nil
+    end
+  end
+
+  defp resource_identifier_schema(related_type, :one) do
+    %{
+      type: "object",
+      properties: %{
+        data: %{
+          type: "object",
+          properties: %{
+            type: %{type: "string", enum: [related_type]},
+            id: %{type: "string"}
+          }
+        }
+      }
+    }
+  end
+
+  defp resource_identifier_schema(related_type, :many) do
+    %{
+      type: "object",
+      properties: %{
+        data: %{
+          type: "array",
+          items: %{
+            type: "object",
+            properties: %{
+              type: %{type: "string", enum: [related_type]},
+              id: %{type: "string"}
+            }
+          }
+        }
+      }
+    }
   end
 
   defp field_schema(type, metadata) do

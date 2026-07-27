@@ -26,7 +26,7 @@ defmodule Hawk.Model do
     quote do
       use Ecto.Schema
 
-      import Hawk.Model, only: [model: 2]
+      import Hawk.Model, only: [model: 2, model: 3]
 
       Module.register_attribute(__MODULE__, :hawk_association_policies, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_association_readers, accumulate: true)
@@ -35,13 +35,30 @@ defmodule Hawk.Model do
   end
 
   defmacro model(source, do: block) do
-    {rewritten_block, metadata} = rewrite_schema_block(block, __CALLER__)
+    do_model(source, [], block, __CALLER__)
+  end
+
+  defmacro model(source, opts, do: block) do
+    do_model(source, opts, block, __CALLER__)
+  end
+
+  defp do_model(source, opts, block, caller) do
+    primary_key? = Keyword.get(opts, :primary_key, true)
+
+    {rewritten_block, metadata} = rewrite_schema_block(block, caller)
+
+    primary_key_decl =
+      if primary_key? do
+        quote do: @primary_key {:id, :binary_id, autogenerate: true}
+      else
+        quote do: @primary_key false
+      end
 
     quote do
       unquote_splicing(quote_attrs(:hawk_association_policies, metadata.policies))
       unquote_splicing(quote_attrs(:hawk_association_readers, metadata.readers))
 
-      @primary_key {:id, :binary_id, autogenerate: true}
+      unquote(primary_key_decl)
       @foreign_key_type :binary_id
 
       Ecto.Schema.schema unquote(source) do

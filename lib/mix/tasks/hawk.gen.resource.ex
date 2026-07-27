@@ -28,7 +28,8 @@ defmodule Mix.Tasks.Hawk.Gen.Resource do
           preloads: :string,
           read_only: :boolean,
           web: :string,
-          public: :boolean
+          public: :boolean,
+          identity: :string
         ],
         aliases: [r: :repo]
       )
@@ -55,7 +56,8 @@ defmodule Mix.Tasks.Hawk.Gen.Resource do
     repo = Keyword.get(opts, :repo) || Mix.raise("--repo is required")
     attributes = csv_atoms(Keyword.get(opts, :attributes, ""))
     relationships = csv_atoms(Keyword.get(opts, :relationships, ""))
-    filters = [:id] ++ csv_atoms(Keyword.get(opts, :filters, ""))
+    identity = opts |> Keyword.get(:identity, "id") |> String.to_atom()
+    filters = [identity] ++ csv_atoms(Keyword.get(opts, :filters, ""))
     preloads = csv_atoms(Keyword.get(opts, :preloads, Enum.join(relationships, ",")))
     read_only? = Keyword.get(opts, :read_only, false)
     web = Keyword.get(opts, :web)
@@ -69,6 +71,7 @@ defmodule Mix.Tasks.Hawk.Gen.Resource do
       repo: repo,
       attributes: attributes,
       relationships: relationships,
+      identity: identity,
       filters: Enum.uniq(filters),
       preloads: Enum.uniq(preloads),
       read_only?: read_only?,
@@ -111,12 +114,15 @@ defmodule Mix.Tasks.Hawk.Gen.Resource do
   end
 
   defp write_resource(config) do
+    identity_opt =
+      if config.identity == :id, do: "", else: ",\n    identity: #{inspect(config.identity)}"
+
     write_ex("lib/#{config.base_path}.ex", """
     defmodule #{config.resource} do
       @moduledoc false
 
       use Hawk.Resource,
-        model: #{config.model}
+        model: #{config.model}#{identity_opt}
     end
     """)
   end
@@ -136,7 +142,7 @@ defmodule Mix.Tasks.Hawk.Gen.Resource do
 
   defp write_reader(config) do
     filters = Enum.map_join(config.filters, "\n", &"  filter(#{inspect(&1)})")
-    sorts = Enum.map_join([:id | config.attributes], "\n", &"  sort(#{inspect(&1)})")
+    sorts = Enum.map_join([config.identity | config.attributes], "\n", &"  sort(#{inspect(&1)})")
     preloads = Enum.map_join(config.preloads, "\n", &"  preload(#{inspect(&1)})")
 
     write_ex("lib/#{config.base_path}/reader.ex", """

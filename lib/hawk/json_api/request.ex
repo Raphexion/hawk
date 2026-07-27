@@ -41,12 +41,13 @@ defmodule Hawk.JsonApi.Request do
   end
 
   @doc """
-  Builds a UUID range filter for a short-id prefix.
+  Builds a UUID range filter for a short-id prefix on the given identity key.
 
   The prefix is padded to a lower/upper UUID bound so the normal btree UUID
-  index can be used instead of `id::text LIKE 'prefix%'`.
+  index can be used instead of `id::text LIKE 'prefix%'`. The key defaults to
+  `:id` and is the resource identity for resources keyed by another field.
   """
-  def short_id_filter(prefix) when is_binary(prefix) do
+  def short_id_filter(prefix, key \\ :id) when is_binary(prefix) and is_atom(key) do
     lower =
       IO.iodata_to_binary([
         prefix,
@@ -63,7 +64,7 @@ defmodule Hawk.JsonApi.Request do
     upper =
       IO.iodata_to_binary([prefix, "-", "ffff", "-", "ffff", "-", "ffff", "-", String.duplicate("f", 12)])
 
-    {:and, %{id: {:gte, lower}}, %{id: {:lte, upper}}}
+    {:and, %{key => {:gte, lower}}, %{key => {:lte, upper}}}
   end
 
   @doc """

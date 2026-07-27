@@ -185,7 +185,9 @@ defmodule Hawk.JsonApi.Controller do
   end
 
   defp show_by_uuid(conn, resource, authority, context, uuid, fields) do
-    case resource.one(authority: authority, context: context, filter: %{id: uuid}) do
+    identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
+
+    case resource.one(authority: authority, context: context, filter: %{identity => uuid}) do
       {:ok, model} ->
         json(
           conn,
@@ -203,10 +205,12 @@ defmodule Hawk.JsonApi.Controller do
   end
 
   defp show_by_short_id(conn, resource, authority, context, prefix, fields) do
+    identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
+
     case resource.all(
            authority: authority,
            context: context,
-           filter: Request.short_id_filter(prefix),
+           filter: Request.short_id_filter(prefix, identity),
            page: %{size: 2}
          ) do
       [model] ->
@@ -251,8 +255,9 @@ defmodule Hawk.JsonApi.Controller do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
       context = request_context(conn)
+      identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
 
-      case resource.one(authority: authority, context: context, filter: %{id: normalize_id(id)}) do
+      case resource.one(authority: authority, context: context, filter: %{identity => normalize_id(id)}) do
         {:ok, existing} ->
           Request.validate_document!(params, model, :updatable)
 
@@ -275,8 +280,9 @@ defmodule Hawk.JsonApi.Controller do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
       context = request_context(conn)
+      identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
 
-      case resource.one(authority: authority, context: context, filter: %{id: normalize_id(id)}) do
+      case resource.one(authority: authority, context: context, filter: %{identity => normalize_id(id)}) do
         {:ok, existing} -> respond_delete(conn, resource, existing, authority)
         :not_found -> json(conn, 404, not_found(resource))
       end
@@ -305,8 +311,9 @@ defmodule Hawk.JsonApi.Controller do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
       context = request_context(conn)
+      identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
 
-      case resource.one(authority: authority, context: context, filter: %{id: normalize_id(id)}) do
+      case resource.one(authority: authority, context: context, filter: %{identity => normalize_id(id)}) do
         {:ok, existing} ->
           respond_action(conn, resource, action_name, existing, params, authority)
 
@@ -330,6 +337,7 @@ defmodule Hawk.JsonApi.Controller do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
       context = request_context(conn)
+      identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
 
       relationship = Schema.relationship_key!(model, relationship_name)
       association = model.__schema__(:association, relationship)
@@ -338,7 +346,7 @@ defmodule Hawk.JsonApi.Controller do
       case resource.one(
              authority: authority,
              context: context,
-             filter: %{id: normalize_id(id)},
+             filter: %{identity => normalize_id(id)},
              preloads: preloads
            ) do
         {:ok, loaded} ->
@@ -369,6 +377,7 @@ defmodule Hawk.JsonApi.Controller do
       authority = authority!(conn, public?)
       context = request_context(conn)
       fields = Request.sparse_fieldsets(params)
+      identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
 
       relationship =
         Schema.relationship_key!(model, relationship_name)
@@ -376,7 +385,7 @@ defmodule Hawk.JsonApi.Controller do
       case resource.one(
              authority: authority,
              context: context,
-             filter: %{id: normalize_id(id)},
+             filter: %{identity => normalize_id(id)},
              preloads: [relationship]
            ) do
         {:ok, model} ->

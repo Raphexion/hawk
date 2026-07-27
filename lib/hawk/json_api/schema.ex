@@ -108,6 +108,44 @@ defmodule Hawk.JsonApi.Schema do
     source
   end
 
+  @doc """
+  Resolves the identity field for a model struct or module.
+
+  The identity field is the model attribute used as the JSON:API `id` and the
+  member-lookup key (default `:id`). It is declared on the resource facade with
+  `use Hawk.Resource, model: ..., identity: :field`. Resources whose backing
+  table has no `:id` (e.g. database views keyed by another column) declare a
+  different identity so every adapter stops assuming `:id`.
+  """
+  @spec identity(struct() | module()) :: atom()
+  def identity(%module{}), do: identity(module)
+
+  def identity(module) when is_atom(module) do
+    case Hawk.Resource.Convention.resource_module(module) do
+      resource when is_atom(resource) -> identity_for_facade(resource)
+    end
+  end
+
+  @doc """
+  Resolves the identity field declared on a resource facade.
+
+  Falls back to `:id` when the facade does not declare one (e.g. a hand-written
+  facade or a model without a Hawk resource).
+  """
+  @spec identity_for_facade(module()) :: atom()
+  def identity_for_facade(resource) when is_atom(resource) do
+    Code.ensure_compiled(resource)
+
+    if function_exported?(resource, :__hawk_resource__, 1) do
+      case resource.__hawk_resource__(:identity) do
+        nil -> :id
+        identity when is_atom(identity) -> identity
+      end
+    else
+      :id
+    end
+  end
+
   defp discovered_metadata(module) do
     Code.ensure_compiled(module)
 
