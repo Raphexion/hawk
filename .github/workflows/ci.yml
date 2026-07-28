@@ -115,3 +115,50 @@ jobs:
             tmp/openapi/openapi.json
             tmp/openapi/types.d.ts
           if-no-files-found: ignore
+
+  docs:
+    name: Documentation checks
+    runs-on: ubuntu-latest
+
+    env:
+      MIX_ENV: docs
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Erlang and Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: "29.0"
+          elixir-version: "1.20.1"
+
+      - name: Cache Mix deps and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-docs-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-docs-
+
+      - name: Install Mix dependencies
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+          mix deps.get
+
+      - name: Compile dependencies
+        run: |
+          mkdir -p tmp
+          if ! mix deps.compile 2> tmp/deps-compile.stderr; then
+            cat tmp/deps-compile.stderr >&2
+            exit 1
+          fi
+
+      - name: Compile application
+        run: mix compile --warnings-as-errors --no-deps-check
+
+      - name: Generate docs with warnings as errors
+        run: mix docs --warnings-as-errors
