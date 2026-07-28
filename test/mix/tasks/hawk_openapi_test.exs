@@ -124,4 +124,61 @@ defmodule Mix.Tasks.Hawk.OpenapiTest do
     assert spec["paths"]["/courses/{id}/-actions/close-registration"]["post"]["operationId"] ==
              "runCoursesCloseRegistration"
   end
+
+  test "to-one relationship examples are nested under data", %{tmp: tmp} do
+    output = Path.join(tmp, "openapi.json")
+
+    Mix.Tasks.Hawk.Openapi.run(["Videdal.Courses", "-o", output])
+
+    spec = Jason.decode!(File.read!(output))
+
+    school =
+      spec["components"]["schemas"]["CourseResource"]["properties"]["relationships"]["properties"][
+        "school"
+      ]
+
+    assert school["example"] == %{"data" => %{"type" => "schools", "id" => Videdal.school_id()}}
+  end
+
+  test "to-many relationship examples are nested under data", %{tmp: tmp} do
+    output = Path.join(tmp, "openapi.json")
+
+    Mix.Tasks.Hawk.Openapi.run(["Videdal.Courses", "-o", output])
+
+    spec = Jason.decode!(File.read!(output))
+
+    grades =
+      spec["components"]["schemas"]["CourseResource"]["properties"]["relationships"]["properties"][
+        "grades"
+      ]
+
+    assert grades["example"] == %{"data" => [%{"type" => "grades", "id" => "1"}]}
+  end
+
+  test "no unused component schemas are emitted", %{tmp: tmp} do
+    output = Path.join(tmp, "openapi.json")
+
+    Mix.Tasks.Hawk.Openapi.run(["-o", output, "--title", "Videdal API", "--version", "1.0.0"])
+
+    spec = Jason.decode!(File.read!(output))
+
+    declared = Map.keys(spec["components"]["schemas"]) |> MapSet.new()
+    referenced = referenced_schema_names(spec)
+
+    unused = MapSet.difference(declared, referenced) |> MapSet.to_list()
+    assert unused == [], "unused component schemas: #{inspect(unused)}"
+  end
+
+  # Walk the spec and collect every #/components/schemas/<Name> reference so we
+  # can assert that every declared component is actually used somewhere.
+  defp referenced_schema_names(spec) do
+    ref_re = ~r{#/components/schemas/([^/"]+)}
+
+    spec
+    |> Jason.encode!()
+    |> then(&Regex.scan(ref_re, &1, capture: :all_but_first))
+    |> List.flatten()
+    |> Enum.uniq()
+    |> MapSet.new()
+  end
 end

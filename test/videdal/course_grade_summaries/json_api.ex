@@ -10,12 +10,12 @@ defmodule Videdal.CourseGradeSummaries.JsonApi do
 
   attribute(:school_id,
     doc: "School identifier for the summarized course.",
-    example: 7
+    example: Videdal.school_id()
   )
 
   attribute(:course_id,
     doc: "Course identifier the statistics describe.",
-    example: 3
+    example: Videdal.course_id()
   )
 
   attribute(:grade_count,

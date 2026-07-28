@@ -287,20 +287,20 @@ defmodule Hawk.OpenApi do
   defp responses(_resource, 204, nil) do
     %{
       "204" => %{description: "No content"},
-      "400" => json_api_content("Invalid JSON:API query parameters", error_document_schema()),
-      "403" => json_api_content("Forbidden by Hawk policy", error_document_schema()),
-      "404" => json_api_content("Resource not found", error_document_schema()),
-      "422" => json_api_content("Validation failed", error_document_schema())
+      "400" => json_api_content("Invalid JSON:API query parameters", error_document_ref()),
+      "403" => json_api_content("Forbidden by Hawk policy", error_document_ref()),
+      "404" => json_api_content("Resource not found", error_document_ref()),
+      "422" => json_api_content("Validation failed", error_document_ref())
     }
   end
 
   defp responses(_resource, success_status, success_schema) do
     %{
       Integer.to_string(success_status) => json_api_content(success_description(success_status), success_schema),
-      "400" => json_api_content("Invalid JSON:API query parameters", error_document_schema()),
-      "403" => json_api_content("Forbidden by Hawk policy", error_document_schema()),
-      "404" => json_api_content("Resource not found", error_document_schema()),
-      "422" => json_api_content("Validation failed", error_document_schema())
+      "400" => json_api_content("Invalid JSON:API query parameters", error_document_ref()),
+      "403" => json_api_content("Forbidden by Hawk policy", error_document_ref()),
+      "404" => json_api_content("Resource not found", error_document_ref()),
+      "422" => json_api_content("Validation failed", error_document_ref())
     }
   end
 
@@ -433,7 +433,7 @@ defmodule Hawk.OpenApi do
       {related_type, cardinality} ->
         resource_identifier_schema(related_type, cardinality)
         |> put_optional(:description, metadata, :doc)
-        |> put_optional(:example, metadata, :example)
+        |> put_relationship_example(metadata)
     end
   end
 
@@ -501,6 +501,8 @@ defmodule Hawk.OpenApi do
       }
     }
   end
+
+  defp error_document_ref, do: %{"$ref": "#/components/schemas/JsonApiErrorDocument"}
 
   defp error_schema do
     %{
@@ -625,6 +627,18 @@ defmodule Hawk.OpenApi do
     case Map.fetch(source, source_key) do
       {:ok, value} -> Map.put(target, key, value)
       :error -> target
+    end
+  end
+
+  # A JSON:API relationship object wraps its identifiers under `data`, so the
+  # user-facing `example:` describes the `data` payload (a single identifier
+  # object for to-one, an array of them for to-many). The OpenAPI example must
+  # be nested under `data` to match the emitted schema and validate against
+  # it; emitting it at the wrapper level produces stray `id`/`type` properties.
+  defp put_relationship_example(schema, metadata) do
+    case Map.fetch(metadata, :example) do
+      {:ok, example} -> Map.put(schema, :example, %{data: example})
+      :error -> schema
     end
   end
 end
