@@ -18,6 +18,7 @@ authentication, and supervision tree.
 ## Direction
 
 Hawk's current north-star design is captured in [`docs/hawk-resource-direction.md`](docs/hawk-resource-direction.md).
+The Plans design (AI-authored, human-reviewed batches) is in [`docs/hawk-plans-design.md`](docs/hawk-plans-design.md).
 
 ## Golden path
 
@@ -62,234 +63,14 @@ filters must reference real model fields and declared reader filters.
 
 A Hawk resource has four small modules plus Phoenix-facing helpers:
 
-- `Model` declares the Ecto schema and explicit JSON:API surface.
+- `Model` declares the Ecto schema and association resource metadata.
 - `Policy` declares who can read/write.
 - `Reader` owns filtering, sorting, pagination, and policy-aware preloads.
 - `Writer` owns validation and mutations.
 - `Actions` is optional and declares imperative JSON:API custom actions under `/-actions/`.
-- JSON:API, OpenAPI, and LiveView helpers are generated from those declarations.
+- JSON:API, OpenAPI, LiveView, and Plans helpers are generated from those declarations.
 
-### Resource generator
-
-For a quick skeleton around an existing Ecto schema, use:
-
-```bash
-mix hawk.gen.resource MyApp.Courses MyApp.Course \
-  --repo MyApp.Repo \
-  --attributes title,code \
-  --relationships school,teacher \
-  --filters school_id,teacher_id \
-  --preloads school,teacher
-```
-
-This creates the facade, policy, reader, JSON:API adapter, LiveView adapter, and
-writer skeleton. Pass `--read-only` to generate `writer: false` and omit the
-writer. Pass `--web MyAppWeb` to also generate a Phoenix JSON:API controller,
-clickable LiveView index/show modules and templates, and a router snippet file
-beside the generated web files. The generated LiveViews use
-`Hawk.Authority.Session.authority_or_public/1`, so they work for public demos and
-can later pick up a session-backed authority. The generator is intentionally
-conservative: it gives you the standard Hawk shape, then you tighten policy,
-filters, labels, docs, and writer rules by hand.
-
-### Validation gate
-
-`use Hawk.Resource` validates at compile time, but a *missing* sibling emits a
-warning rather than raising, so a facade can compile before its siblings during
-incremental edits or code generation. A *present but malformed* sibling still
-fails fast — that is real contract drift, not a write-order artifact.
-
-`mix hawk.validate` is the authoritative, order-independent gate. It validates
-every discovered Hawk resource in strict mode (missing siblings raise) and runs
-the full `Hawk.ResourceContract` cross-checks. The `mix test` alias runs it
-first, so `mix test` is the complete local gate — contract validation plus the
-suite, same path CI takes:
-
-```bash
-mix test                          # mix hawk.validate + the test suite
-mix hawk.validate                # discover and validate all Hawk resources
-mix hawk.validate MyApp.Courses  # validate explicit resource(s)
-```
-
-`mix hawk.openapi` writes an OpenAPI spec from every discovered Hawk facade
-(`json_api: false` resources are omitted by `Hawk.OpenApi.spec/2`), so the spec
-stays in sync with the resources that actually exist — no hand-maintained list
-to drift:
-
-```bash
-mix hawk.openapi -o tmp/openapi.json --title "My API" --version 1.0.0 \
-  --path-prefix /api/v1
-mix hawk.openapi MyApp.Courses -o spec.json   # override discovery
-```
-
-### JSON:API adapter
-
-New resources should keep JSON:API exposure in a sibling adapter module:
-
-```elixir
-defmodule MyApp.Courses.JsonApi do
-  use Hawk.JsonApi.Resource
-
-  type("courses")
-  doc("A course taught by a teacher.")
-
-  attribute(:title,
-    writable: true,
-    doc: "Human-readable course title.",
-    example: "Math"
-  )
-
-  attribute(:slug,
-    source: :public_slug,
-    creatable: true,
-    updatable: false
-  )
-
-  relationship(:teacher,
-    writable: true,
-    doc: "The teacher responsible for the course.",
-    example: %{type: "teachers", id: "..."}
-  )
-end
-```
-
-`writable: true` means both creatable and updatable. Use `creatable:` and
-`updatable:` when create/update capabilities differ. `source:` maps the external
-JSON:API name to the internal model/writer attr for both rendering and request
-payloads. Read-only relationships can expose normal Ecto associations, including
-`many_to_many` projections over internal join schemas. Writable relationships
-must be `belongs_to` associations because Hawk maps them to the owning foreign
-key passed into the writer. Mutating `has_many`, `has_one`, or `many_to_many`
-relationships should be modeled as explicit writer/action workflows.
-
-### LiveView adapter
-
-LiveView exposure belongs in a sibling adapter too. Hawk handles data plumbing;
-your templates still own the markup.
-
-```elixir
-defmodule MyApp.Courses.LiveView do
-  use Hawk.LiveView.Resource
-
-  as(:course)
-  plural_as(:courses)
-
-  index do
-    filter(:teacher_id)
-    search(:title, operator: :ilike)
-    sort(:id)
-    sort(:title)
-
-    table do
-      column(:title, label: "Course")
-      column(:registration_state)
-    end
-  end
-
-  show do
-    field(:title)
-    field(:registration_state, label: "State")
-  end
-
-  create_form do
-    field(:title, label: gettext("Course"))
-    field(:teacher_id, label: dgettext("courses", "Teacher"))
-  end
-
-  update_form do
-    field(:title, label: gettext("Course"))
-  end
-end
-```
-
-`use Hawk.LiveView, resource: MyApp.Courses` reads `as` and `plural_as` from
-the LiveView adapter when present, then falls back to model-based convention.
-Generated LiveView event handlers follow resource capabilities; for example,
-read-only resources with `writer: false` do not get the default `"hawk:delete"`
-handler. Show pages can load by natural keys when the reader declares the filter:
-
-```elixir
-socket = CourseLive.assign_show(socket, authority, short_id, lookup: :short_id)
-```
-
-LiveView index params are caller-provided narrowing/presentation only;
-pass them as `params: %{"filter" => ..., "search" => ..., "sort" => ..., "page" => ...}`
-to `assign_index/3`. Hawk accepts only filters/searches/sorts declared in the
-LiveView adapter and validated against the Reader. Search declarations can turn a
-text field into an `:ilike` filter, so `%{"search" => %{"title" => "histo"}}`
-becomes `%{title: {:ilike, "%histo%"}}`. Sort and search changes reset the page
-number to `1`; page changes keep the current query state. Policies remain the
-security boundary and are shared with JSON:API reads.
-
-When the resource writer exposes form changeset helpers, `use Hawk.LiveView`
-also generates keyed form helpers:
-
-```elixir
-socket = CourseLive.assign_new_form(socket, authority)
-socket = CourseLive.assign_edit_form(socket, course, authority)
-```
-
-These assign `:course_form` and `:course_form_fields` by default and track form
-state under `:hawk_form_states`. `create_form` fields are assigned for new forms;
-`update_form` fields are assigned for edit forms. Read-only/admin display forms can use
-`assign_read_form(socket, course)`; it assigns the update-form fields when present,
-falls back to show fields, and records `mode: :read` without generating save or
-validation behavior. Label metadata can use
-`gettext("...")` or `dgettext("domain", "...")` descriptors without translating
-at compile time. Hawk does not own UI translation; by default `hawk_field_label/1`
-returns the descriptor's message id or a humanized field name. Apps that want a
-shared resolver can opt in with a small label module:
-
-```elixir
-defmodule MyAppWeb.HawkLabels do
-  import MyAppWeb.Gettext
-
-  def field_label({:gettext, msgid}), do: gettext(msgid)
-  def field_label({:dgettext, domain, msgid}), do: dgettext(domain, msgid)
-end
-
-use Hawk.LiveView,
-  resource: MyApp.Courses,
-  label_resolver: MyAppWeb.HawkLabels
-```
-
-```heex
-<.input field={@course_form[field.name]} label={hawk_field_label(field)} />
-```
-
-For read/show surfaces, `hawk_field_value(model, field)` resolves `:source` and
-applies optional formatter functions, so templates can keep display projections
-near the LiveView adapter metadata.
-
-Hawk also generates `hawk_validate/2` and `hawk_save/2,3`.
-Default `handle_event("hawk:validate", ...)` and `handle_event("hawk:save", ...)`
-clauses call those helpers unless `events: false` is set. `hawk_validate/2`
-rebuilds a non-persisting validation changeset through `change_create/2` or
-`change_update/3`, then assigns a Phoenix `to_form(changeset, as: :course)` on a
-real `Phoenix.LiveView.Socket`. `hawk_save/2` uses the same state to call
-`create/2` or `update/3`; validation failures keep the keyed form assigned with
-`action: :insert` or `:update`, authorization failures assign `:hawk_error`, and
-successful saves assign the saved model under `:course`. Use `hawk_save/3` with
-`on_success: fn socket, course -> ... end` when the app needs post-save behavior
-such as navigation while still reusing Hawk's save plumbing. Form helpers
-build a `Phoenix.HTML.Form` through `to_form/2` on a real
-`Phoenix.LiveView.Socket`.
-
-Known server-side values can be forced into a form without trusting hidden client
-inputs:
-
-```elixir
-socket =
-  CourseLive.assign_new_form(socket, authority,
-    forced_attrs: %{teacher_id: current_teacher.id},
-    hidden: [:teacher_id]
-  )
-```
-
-`forced_attrs` are merged after client params during validation and save, so the
-server value wins even if the browser submits a different `teacher_id`. `hidden`
-removes fields from the assigned form-field metadata; the writer remains the
-final acceptance boundary.
+## Core modules
 
 ### Model
 
@@ -474,30 +255,6 @@ defmodule MyApp.Courses.Writer do
 end
 ```
 
-### Authority conventions
-
-Hawk does not authenticate users itself. Apps can use the small session/assign
-convention helpers to carry an already-resolved authority through controllers and
-LiveViews:
-
-```elixir
-authority = MyAppWeb.Auth.authority_for(conn)
-conn = Hawk.Authority.Plug.call(conn, resolver: fn _conn -> authority end)
-
-session_authority = Hawk.Authority.Session.dump(authority)
-authority = Hawk.Authority.Session.authority_or_public(session)
-```
-
-`Hawk.PhoenixAuth` is the phx.gen.auth-specific bridge. In Plug pipelines it can
-read an existing `current_scope` or a URL-safe Base64 Bearer session token,
-convert that scope to a Hawk authority, and assign both `:hawk_authority` and
-`:authority` for JSON:API controllers. In LiveView `on_mount`, use it after the
-generated `UserAuth` hook has assigned `current_scope`.
-
-`Hawk.Authority.Plug` / `Hawk.Authority.Session` are lower-level generic helpers
-for apps that are not using the phx.gen.auth scope shape. Missing authority falls
-back to readonly public access, not system access.
-
 `Hawk.Writer.Resource` generates `change_create/2` / `create/2` and
 `change_update/3` / `update/3` from the same pipelines. `change_*` functions
 return non-persisting changesets with `action: :validate`, which is the boundary
@@ -572,6 +329,72 @@ Request shape:
 }
 ```
 
+## Authority
+
+Hawk does not authenticate users itself. Apps can use the small session/assign
+convention helpers to carry an already-resolved authority through controllers and
+LiveViews:
+
+```elixir
+authority = MyAppWeb.Auth.authority_for(conn)
+conn = Hawk.Authority.Plug.call(conn, resolver: fn _conn -> authority end)
+
+session_authority = Hawk.Authority.Session.dump(authority)
+authority = Hawk.Authority.Session.authority_or_public(session)
+```
+
+`Hawk.PhoenixAuth` is the phx.gen.auth-specific bridge. In Plug pipelines it can
+read an existing `current_scope` or a URL-safe Base64 Bearer session token,
+convert that scope to a Hawk authority, and assign both `:hawk_authority` and
+`:authority` for JSON:API controllers. In LiveView `on_mount`, use it after the
+generated `UserAuth` hook has assigned `current_scope`.
+
+`Hawk.Authority.Plug` / `Hawk.Authority.Session` are lower-level generic helpers
+for apps that are not using the phx.gen.auth scope shape. Missing authority falls
+back to readonly public access, not system access.
+
+## Adapters
+
+### JSON:API adapter
+
+New resources should keep JSON:API exposure in a sibling adapter module:
+
+```elixir
+defmodule MyApp.Courses.JsonApi do
+  use Hawk.JsonApi.Resource
+
+  type("courses")
+  doc("A course taught by a teacher.")
+
+  attribute(:title,
+    writable: true,
+    doc: "Human-readable course title.",
+    example: "Math"
+  )
+
+  attribute(:slug,
+    source: :public_slug,
+    creatable: true,
+    updatable: false
+  )
+
+  relationship(:teacher,
+    writable: true,
+    doc: "The teacher responsible for the course.",
+    example: %{type: "teachers", id: "..."}
+  )
+end
+```
+
+`writable: true` means both creatable and updatable. Use `creatable:` and
+`updatable:` when create/update capabilities differ. `source:` maps the external
+JSON:API name to the internal model/writer attr for both rendering and request
+payloads. Read-only relationships can expose normal Ecto associations, including
+`many_to_many` projections over internal join schemas. Writable relationships
+must be `belongs_to` associations because Hawk maps them to the owning foreign
+key passed into the writer. Mutating `has_many`, `has_one`, or `many_to_many`
+relationships should be modeled as explicit writer/action workflows.
+
 ### JSON:API controller
 
 When the controller points at a `Hawk.Resource` facade, Hawk infers the model from the resource:
@@ -617,6 +440,8 @@ hawk_json_api MyApp.Courses, MyAppWeb.CourseController,
 The macro validates that every emitted route points at an exported controller
 action, so capability drift fails while the router compiles.
 
+#### Errors
+
 Controller errors use canonical `%Hawk.Error{}` structs internally and render
 JSON:API documents at the adapter boundary:
 
@@ -633,20 +458,6 @@ source: :title)`) renders a validation error at `/data/attributes/name`, not the
 internal `/data/attributes/title`; a `belongs_to` foreign key renders at
 `/data/relationships/{external}`. `Hawk.JsonApi.Schema.external_pointer/2` owns
 that reverse mapping.
-
-Controller member routes validate path IDs as UUIDs before querying the reader.
-Create requests must include `data.type` matching the resource type. Update
-requests may omit `data.type` for small PATCH bodies, but when present it must
-match. Unknown writable attributes or relationships fail loudly instead of being
-silently ignored, and relationship identifiers must use the declared related
-resource type and a valid UUID id.
-
-Resource objects returned by `show/2` include resource and relationship links.
-Relationship endpoints return JSON:API relationship linkage or related resource
-documents, using the same reader policy and preload path as ordinary includes.
-To-one relationship linkage is read from the foreign key; to-many relationship
-linkage is preloaded through the related resource's reader so the returned
-identifiers reflect policy-visible related records.
 
 #### Short IDs
 
@@ -675,6 +486,8 @@ The range lookup is designed for PostgreSQL UUID primary keys: Hawk turns the
 `id::text LIKE 'prefix%'`, which is easier to write but can force scans or require
 a separate functional index.
 
+#### Query parameters
+
 Some requests support declared reader filters through JSON:API-style query params.
 Bare values become equality filters, and supported operators use one nested key:
 
@@ -690,75 +503,64 @@ resource type, including included resources:
 /api/v1/courses?include=teacher&fields[courses]=title,teacher&fields[teachers]=name
 ```
 
-### Telemetry
+### LiveView adapter
 
-Hawk does not emit its own controller telemetry. Generated JSON:API controllers
-run behind standard Phoenix endpoints, so request-level latency and status come
-from Phoenix's built-in `[:phoenix, :endpoint, :start/:stop]` and
-`[:phoenix, :router_dispatch, :start/:stop]` events. Attach `Telemetry.Metrics`
-to those the same way you would for any Phoenix controller.
-
-### OpenAPI controller
+LiveView exposure belongs in a sibling adapter too. Hawk handles data plumbing;
+your templates still own the markup.
 
 ```elixir
-defmodule MyAppWeb.OpenApiController do
-  use Hawk.OpenApi.Controller,
-    title: "My API",
-    version: "1.0.0",
-    path_prefix: "/api/v1",
-    resources: [MyApp.Courses, MyApp.Grades]
+defmodule MyApp.Courses.LiveView do
+  use Hawk.LiveView.Resource
+
+  as(:course)
+  plural_as(:courses)
+
+  index do
+    filter(:teacher_id)
+    search(:title, operator: :ilike)
+    sort(:id)
+    sort(:title)
+
+    table do
+      column(:title, label: "Course")
+      column(:registration_state)
+    end
+  end
+
+  show do
+    field(:title)
+    field(:registration_state, label: "State")
+  end
+
+  create_form do
+    field(:title, label: gettext("Course"))
+    field(:teacher_id, label: dgettext("courses", "Teacher"))
+  end
+
+  update_form do
+    field(:title, label: gettext("Course"))
+  end
 end
 ```
 
-Pass resource facades when available; model modules remain supported for older
-code. Facades with `json_api: false` are omitted because this OpenAPI generator
-documents the JSON:API surface only. This exposes `spec/0` and `show/2`. The specification is composed from Hawk
-resource declarations and the same `Hawk.JsonApi.Routes` route specs used for
-capability-aware routing: JSON:API adapter schemas, request bodies, error
-documents, sort parameters, pagination parameters, valid include paths, declared
-`/-actions/` operations, relationship routes, the optional `path_prefix`, and
-optional resource organization metadata.
-
-Custom actions automatically appear in the OpenAPI/Swagger spec as `POST`
-operations under paths such as `/api/v1/courses/{id}/-actions/open-registration`.
-Their request bodies are documented as JSON:API documents with a `meta` object,
-and successful responses use the normal resource schema.
-
-Add `tag/1` and `group/1` inside the JSON:API adapter to make Swagger UI
- easier to navigate:
+`use Hawk.LiveView, resource: MyApp.Courses` reads `as` and `plural_as` from
+the LiveView adapter when present, then falls back to model-based convention.
+Generated LiveView event handlers follow resource capabilities; for example,
+read-only resources with `writer: false` do not get the default `"hawk:delete"`
+handler. Show pages can load by natural keys when the reader declares the filter:
 
 ```elixir
-defmodule MyApp.Courses.JsonApi do
-  use Hawk.JsonApi.Resource
-
-  type("courses")
-  tag("Academics")
-  group("Courses")
-  doc("A course taught by a teacher at a school.")
-end
+socket = CourseLive.assign_show(socket, authority, short_id, lookup: :short_id)
 ```
 
-`tag/1` becomes the OpenAPI operation tag and top-level tag entry. `group/1` is
-emitted as `x-resource-group`; Hawk also emits `x-resource-type` so downstream
-clients and docs can keep related JSON:API resources together without guessing
-from path names.
-
-Relationship schemas are typed from the model association: a `belongs_to`/
-`has_one` relationship renders as a to-one `data` object whose `type` enum is
-the related resource's JSON:API type, and a `has_many`/`many_to_many`
-relationship renders as a `data` array of the same identifier shape. The target
-type is resolved from the association (or the related model's adapter by
-convention), so no per-relationship `:resource` opt is needed.
-
-Frontend teams can generate TypeScript from that OpenAPI contract with their
-preferred tooling, for example:
-
-```bash
-npx openapi-typescript http://localhost:4000/openapi.json -o src/api/types.ts
-```
-
-Hawk intentionally stays centered on the backend contract instead of owning a
-frontend generator or client runtime.
+LiveView index params are caller-provided narrowing/presentation only;
+pass them as `params: %{"filter" => ..., "search" => ..., "sort" => ..., "page" => ...}`
+to `assign_index/3`. Hawk accepts only filters/searches/sorts declared in the
+LiveView adapter and validated against the Reader. Search declarations can turn a
+text field into an `:ilike` filter, so `%{"search" => %{"title" => "histo"}}`
+becomes `%{title: {:ilike, "%histo%"}}`. Sort and search changes reset the page
+number to `1`; page changes keep the current query state. Policies remain the
+security boundary and are shared with JSON:API reads.
 
 ### LiveView helpers
 
@@ -862,6 +664,232 @@ Each resource still goes through its own reader and policy. The page helper just
 composes the reads and shared mutation events; it does not create a new bypass
 around Hawk's authorization model.
 
+When the resource writer exposes form changeset helpers, `use Hawk.LiveView`
+also generates keyed form helpers:
+
+```elixir
+socket = CourseLive.assign_new_form(socket, authority)
+socket = CourseLive.assign_edit_form(socket, course, authority)
+```
+
+These assign `:course_form` and `:course_form_fields` by default and track form
+state under `:hawk_form_states`. `create_form` fields are assigned for new forms;
+`update_form` fields are assigned for edit forms. Read-only/admin display forms can use
+`assign_read_form(socket, course)`; it assigns the update-form fields when present,
+falls back to show fields, and records `mode: :read` without generating save or
+validation behavior. Label metadata can use
+`gettext("...")` or `dgettext("domain", "...")` descriptors without translating
+at compile time. Hawk does not own UI translation; by default `hawk_field_label/1`
+returns the descriptor's message id or a humanized field name. Apps that want a
+shared resolver can opt in with a small label module:
+
+```elixir
+defmodule MyAppWeb.HawkLabels do
+  import MyAppWeb.Gettext
+
+  def field_label({:gettext, msgid}), do: gettext(msgid)
+  def field_label({:dgettext, domain, msgid}), do: dgettext(domain, msgid)
+end
+
+use Hawk.LiveView,
+  resource: MyApp.Courses,
+  label_resolver: MyAppWeb.HawkLabels
+```
+
+```heex
+<.input field={@course_form[field.name]} label={hawk_field_label(field)} />
+```
+
+For read/show surfaces, `hawk_field_value(model, field)` resolves `:source` and
+applies optional formatter functions, so templates can keep display projections
+near the LiveView adapter metadata.
+
+Hawk also generates `hawk_validate/2` and `hawk_save/2,3`.
+Default `handle_event("hawk:validate", ...)` and `handle_event("hawk:save", ...)`
+clauses call those helpers unless `events: false` is set. `hawk_validate/2`
+rebuilds a non-persisting validation changeset through `change_create/2` or
+`change_update/3`, then assigns a Phoenix `to_form(changeset, as: :course)` on a
+real `Phoenix.LiveView.Socket`. `hawk_save/2` uses the same state to call
+`create/2` or `update/3`; validation failures keep the keyed form assigned with
+`action: :insert` or `:update`, authorization failures assign `:hawk_error`, and
+successful saves assign the saved model under `:course`. Use `hawk_save/3` with
+`on_success: fn socket, course -> ... end` when the app needs post-save behavior
+such as navigation while still reusing Hawk's save plumbing. Form helpers
+build a `Phoenix.HTML.Form` through `to_form/2` on a real
+`Phoenix.LiveView.Socket`.
+
+Known server-side values can be forced into a form without trusting hidden client
+inputs:
+
+```elixir
+socket =
+  CourseLive.assign_new_form(socket, authority,
+    forced_attrs: %{teacher_id: current_teacher.id},
+    hidden: [:teacher_id]
+  )
+```
+
+`forced_attrs` are merged after client params during validation and save, so the
+server value wins even if the browser submits a different `teacher_id`. `hidden`
+removes fields from the assigned form-field metadata; the writer remains the
+final acceptance boundary.
+
+## OpenAPI
+
+```elixir
+defmodule MyAppWeb.OpenApiController do
+  use Hawk.OpenApi.Controller,
+    title: "My API",
+    version: "1.0.0",
+    path_prefix: "/api/v1",
+    resources: [MyApp.Courses, MyApp.Grades]
+end
+```
+
+Pass resource facades when available; model modules remain supported for older
+code. Facades with `json_api: false` are omitted because this OpenAPI generator
+documents the JSON:API surface only. This exposes `spec/0` and `show/2`. The specification is composed from Hawk
+resource declarations and the same `Hawk.JsonApi.Routes` route specs used for
+capability-aware routing: JSON:API adapter schemas, request bodies, error
+documents, sort parameters, pagination parameters, valid include paths, declared
+`/-actions/` operations, relationship routes, the optional `path_prefix`, and
+optional resource organization metadata.
+
+Custom actions automatically appear in the OpenAPI/Swagger spec as `POST`
+operations under paths such as `/api/v1/courses/{id}/-actions/open-registration`.
+Their request bodies are documented as JSON:API documents with a `meta` object,
+and successful responses use the normal resource schema.
+
+Add `tag/1` and `group/1` inside the JSON:API adapter to make Swagger UI
+ easier to navigate:
+
+```elixir
+defmodule MyApp.Courses.JsonApi do
+  use Hawk.JsonApi.Resource
+
+  type("courses")
+  tag("Academics")
+  group("Courses")
+  doc("A course taught by a teacher at a school.")
+end
+```
+
+`tag/1` becomes the OpenAPI operation tag and top-level tag entry. `group/1` is
+emitted as `x-resource-group`; Hawk also emits `x-resource-type` so downstream
+clients and docs can keep related JSON:API resources together without guessing
+from path names.
+
+Relationship schemas are typed from the model association: a `belongs_to`/
+`has_one` relationship renders as a to-one `data` object whose `type` enum is
+the related resource's JSON:API type, and a `has_many`/`many_to_many`
+relationship renders as a `data` array of the same identifier shape. The target
+type is resolved from the association (or the related model's adapter by
+convention), so no per-relationship `:resource` opt is needed.
+
+Frontend teams can generate TypeScript from that OpenAPI contract with their
+preferred tooling, for example:
+
+```bash
+npx openapi-typescript http://localhost:4000/openapi.json -o src/api/types.ts
+```
+
+Hawk intentionally stays centered on the backend contract instead of owning a
+frontend generator or client runtime.
+
+## Plans
+
+Plans are a human-in-the-loop execution mode over the existing JSON:API/Action
+resource surface. An external AI composes a *proposed* batch of resource
+operations for a specific problem, and a non-technical human reviews the rendered
+effects and approves it before it touches production data — with the whole batch
+executed atomically under the reviewer's authority, no AI in the loop at
+execution.
+
+The plan language is a sequence of resource-shaped operations (`:create`,
+`:update`, `:delete`, `:action`) that the AI composes against the resource
+spec (generated by `Hawk.Plans.Spec`, the resource-shaped equivalent of OpenAPI).
+The executor (`Hawk.Plans.run/3`) runs the batch in a single `Hawk.Multi`
+transaction under the reviewer's authority, all-or-nothing. The dry-run
+(`Hawk.Plans.preview/2`) executes in a transaction and rolls back, giving the
+human a full-fidelity effects preview.
+
+Hawk owns the plan *struct*, the *spec renderer*, and the *execution invariants*
+(`Hawk.Plan`, `Hawk.Plans.Spec`, `Hawk.Plans`, `Hawk.Multi`). The host app owns
+plan *storage* (its own `plans` table + migration) and *plan-lifecycle auth*
+(who can create/approve a plan — a product decision). This mirrors how Hawk
+treats the `Repo`: Hawk does not define the `plans` table; the app provides it.
+
+See [`docs/hawk-plans-design.md`](docs/hawk-plans-design.md) for the full design.
+
+```bash
+mix hawk.plans.spec -o tmp/plans.json   # generate the plan operation manifest
+```
+
+## Telemetry
+
+Hawk does not emit its own controller telemetry. Generated JSON:API controllers
+run behind standard Phoenix endpoints, so request-level latency and status come
+from Phoenix's built-in `[:phoenix, :endpoint, :start/:stop]` and
+`[:phoenix, :router_dispatch, :start/:stop]` events. Attach `Telemetry.Metrics`
+to those the same way you would for any Phoenix controller.
+
+## Generators and validation
+
+### Resource generator
+
+For a quick skeleton around an existing Ecto schema, use:
+
+```bash
+mix hawk.gen.resource MyApp.Courses MyApp.Course \
+  --repo MyApp.Repo \
+  --attributes title,code \
+  --relationships school,teacher \
+  --filters school_id,teacher_id \
+  --preloads school,teacher
+```
+
+This creates the facade, policy, reader, JSON:API adapter, LiveView adapter, and
+writer skeleton. Pass `--read-only` to generate `writer: false` and omit the
+writer. Pass `--web MyAppWeb` to also generate a Phoenix JSON:API controller,
+clickable LiveView index/show modules and templates, and a router snippet file
+beside the generated web files. The generated LiveViews use
+`Hawk.Authority.Session.authority_or_public/1`, so they work for public demos and
+can later pick up a session-backed authority. The generator is intentionally
+conservative: it gives you the standard Hawk shape, then you tighten policy,
+filters, labels, docs, and writer rules by hand.
+
+### Validation gate
+
+`use Hawk.Resource` validates at compile time, but a *missing* sibling emits a
+warning rather than raising, so a facade can compile before its siblings during
+incremental edits or code generation. A *present but malformed* sibling still
+fails fast — that is real contract drift, not a write-order artifact.
+
+`mix hawk.validate` is the authoritative, order-independent gate. It validates
+every discovered Hawk resource in strict mode (missing siblings raise) and runs
+the full `Hawk.ResourceContract` cross-checks. The `mix test` alias runs it
+first, so `mix test` is the complete local gate — contract validation plus the
+suite, same path CI takes:
+
+```bash
+mix test                          # mix hawk.validate + the test suite
+mix hawk.validate                # discover and validate all Hawk resources
+mix hawk.validate MyApp.Courses  # validate explicit resource(s)
+```
+
+`mix hawk.openapi` writes an OpenAPI spec from every discovered Hawk facade
+(`json_api: false` resources are omitted by `Hawk.OpenApi.spec/2`), so the spec
+stays in sync with the resources that actually exist — no hand-maintained list
+to drift:
+
+```bash
+mix hawk.openapi -o tmp/openapi.json --title "My API" --version 1.0.0 \
+  --path-prefix /api/v1
+mix hawk.openapi MyApp.Courses -o spec.json   # override discovery
+```
+
+## Testing
+
 ### Resource contract test
 
 ```elixir
@@ -951,6 +979,8 @@ Specific business-rule tests can call `generate_sample(index)` or
 cached per test process, so it also works when it creates real PostgreSQL data
 through fixtures or factories and several generated samples need to share those
 records.
+
+## Formatting
 
 Applications should import Hawk's formatter settings so the DSL stays tidy:
 
