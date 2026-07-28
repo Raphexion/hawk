@@ -16,6 +16,7 @@ defmodule Hawk.JsonApi.Resource do
           group: 1,
           relationship: 2,
           tag: 1,
+          tag: 2,
           type: 1
         ]
 
@@ -39,9 +40,13 @@ defmodule Hawk.JsonApi.Resource do
     end
   end
 
-  defmacro tag(tag) when is_binary(tag) do
+  defmacro tag(tag, opts \\ []) when is_binary(tag) and is_list(opts) do
     quote do
       @hawk_json_api_tag unquote(tag)
+
+      if desc = Keyword.get(unquote(opts), :description) do
+        @hawk_json_api_tag_description desc
+      end
     end
   end
 
@@ -72,6 +77,9 @@ defmodule Hawk.JsonApi.Resource do
 
     metadata = put_optional(metadata, :doc, Module.get_attribute(env.module, :hawk_json_api_doc))
     metadata = put_optional(metadata, :tag, Module.get_attribute(env.module, :hawk_json_api_tag))
+
+    metadata =
+      put_optional(metadata, :tag_description, Module.get_attribute(env.module, :hawk_json_api_tag_description))
 
     metadata =
       put_optional(metadata, :group, Module.get_attribute(env.module, :hawk_json_api_group))

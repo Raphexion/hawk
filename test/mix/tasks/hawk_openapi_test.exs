@@ -169,6 +169,31 @@ defmodule Mix.Tasks.Hawk.OpenapiTest do
     assert unused == [], "unused component schemas: #{inspect(unused)}"
   end
 
+  test "top-level tags carry a description when declared", %{tmp: tmp} do
+    output = Path.join(tmp, "openapi.json")
+
+    Mix.Tasks.Hawk.Openapi.run(["Videdal.Courses", "-o", output])
+
+    spec = Jason.decode!(File.read!(output))
+
+    academics = Enum.find(spec["tags"], &(&1["name"] == "Academics"))
+
+    assert academics["description"] ==
+             "Academic resources: courses, grades, and enrollments."
+  end
+
+  test "top-level tags omit description when none is declared", %{tmp: tmp} do
+    output = Path.join(tmp, "openapi.json")
+
+    Mix.Tasks.Hawk.Openapi.run(["Videdal.Grades", "-o", output])
+
+    spec = Jason.decode!(File.read!(output))
+
+    academics = Enum.find(spec["tags"], &(&1["name"] == "Academics"))
+
+    refute Map.has_key?(academics, "description")
+  end
+
   # Walk the spec and collect every #/components/schemas/<Name> reference so we
   # can assert that every declared component is actually used somewhere.
   defp referenced_schema_names(spec) do

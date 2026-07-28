@@ -43,10 +43,18 @@ defmodule Hawk.JsonApiResourceTest.EmptyJsonApi do
   use Hawk.JsonApi.Resource
 end
 
+defmodule Hawk.JsonApiResourceTest.DescribedTagJsonApi do
+  use Hawk.JsonApi.Resource
+
+  type("described-tags")
+  tag("Academics", description: "Academic resources.")
+end
+
 defmodule Hawk.JsonApiResourceTest do
   use ExUnit.Case, async: true
 
   alias Hawk.JsonApiResourceTest.CourseJsonApi
+  alias Hawk.JsonApiResourceTest.DescribedTagJsonApi
   alias Hawk.JsonApiResourceTest.EmptyJsonApi
 
   test "declares explicit JSON:API adapter metadata" do
@@ -92,5 +100,21 @@ defmodule Hawk.JsonApiResourceTest do
              creatable: [],
              updatable: []
            }
+  end
+
+  test "tag/2 stores the description as a separate metadata key" do
+    assert DescribedTagJsonApi.__hawk_json_api__() == %{
+             type: "described-tags",
+             tag: "Academics",
+             tag_description: "Academic resources.",
+             attributes: %{},
+             relationships: %{},
+             creatable: [],
+             updatable: []
+           }
+  end
+
+  test "tag/1 omits the description key" do
+    refute Map.has_key?(CourseJsonApi.__hawk_json_api__(), :tag_description)
   end
 end

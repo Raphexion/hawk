@@ -54,12 +54,32 @@ defmodule Hawk.OpenApi do
 
   defp tags(resources) do
     resources
-    |> Enum.map(& &1.json_api[:tag])
+    |> Enum.map(&tag_object(&1.json_api))
     |> Enum.reject(&is_nil/1)
-    |> Enum.uniq()
-    |> Enum.sort()
-    |> Enum.map(&%{name: &1})
+    |> dedupe_tags()
+    |> Enum.sort_by(& &1[:name])
+    |> Enum.map(&maybe_put_description/1)
   end
+
+  defp tag_object(json_api) do
+    case Map.get(json_api, :tag) do
+      nil -> nil
+      name -> %{name: name, description: Map.get(json_api, :tag_description)}
+    end
+  end
+
+  # Multiple resources can share a tag name. Collapse them to one entry per
+  # name, preferring an entry that carries a description over one without.
+  defp dedupe_tags(tags) do
+    tags
+    |> Enum.group_by(& &1[:name])
+    |> Enum.map(fn {_name, group} ->
+      Enum.find(group, &(&1[:description] != nil)) || hd(group)
+    end)
+  end
+
+  defp maybe_put_description(%{description: nil} = tag), do: Map.delete(tag, :description)
+  defp maybe_put_description(tag), do: tag
 
   defp paths(resources, path_prefix) do
     Enum.reduce(resources, %{}, fn resource, paths ->

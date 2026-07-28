@@ -777,7 +777,16 @@ end
 `tag/1` becomes the OpenAPI operation tag and top-level tag entry. `group/1` is
 emitted as `x-resource-group`; Hawk also emits `x-resource-type` so downstream
 clients and docs can keep related JSON:API resources together without guessing
-from path names.
+from path names. Pass `tag/2` with a `:description` to populate the top-level
+tag's description (Swagger UI shows it next to the group), which keeps the spec
+free of `tag-description` warnings:
+
+```elixir
+tag("Academics", description: "Academic resources: courses, grades, and enrollments.")
+```
+
+Multiple resources sharing a tag name collapse to one top-level tag entry;
+when any of them declares a description, that description wins.
 
 Relationship schemas are typed from the model association: a `belongs_to`/
 `has_one` relationship renders as a to-one `data` object whose `type` enum is

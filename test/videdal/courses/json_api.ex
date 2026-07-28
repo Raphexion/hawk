@@ -6,7 +6,7 @@ defmodule Videdal.Courses.JsonApi do
   use Hawk.JsonApi.Resource
 
   type("courses")
-  tag("Academics")
+  tag("Academics", description: "Academic resources: courses, grades, and enrollments.")
   group("Courses")
   doc("A course taught by a teacher at a school.")
 
