@@ -113,6 +113,7 @@ defmodule Hawk.OpenApi do
     resource
     |> operation_metadata()
     |> Map.merge(%{
+      operationId: "list#{pascalize(resource.json_api.type)}",
       summary: "List #{resource.json_api.type}",
       parameters: index_parameters(resource),
       responses: responses(resource, 200, array_schema(resource))
@@ -123,6 +124,7 @@ defmodule Hawk.OpenApi do
     resource
     |> operation_metadata()
     |> Map.merge(%{
+      operationId: "show#{pascalize(resource.json_api.type)}",
       summary: "Show #{resource_name(resource)}",
       parameters: [show_id_parameter()],
       responses: responses(resource, 200, data_schema(resource))
@@ -133,6 +135,7 @@ defmodule Hawk.OpenApi do
     resource
     |> operation_metadata()
     |> Map.merge(%{
+      operationId: "#{write_verb(capability)}#{pascalize(resource.json_api.type)}",
       summary: summary,
       parameters: Keyword.get(opts, :parameters, []),
       requestBody: request_body(resource, capability),
@@ -144,6 +147,7 @@ defmodule Hawk.OpenApi do
     resource
     |> operation_metadata()
     |> Map.merge(%{
+      operationId: "delete#{pascalize(resource.json_api.type)}",
       summary: "Delete #{resource_name(resource)}",
       parameters: [uuid_id_parameter()],
       responses: responses(resource, 204, nil)
@@ -154,6 +158,7 @@ defmodule Hawk.OpenApi do
     resource
     |> operation_metadata()
     |> Map.merge(%{
+      operationId: "show#{pascalize(resource.json_api.type)}Relationship",
       summary: "Show #{resource_name(resource)} relationship linkage",
       parameters: [uuid_id_parameter(), relationship_parameter(resource)],
       responses: responses(resource, 200, relationship_document_schema())
@@ -164,6 +169,7 @@ defmodule Hawk.OpenApi do
     resource
     |> operation_metadata()
     |> Map.merge(%{
+      operationId: "show#{pascalize(resource.json_api.type)}Related",
       summary: "Show #{resource_name(resource)} related resource",
       parameters: [uuid_id_parameter(), relationship_parameter(resource)],
       responses: responses(resource, 200, data_schema(resource))
@@ -174,6 +180,7 @@ defmodule Hawk.OpenApi do
     resource
     |> operation_metadata()
     |> Map.merge(%{
+      operationId: "run#{pascalize(resource.json_api.type)}#{pascalize(name)}",
       summary: "Run #{name} for #{resource_name(resource)}",
       description: metadata[:doc],
       parameters: [uuid_id_parameter()],
@@ -181,6 +188,19 @@ defmodule Hawk.OpenApi do
       responses: responses(resource, 200, data_schema(resource))
     })
   end
+
+  # Builds a PascalCase identifier from a kebab-case JSON:API type or action
+  # name (e.g. "course-rosters" -> "CourseRosters", "open-registration" ->
+  # "OpenRegistration"). Used for OpenAPI `operationId`s, which must be unique
+  # across the spec and are derived from the resource type plus the operation.
+  defp pascalize(name) do
+    name
+    |> String.split("-")
+    |> Enum.map_join(&String.capitalize/1)
+  end
+
+  defp write_verb(:creatable), do: "create"
+  defp write_verb(:updatable), do: "update"
 
   defp operation_metadata(resource) do
     %{}
