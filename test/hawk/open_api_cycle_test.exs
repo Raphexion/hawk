@@ -64,7 +64,7 @@ defmodule Hawk.OpenApiCycleTest do
   use ExUnit.Case, async: true
 
   test "OpenAPI include generation stops on self-referential reader cycles" do
-    spec = Hawk.OpenApi.spec([Hawk.OpenApiCycleTest.Nodes])
+    spec = Hawk.OpenApi.spec([Hawk.OpenApiCycleTest.Nodes], title: "Test API")
 
     include =
       spec.paths["/nodes"].get.parameters

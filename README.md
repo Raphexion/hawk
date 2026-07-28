@@ -894,8 +894,15 @@ to drift:
 ```bash
 mix hawk.openapi -o tmp/openapi.json --title "My API" --version 1.0.0 \
   --path-prefix /api/v1
-mix hawk.openapi MyApp.Courses -o spec.json   # override discovery
+mix hawk.openapi MyApp.Courses -o spec.json --title "My API"   # override discovery
+mix hawk.openapi -o spec.json --title "My API" --license "Apache-2.0" \
+  --license-url "https://www.apache.org/licenses/LICENSE-2.0"
 ```
+
+`--title` is required: Hawk is a library and does not name the host app's API.
+`info.license` is the host application's choice — Hawk does not pick a license
+for you. Pass `--license` (and optionally `--license-url`) to render it; omit
+both to leave `info.license` out of the spec.
 
 ## Testing
 

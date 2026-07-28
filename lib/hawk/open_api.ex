@@ -14,8 +14,12 @@ defmodule Hawk.OpenApi do
 
   ## Options
 
-    * `:title` — the info title (default `"Hawk API"`).
+    * `:title` (required) — the info title. The host app must name its API; Hawk
+      does not pick one. OpenAPI requires `info.title`.
     * `:version` — the info version (default `"1.0.0"`).
+    * `:license` — the `info.license` object. Accepts a string (rendered as
+      `%{name: string}`) or a `%{name: ..., url: ...}` map; omitted when not set.
+      Hawk is a library and does not choose a license for the host app.
     * `:servers` — the servers list (default `[%{url: "/"}]`).
     * `:security` — the top-level security list (default `[]`).
     * `:path_prefix` — a prefix applied to every path (default `""`).
@@ -23,12 +27,20 @@ defmodule Hawk.OpenApi do
   def spec(resources, opts \\ []) when is_list(resources) do
     resources = resources |> Enum.map(&normalize_resource/1) |> Enum.reject(&is_nil/1)
 
+    title =
+      Keyword.get(opts, :title) ||
+        raise ArgumentError, "Hawk.OpenApi.spec/2 requires :title — the host app must name its API"
+
+    info =
+      %{
+        title: title,
+        version: Keyword.get(opts, :version, "1.0.0")
+      }
+      |> maybe_put_license(Keyword.get(opts, :license))
+
     %{
       openapi: "3.1.0",
-      info: %{
-        title: Keyword.get(opts, :title, "Hawk API"),
-        version: Keyword.get(opts, :version, "1.0.0")
-      },
+      info: info,
       servers: Keyword.get(opts, :servers, [%{url: "/"}]),
       security: Keyword.get(opts, :security, []),
       tags: tags(resources),
@@ -38,6 +50,12 @@ defmodule Hawk.OpenApi do
       }
     }
   end
+
+  # `info.license` is the host app's choice, not Hawk's. Accept a name string
+  # (rendered as `%{name: ...}`) or a full `%{name: ..., url: ...}` map.
+  defp maybe_put_license(info, nil), do: info
+  defp maybe_put_license(info, license) when is_binary(license), do: Map.put(info, :license, %{name: license})
+  defp maybe_put_license(info, %{name: _} = license), do: Map.put(info, :license, license)
 
   defp normalize_resource(module) when is_atom(module) do
     Code.ensure_compiled(module)

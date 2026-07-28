@@ -45,7 +45,7 @@ defmodule Mix.Tasks.Hawk.OpenapiTest do
   test "explicit resources override discovery", %{tmp: tmp} do
     output = Path.join(tmp, "openapi.json")
 
-    Mix.Tasks.Hawk.Openapi.run(["Videdal.Courses", "-o", output])
+    Mix.Tasks.Hawk.Openapi.run(["Videdal.Courses", "-o", output, "--title", "Test API"])
 
     spec = Jason.decode!(File.read!(output))
 
@@ -60,6 +60,12 @@ defmodule Mix.Tasks.Hawk.OpenapiTest do
   test "requires --output", _ctx do
     assert_raise ArgumentError, ~r/requires --output/, fn ->
       Mix.Tasks.Hawk.Openapi.run(["--title", "x"])
+    end
+  end
+
+  test "requires --title", _ctx do
+    assert_raise ArgumentError, ~r/requires --title/, fn ->
+      Mix.Tasks.Hawk.Openapi.run(["-o", "ignored.json"])
     end
   end
 
@@ -88,7 +94,7 @@ defmodule Mix.Tasks.Hawk.OpenapiTest do
   test "standard operations follow the list/show/create/update/delete convention", %{tmp: tmp} do
     output = Path.join(tmp, "openapi.json")
 
-    Mix.Tasks.Hawk.Openapi.run(["Videdal.Schools", "-o", output])
+    Mix.Tasks.Hawk.Openapi.run(["Videdal.Schools", "-o", output, "--title", "Test API"])
 
     spec = Jason.decode!(File.read!(output))
 
@@ -102,7 +108,7 @@ defmodule Mix.Tasks.Hawk.OpenapiTest do
   test "relationship and related operations are distinguished in the operationId", %{tmp: tmp} do
     output = Path.join(tmp, "openapi.json")
 
-    Mix.Tasks.Hawk.Openapi.run(["Videdal.Courses", "-o", output])
+    Mix.Tasks.Hawk.Openapi.run(["Videdal.Courses", "-o", output, "--title", "Test API"])
 
     spec = Jason.decode!(File.read!(output))
 
@@ -115,7 +121,7 @@ defmodule Mix.Tasks.Hawk.OpenapiTest do
   test "action operations get a per-action operationId", %{tmp: tmp} do
     output = Path.join(tmp, "openapi.json")
 
-    Mix.Tasks.Hawk.Openapi.run(["Videdal.Courses", "-o", output])
+    Mix.Tasks.Hawk.Openapi.run(["Videdal.Courses", "-o", output, "--title", "Test API"])
 
     spec = Jason.decode!(File.read!(output))
 
@@ -128,7 +134,7 @@ defmodule Mix.Tasks.Hawk.OpenapiTest do
   test "to-one relationship examples are nested under data", %{tmp: tmp} do
     output = Path.join(tmp, "openapi.json")
 
-    Mix.Tasks.Hawk.Openapi.run(["Videdal.Courses", "-o", output])
+    Mix.Tasks.Hawk.Openapi.run(["Videdal.Courses", "-o", output, "--title", "Test API"])
 
     spec = Jason.decode!(File.read!(output))
 
@@ -143,7 +149,7 @@ defmodule Mix.Tasks.Hawk.OpenapiTest do
   test "to-many relationship examples are nested under data", %{tmp: tmp} do
     output = Path.join(tmp, "openapi.json")
 
-    Mix.Tasks.Hawk.Openapi.run(["Videdal.Courses", "-o", output])
+    Mix.Tasks.Hawk.Openapi.run(["Videdal.Courses", "-o", output, "--title", "Test API"])
 
     spec = Jason.decode!(File.read!(output))
 
@@ -172,7 +178,7 @@ defmodule Mix.Tasks.Hawk.OpenapiTest do
   test "top-level tags carry a description when declared", %{tmp: tmp} do
     output = Path.join(tmp, "openapi.json")
 
-    Mix.Tasks.Hawk.Openapi.run(["Videdal.Courses", "-o", output])
+    Mix.Tasks.Hawk.Openapi.run(["Videdal.Courses", "-o", output, "--title", "Test API"])
 
     spec = Jason.decode!(File.read!(output))
 
@@ -185,13 +191,54 @@ defmodule Mix.Tasks.Hawk.OpenapiTest do
   test "top-level tags omit description when none is declared", %{tmp: tmp} do
     output = Path.join(tmp, "openapi.json")
 
-    Mix.Tasks.Hawk.Openapi.run(["Videdal.Grades", "-o", output])
+    Mix.Tasks.Hawk.Openapi.run(["Videdal.Grades", "-o", output, "--title", "Test API"])
 
     spec = Jason.decode!(File.read!(output))
 
     academics = Enum.find(spec["tags"], &(&1["name"] == "Academics"))
 
     refute Map.has_key?(academics, "description")
+  end
+
+  test "info.license is omitted by default", %{tmp: tmp} do
+    output = Path.join(tmp, "openapi.json")
+
+    Mix.Tasks.Hawk.Openapi.run(["Videdal.Schools", "-o", output, "--title", "Test API"])
+
+    spec = Jason.decode!(File.read!(output))
+
+    refute Map.has_key?(spec["info"], "license")
+  end
+
+  test "--license renders info.license from a name string", %{tmp: tmp} do
+    output = Path.join(tmp, "openapi.json")
+
+    Mix.Tasks.Hawk.Openapi.run([
+      "Videdal.Schools",
+      "-o", output,
+      "--title", "Test API",
+      "--license", "MIT"
+    ])
+
+    spec = Jason.decode!(File.read!(output))
+
+    assert spec["info"]["license"] == %{"name" => "MIT"}
+  end
+
+  test "--license-url adds a url to info.license", %{tmp: tmp} do
+    output = Path.join(tmp, "openapi.json")
+
+    Mix.Tasks.Hawk.Openapi.run([
+      "Videdal.Schools",
+      "-o", output,
+      "--title", "Test API",
+      "--license", "Apache-2.0",
+      "--license-url", "https://www.apache.org/licenses/LICENSE-2.0"
+    ])
+
+    spec = Jason.decode!(File.read!(output))
+
+    assert spec["info"]["license"] == %{"name" => "Apache-2.0", "url" => "https://www.apache.org/licenses/LICENSE-2.0"}
   end
 
   # Walk the spec and collect every #/components/schemas/<Name> reference so we

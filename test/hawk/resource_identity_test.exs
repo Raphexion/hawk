@@ -71,7 +71,7 @@ defmodule Hawk.ResourceIdentityTest do
   end
 
   test "OpenAPI renders the identity-keyed resource without assuming :id" do
-    spec = Hawk.OpenApi.spec([Videdal.CourseRosters])
+    spec = Hawk.OpenApi.spec([Videdal.CourseRosters], title: "Test API")
 
     assert Map.has_key?(spec.paths, "/course-rosters")
     assert Map.has_key?(spec.components.schemas, :CourseRosterResource)

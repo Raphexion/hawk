@@ -2,7 +2,7 @@ defmodule Hawk.OpenApiResourceAdapterTest do
   use ExUnit.Case, async: true
 
   test "OpenAPI accepts resource facades and documents adapter JSON:API contract" do
-    spec = Hawk.OpenApi.spec([Videdal.ExternalCourses])
+    spec = Hawk.OpenApi.spec([Videdal.ExternalCourses], title: "Test API")
 
     assert Map.has_key?(spec.paths, "/courses")
     refute Map.has_key?(spec.paths, "/internal_courses")
@@ -33,7 +33,7 @@ defmodule Hawk.OpenApiResourceAdapterTest do
   end
 
   test "write schemas use adapter names, source types, and capability metadata" do
-    spec = Hawk.OpenApi.spec([Videdal.ExternalCourses])
+    spec = Hawk.OpenApi.spec([Videdal.ExternalCourses], title: "Test API")
 
     create_schema =
       spec.paths["/courses"].post.requestBody.content["application/vnd.api+json"].schema
@@ -68,7 +68,7 @@ defmodule Hawk.OpenApiResourceAdapterTest do
   end
 
   test "include and sort parameters expose adapter names where applicable" do
-    spec = Hawk.OpenApi.spec([Videdal.ExternalCourses])
+    spec = Hawk.OpenApi.spec([Videdal.ExternalCourses], title: "Test API")
     parameters = spec.paths["/courses"].get.parameters
 
     assert %{
@@ -85,7 +85,7 @@ defmodule Hawk.OpenApiResourceAdapterTest do
   end
 
   test "OpenAPI omits resources with json_api disabled" do
-    spec = Hawk.OpenApi.spec([Videdal.ExternalCourses, Videdal.InternalNotes])
+    spec = Hawk.OpenApi.spec([Videdal.ExternalCourses, Videdal.InternalNotes], title: "Test API")
 
     assert Map.has_key?(spec.paths, "/courses")
     refute Map.has_key?(spec.paths, "/internal_notes")
@@ -94,7 +94,7 @@ defmodule Hawk.OpenApiResourceAdapterTest do
   end
 
   test "OpenAPI exposes write routes and omits action routes when actions are absent" do
-    spec = Hawk.OpenApi.spec([Videdal.CourseCatalog])
+    spec = Hawk.OpenApi.spec([Videdal.CourseCatalog], title: "Test API")
 
     assert spec.paths["/course-catalog"].get
     assert Map.has_key?(spec.paths["/course-catalog"], :post)
@@ -109,7 +109,7 @@ defmodule Hawk.OpenApiResourceAdapterTest do
   end
 
   test "show id parameter documents short ids; mutations/actions/relationships require full UUIDs" do
-    spec = Hawk.OpenApi.spec([Videdal.Courses])
+    spec = Hawk.OpenApi.spec([Videdal.Courses], title: "Test API")
 
     show_param = hd(spec.paths["/courses/{id}"].get.parameters)
     assert show_param.name == "id"
@@ -130,6 +130,12 @@ defmodule Hawk.OpenApiResourceAdapterTest do
       assert id_param.schema == %{type: "string", format: "uuid"},
              "expected #{method} #{path} id parameter to require a full UUID"
       refute Map.has_key?(id_param, :description)
+    end
+  end
+
+  test "spec/2 requires :title" do
+    assert_raise ArgumentError, ~r/requires :title/, fn ->
+      Hawk.OpenApi.spec([Videdal.ExternalCourses])
     end
   end
 end

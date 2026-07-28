@@ -7,7 +7,7 @@ defmodule Hawk.OpenApiActionsTest do
   # reader-less test fixture.
 
   test "OpenAPI resolves to-one relationships to typed resource identifier schemas" do
-    spec = Hawk.OpenApi.spec([Videdal.Courses])
+    spec = Hawk.OpenApi.spec([Videdal.Courses], title: "Test API")
     course = Map.fetch!(spec.components.schemas, :CourseResource)
     teacher = course.properties.relationships.properties.teacher
 
@@ -24,7 +24,7 @@ defmodule Hawk.OpenApiActionsTest do
   end
 
   test "OpenAPI resolves to-many relationships to typed array schemas" do
-    spec = Hawk.OpenApi.spec([Videdal.Courses])
+    spec = Hawk.OpenApi.spec([Videdal.Courses], title: "Test API")
     course = Map.fetch!(spec.components.schemas, :CourseResource)
     grades = course.properties.relationships.properties.grades
 
@@ -43,7 +43,7 @@ defmodule Hawk.OpenApiActionsTest do
   end
 
   test "OpenAPI action schemas map Hawk action param types to JSON schema types" do
-    spec = Hawk.OpenApi.spec([Videdal.Courses])
+    spec = Hawk.OpenApi.spec([Videdal.Courses], title: "Test API")
 
     action = spec.paths["/courses/{id}/-actions/open-registration"].post
     meta = action.requestBody.content["application/vnd.api+json"].schema.properties.meta
