@@ -1,11 +1,5 @@
 defmodule Hawk.Reader.Preloader do
-  @moduledoc """
-  Applies explicitly allowed reader preloads after fetching rows.
-
-  This is intentionally small: Hawk validates the requested top-level preload
-  keys, then delegates batching to the host repo's `preload/2`. Resource modules
-  own which associations are exposed as reader preloads.
-  """
+  @moduledoc false
   import Ecto.Query
 
   @type preload :: atom() | {atom(), [preload()]}
@@ -74,6 +68,7 @@ defmodule Hawk.Reader.Preloader do
   end
 
   @spec validate_preloads!([preload()], Enumerable.t(), module(), map()) :: :ok
+  @doc false
   def validate_preloads!(requested, allowed_keys, root_schema, readers) when is_list(requested) do
     validate_preloads!(requested, allowed_keys)
 

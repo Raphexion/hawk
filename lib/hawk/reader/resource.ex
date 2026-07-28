@@ -1,13 +1,84 @@
 defmodule Hawk.Reader.Resource do
   @moduledoc """
-  Declarative reader DSL for Hawk resources.
+  The declarative reader DSL for a Hawk resource: filters, sorts, preloads, and
+  custom join rules.
 
-  The DSL stores resource-owned reader declarations and generates the standard
-  public reader API by delegating execution to `Hawk.Reader`.
+  A reader owns the query surface of a resource — which columns a caller can
+  filter or sort on, which associations can be preloaded, and how scoped reads
+  compile into Ecto queries. It is the security-relevant surface: every filter
+  narrows what a caller can see, so filters are declared deliberately, one line
+  at a time, as the UI requires them.
+
+  The DSL stores resource-owned declarations and generates the standard public
+  reader API (`one/1`, `all/1`, `preload_query/2`, and metadata functions) by
+  delegating execution to `Hawk.Reader`.
+
+  ## Options
+
+    * `:repo` (required) — the `Ecto.Repo` to query through.
+    * `:schema` (required) — the `Hawk.Model` / `Ecto.Schema` to read.
+    * `:policy` — the policy module (default: the conventional sibling
+      `<Resource>.Policy`).
+    * `:forced_filter` — a filter map always merged into every query (default
+      `:all`, i.e. none). Use to globally narrow a reader.
+    * `:default_sort` — `{dir, key}` or a list (default `[asc: :id]`).
+    * `:max_page_size` — cap on requested page size (default `100`).
+    * `:default_page_size` — page size when none requested (default
+      `max_page_size`).
+
+  ## DSL
+
+    * `filter/1` — declare a filterable column (compiled by
+      `Hawk.Reader.FilterCompiler`).
+    * `filter/2` — declare a filter with a custom handler block.
+    * `sort/1` — declare a sortable column.
+    * `preload/1` — declare a preloadable association (resolved through the
+      associated resource's reader and policy).
+    * `preload/2` — declare a preload pointing at a specific reader module.
+    * `attach/3` — declare a custom join rule used when filtering/sorting
+      across an association.
+
+  ## Example
+
+      defmodule MyApp.Courses.Reader do
+        use Hawk.Reader.Resource,
+          repo: MyApp.Repo,
+          schema: MyApp.Course,
+          default_page_size: 100,
+          max_page_size: 100
+
+        filter(:id)
+        filter(:school_id)
+        filter(:teacher_id)
+        sort(:id)
+        sort(:title)
+        preload(:teacher)
+        preload(:grades)
+      end
+
+  ## Generated functions
+
+    * `one/1`, `all/1` — read a member or collection, scoped by policy.
+    * `preload_query/2` — an authorized preload query for an association.
+    * `filter_keys/0`, `sort_keys/0`, `preload_keys/0`, `preload_readers/0`,
+      `filter_handlers/0`, `join_plan/0` — the declared metadata.
+    * `read_filter/1` — delegates to the policy.
+    * `repo/0` — the configured repo.
+
+  Nested includes (`include=grades.student`) become nested Ecto preloads where
+  every layer uses that resource's own reader and policy — opening `courses`
+  does not accidentally open `grades` or `students`.
+
+  ## See also
+
+    * `Hawk.Reader` — the execution engine.
+    * `Hawk.Reader.FilterCompiler` — how `filter/1` compiles to Ecto.
+    * `Hawk.Policy` — the read policy that scopes queries.
   """
 
   @required_options [:repo, :schema]
 
+  @doc false
   defmacro __using__(opts) do
     validate_options!(opts)
 
@@ -44,12 +115,22 @@ defmodule Hawk.Reader.Resource do
     end
   end
 
+  @doc """
+  Declares a filterable column. Compiled by `Hawk.Reader.FilterCompiler` into
+  an Ecto `where` clause keyed on the external filter name.
+  """
   defmacro filter(key) when is_atom(key) do
     quote do
       @hawk_reader_filter_keys unquote(key)
     end
   end
 
+  @doc """
+  Declares a filterable column with a custom handler block.
+
+  The block must evaluate to a function of one argument (the supplied filter
+  value) returning an Ecto query fragment or keyword filter.
+  """
   defmacro filter(key, do: block) when is_atom(key) do
     handler_name = :"__hawk_filter_#{key}__"
 
@@ -64,18 +145,33 @@ defmodule Hawk.Reader.Resource do
     end
   end
 
+  @doc """
+  Declares a sortable column. Both `key` and `-key` are accepted by callers.
+  """
   defmacro sort(key) when is_atom(key) do
     quote do
       @hawk_reader_sort_keys unquote(key)
     end
   end
 
+  @doc """
+  Declares a preloadable association. The association is loaded through the
+  associated resource's own reader and policy (see `Hawk.Reader.Resource`).
+  """
   defmacro preload(key) when is_atom(key) do
     quote do
       @hawk_reader_preload_keys unquote(key)
     end
   end
 
+  @doc """
+  Declares a preloadable association resolved through a specific reader module,
+  overriding the convention-based discovery.
+
+  ## Options
+
+    * `:reader` — the reader module to preload through.
+  """
   defmacro preload(key, opts) when is_atom(key) and is_list(opts) do
     reader = opts |> Keyword.get(:reader) |> Macro.expand(__CALLER__)
     validate_preload_reader!(key, reader)
@@ -86,6 +182,17 @@ defmodule Hawk.Reader.Resource do
     end
   end
 
+  @doc """
+  Declares a custom join rule used when filtering or sorting across an
+  association that needs an explicit join.
+
+  ## Options
+
+    * `:when_filter` — keys that trigger this join.
+    * `:when_sort` — sort keys that trigger this join.
+
+  The block receives the query variable and must return an Ecto query.
+  """
   defmacro attach(name, opts, do: block) when is_atom(name) and is_list(opts) do
     handler_name = :"__hawk_join_#{name}__"
     when_filter = Keyword.get(opts, :when_filter, [])

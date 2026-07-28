@@ -1,23 +1,81 @@
 defmodule Hawk.Model do
   @moduledoc """
-  Thin schema DSL for Hawk-owned models.
+  Schema DSL for Hawk-owned models: a thin wrapper over `Ecto.Schema` that adds
+  association resource metadata and an optional non-`id` identity.
 
-  `Hawk.Model` keeps Ecto as the persistence layer, but lets a model declare
-  association resource metadata at the association site. Hawk readers can then
-  preload through the associated resource reader instead of duplicating preload
-  query logic in policies.
+  `Hawk.Model` keeps Ecto as the persistence layer. It does not own the external
+  JSON:API shape — that lives in the sibling adapter (`MyApp.Courses.JsonApi`).
+  What it adds on top of `Ecto.Schema`:
 
-  The external JSON:API shape of a resource lives in its sibling adapter
-  (`MyApp.Courses.JsonApi`), not on the model. `Hawk.Model` only generates the
-  resource convention (`__hawk_resource__/0`) and association metadata used by
-  `Hawk.JsonApi.Schema` to discover the adapter.
+    * a `model/2` (and `model/3`) macro replacing `schema/2`, so Hawk can inject
+      its default primary key and foreign-key type;
+    * association resource metadata (`:policy`, `:reader`, `:resource` opts on
+      `belongs_to`/`has_many`/`many_to_many`) declared at the association site,
+      so readers preload through the *associated resource's reader* instead of
+      duplicating preload query logic in policies; and
+    * the `__hawk_resource__/0` convention function used by
+      `Hawk.JsonApi.Schema` to discover the adapter.
 
-  Association resource metadata (`:policy`, `:reader`, `:resource` opts on
-  `belongs_to`/`has_many`/`many_to_many`) is declared at the association site
-  so Hawk readers preload through the associated resource reader instead of
-  duplicating preload query logic in policies. When no override is given, the
-  resource module is inferred by `Hawk.Resource.Convention` from the schema
-  name.
+  ## Primary key and identity
+
+  By default every `Hawk.Model` gets a surrogate `:id` binary primary key with
+  `autogenerate: true` and `@foreign_key_type :binary_id`. Two escapes:
+
+    * `primary_key: false` on `model/3` drops the surrogate primary key
+      entirely, for view-backed projections with no `:id` column.
+    * A non-`id` identity is declared on the *facade* (`use Hawk.Resource,
+      identity: :course_id`), not here — the model just needs the field to
+      exist. See "ID-less and view-backed resources" in the README.
+
+  ## Association resource metadata
+
+  `belongs_to`/`has_many`/`many_to_many` accept `:policy`, `:reader`, and
+  `:resource` opts. When omitted, the resource module is inferred by
+  `Hawk.Resource.Convention` from the associated schema name (e.g.
+  `MyApp.Course` → `MyApp.Courses`). Declaring them explicitly is how you point
+  an association at a resource whose name does not follow the convention, or
+  whose reader should be used for preloads.
+
+  ## Example
+
+      defmodule MyApp.Course do
+        use Hawk.Model
+
+        model "courses" do
+          field(:title, :string)
+
+          belongs_to(:school, MyApp.School)
+          belongs_to(:teacher, MyApp.Teacher,
+            reader: MyApp.Teachers.Reader,
+            policy: MyApp.Teachers.Policy
+          )
+          has_many(:grades, MyApp.Grade, resource: MyApp.Grades)
+        end
+      end
+
+  A view-backed projection with no surrogate key:
+
+      defmodule MyApp.CourseGradeSummary do
+        use Hawk.Model
+
+        model "course_grade_summaries", primary_key: false do
+          field(:course_id, :binary_id)
+          field(:grade_count, :integer)
+        end
+      end
+
+  ## Generated functions
+
+    * `__hawk_resource__/0` — the resource module inferred for this schema, used
+      for adapter discovery.
+    * `__hawk_association_policy__/1` and `__hawk_association_reader__/1` —
+      `{:ok, module}` / `:error` lookups of the per-association policy and
+      reader declared with the `:policy` / `:reader` opts.
+
+  ## See also
+
+    * `Hawk.Resource` — the facade that consumes a model.
+    * `Hawk.Resource.Convention` — schema-name → resource-module inference.
   """
 
   alias Hawk.Resource.Convention
@@ -34,10 +92,31 @@ defmodule Hawk.Model do
     end
   end
 
+  @doc """
+  Declares the schema source and block, with Hawk's default primary key.
+
+  Equivalent to `model/3` with no options.
+  """
   defmacro model(source, do: block) do
     do_model(source, [], block, __CALLER__)
   end
 
+  @doc """
+  Declares the schema source with options, then the field/association block.
+
+  ## Options
+
+    * `:primary_key` (default `true`) — when `false`, no surrogate `:id`
+      primary key is generated. Use for view-backed projections; pair with a
+      declared `identity:` on the facade for the JSON:API `id`.
+
+  ## Example
+
+      model "course_grade_summaries", primary_key: false do
+        field(:course_id, :binary_id)
+        field(:grade_count, :integer)
+      end
+  """
   defmacro model(source, opts, do: block) do
     do_model(source, opts, block, __CALLER__)
   end

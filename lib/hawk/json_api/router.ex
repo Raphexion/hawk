@@ -2,13 +2,35 @@ defmodule Hawk.JsonApi.Router do
   @moduledoc """
   Router macro adapter for Hawk JSON:API resource route specs.
 
-  The macro emits ordinary router DSL calls (`get/3`, `post/3`, `patch/3`,
-  `delete/3`) from `Hawk.JsonApi.Routes`. Phoenix routers can use those calls,
-  and tests can exercise the same behavior with a tiny fake router DSL.
+  `import Hawk.JsonApi.Router` inside a Phoenix router and call
+  `hawk_json_api/3` to emit ordinary router DSL calls (`get/3`, `post/3`,
+  `patch/3`, `delete/3`) from `Hawk.JsonApi.Routes`. Routes are capability-aware:
+  only actions the resource supports are emitted.
+
+  ## Example
+
+      defmodule MyAppWeb.Router do
+        use MyAppWeb, :router
+        import Hawk.JsonApi.Router
+
+        scope "/api/v1", MyAppWeb do
+          hawk_json_api(Videdal.Courses, CoursesController)
+        end
+      end
+
+  The controller must define a clause for each action the resource exposes
+  (e.g. `index/2`, `show/2`); otherwise this macro raises at compile time.
   """
 
   alias Hawk.JsonApi.Routes
 
+  @doc """
+  Emits Phoenix router calls for every route in the resource's spec.
+
+  ## Options
+
+    * `:path_prefix` — passed through to `Hawk.JsonApi.Routes.routes/2`.
+  """
   defmacro hawk_json_api(resource, controller, opts \\ []) do
     env = __CALLER__
     resource = Macro.expand(resource, env)

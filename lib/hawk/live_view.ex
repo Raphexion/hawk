@@ -9,6 +9,21 @@ defmodule Hawk.LiveView do
   alias Hawk.LiveView
   alias Hawk.LiveView.IndexState
 
+  @doc """
+  Generates LiveView helpers for a Hawk resource.
+
+  Emits assign helpers (`assign_index/3`, `assign_show/4`, `assign_read_form/3`,
+  form helpers), field label/value helpers, and event handlers, all backed by
+  the resource's reader/writer and the LiveView adapter metadata. Templates
+  call these to render index/show/form screens.
+
+  ## Options
+
+    * `:resource` (required) — the `Hawk.Resource` facade.
+    * `:as` / `:plural_as` — assign names (default: inferred from the resource).
+    * `:events` — whether to generate event handlers (default `true`).
+    * `:label_resolver` — a module providing `field_label/2` for translation.
+  """
   defmacro __using__(opts) do
     env = __CALLER__
     resource = Keyword.fetch!(opts, :resource) |> Macro.expand(env)
@@ -196,10 +211,12 @@ defmodule Hawk.LiveView do
     |> String.to_atom()
   end
 
+  @doc false
   def assign_index(socket, resource, as, plural_as, authority, opts \\ []) do
     assign_index(socket, resource, as, plural_as, authority, opts, %{})
   end
 
+  @doc false
   def assign_index(socket, resource, as, plural_as, authority, opts, live_view) do
     state = IndexState.normalize(Keyword.get(opts, :params, %{}), live_view)
 
@@ -222,10 +239,12 @@ defmodule Hawk.LiveView do
     |> assign(plural_as, results)
   end
 
+  @doc false
   def assign_show(socket, resource, as, authority, id, opts \\ []) do
     assign_show(socket, resource, as, authority, id, opts, %{})
   end
 
+  @doc false
   def assign_show(socket, resource, as, authority, id, opts, live_view) do
     identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
     lookup = Keyword.get(opts, :lookup, identity)
@@ -250,6 +269,7 @@ defmodule Hawk.LiveView do
     end
   end
 
+  @doc false
   def assign_read_form(socket, as, model, opts \\ [], live_view \\ %{}) do
     fields = live_view |> form_fields(:update_form, Keyword.get(opts, :hidden, [])) |> fallback_read_fields(live_view)
 
@@ -259,10 +279,12 @@ defmodule Hawk.LiveView do
     |> assign(form_fields_assign(as), fields)
   end
 
+  @doc false
   def assign_new_form(socket, resource, as, authority, attrs \\ %{}) do
     assign_new_form(socket, resource, as, authority, attrs, %{})
   end
 
+  @doc false
   def assign_new_form(socket, resource, as, authority, opts, live_view) do
     opts = normalize_form_options(opts)
     attrs = merge_forced_attrs(opts.attrs, opts.forced_attrs)
@@ -274,10 +296,12 @@ defmodule Hawk.LiveView do
     |> assign(form_fields_assign(as), form_fields(live_view, :create_form, opts.hidden))
   end
 
+  @doc false
   def assign_edit_form(socket, resource, as, model, authority, attrs \\ %{}) do
     assign_edit_form(socket, resource, as, model, authority, attrs, %{})
   end
 
+  @doc false
   def assign_edit_form(socket, resource, as, model, authority, opts, live_view) do
     opts = normalize_form_options(opts)
     attrs = merge_forced_attrs(opts.attrs, opts.forced_attrs)
@@ -294,6 +318,7 @@ defmodule Hawk.LiveView do
     |> assign(form_fields_assign(as), form_fields(live_view, :update_form, opts.hidden))
   end
 
+  @doc false
   def handle_validate(socket, resource, as, params) do
     form_params = Map.get(params, to_string(as), %{})
     state = socket.assigns.hawk_form_states[as]
@@ -308,6 +333,7 @@ defmodule Hawk.LiveView do
     {:noreply, assign(socket, form_assign(as), form_value(socket, changeset, as))}
   end
 
+  @doc false
   def handle_save(socket, resource, as, params, opts \\ []) do
     form_params = Map.get(params, to_string(as), %{})
     state = socket.assigns.hawk_form_states[as]
@@ -368,10 +394,12 @@ defmodule Hawk.LiveView do
     |> assign(form_assign(as), form_value(socket, changeset, as))
   end
 
+  @doc false
   def handle_delete(socket, resource, as, plural_as, params) do
     handle_delete(socket, resource, as, plural_as, params, %{})
   end
 
+  @doc false
   def handle_delete(
         socket,
         resource,
@@ -411,12 +439,14 @@ defmodule Hawk.LiveView do
     Keyword.update(opts, :page, page, &Map.merge(&1, page))
   end
 
+  @doc false
   def field_label(field, opts \\ []) do
     field
     |> Map.get(:label, {:humanize, Map.fetch!(field, :name)})
     |> resolve_label(Keyword.get(opts, :label_resolver))
   end
 
+  @doc false
   def field_value(model, field) when is_map(field) do
     source = Map.get(field, :source, Map.fetch!(field, :name))
     value = Map.get(model, source)

@@ -45,24 +45,45 @@ defmodule Hawk.JsonApiControllerCase do
   alias Hawk.Authority
   alias Hawk.MutationContext
 
+  @doc """
+  Declares the named `Hawk.Authority` values the generated matrix exercises.
+
+  `:public` is always included automatically. The block receives the
+  `pre_authorities/0` result and must return a map of `%{name => authority}`.
+  """
   defmacro authorities(pre_authorities, do: block) do
     quote do
       def __hawk_authorities__(unquote(pre_authorities)), do: unquote(block)
     end
   end
 
+  @doc """
+  Declares shared context built once per test process (e.g. parent records),
+  cached and threaded into `pre_sample/2` and `sample/4`.
+  """
   defmacro pre_authorities(do: block) do
     quote do
       def __hawk_pre_authorities__, do: unquote(block)
     end
   end
 
+  @doc """
+  Builds shared context from `pre_authorities/0` and `authorities/0`, cached
+  per test process. Useful when samples need shared parent records created via
+  fixtures or factories.
+  """
   defmacro pre_sample(pre_authorities, authorities, do: block) do
     quote do
       def pre_sample(unquote(pre_authorities), unquote(authorities)), do: unquote(block)
     end
   end
 
+  @doc """
+  Builds a deterministic resource sample for a given authority set, known
+  context, and index. Required callback; the matrix uses generated samples for
+  collection/pagination coverage and `sample_model/0` (index 1) for
+  show/update/delete.
+  """
   defmacro sample(pre_authorities, authorities, known, index, do: block) do
     quote do
       def sample(
@@ -75,6 +96,7 @@ defmodule Hawk.JsonApiControllerCase do
     end
   end
 
+  @doc false
   def maybe_start_sandbox(repo, tags, on_exit_fun) do
     if Code.ensure_loaded?(repo) and function_exported?(repo, :__adapter__, 0) do
       owner = Sandbox.start_owner!(repo, shared: not tags[:async])
@@ -186,6 +208,17 @@ defmodule Hawk.JsonApiControllerCase do
     end
   end
 
+  @doc """
+  Generates a test that asserts index query growth stays bounded as the
+  collection size grows, catching N+1 preloads.
+
+  ## Options
+
+    * `:include` — the `include` query param.
+    * `:params` — extra query params.
+    * `:parent_counts` — collection sizes to compare (default `[1, sample_count]`).
+    * `:max_extra_queries` — allowed extra queries per parent added (default `0`).
+  """
   defmacro n_plus_one_guard(opts) do
     description =
       opts
@@ -201,6 +234,7 @@ defmodule Hawk.JsonApiControllerCase do
     end
   end
 
+  @doc false
   def assert_json_api_controller_matrix(test_module) do
     config = test_module.__hawk_json_api_controller_case__()
     samples = sample_models(test_module, config.sample_count)
@@ -218,6 +252,7 @@ defmodule Hawk.JsonApiControllerCase do
     end)
   end
 
+  @doc false
   def assert_index_query_growth(test_module, opts) when is_atom(test_module) and is_list(opts) do
     config = test_module.__hawk_json_api_controller_case__()
     repo = config.repo || raise ArgumentError, "n_plus_one_guard requires :repo in Hawk.JsonApiControllerCase"
@@ -265,6 +300,10 @@ defmodule Hawk.JsonApiControllerCase do
     results
   end
 
+  @doc """
+  Runs `fun` and returns `{result, query_count}` by attaching a telemetry
+  handler to the repo's query event. Useful for ad-hoc query-count assertions.
+  """
   def count_repo_queries(repo, fun, opts \\ []) when is_atom(repo) and is_function(fun, 0) do
     test_pid = self()
     ref = make_ref()
@@ -286,6 +325,7 @@ defmodule Hawk.JsonApiControllerCase do
     end
   end
 
+  @doc false
   def handle_query_event(_event, _measurements, metadata, %{
         test_pid: test_pid,
         ref: ref,
@@ -296,6 +336,7 @@ defmodule Hawk.JsonApiControllerCase do
     end
   end
 
+  @doc false
   def create_params_for(test_module) do
     config = test_module.__hawk_json_api_controller_case__()
 
@@ -305,6 +346,7 @@ defmodule Hawk.JsonApiControllerCase do
     end
   end
 
+  @doc false
   def update_params_for(test_module) do
     config = test_module.__hawk_json_api_controller_case__()
 

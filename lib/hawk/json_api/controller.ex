@@ -9,6 +9,19 @@ defmodule Hawk.JsonApi.Controller do
   alias Hawk.JsonApi.Controller, as: JsonApiController
   alias Hawk.JsonApi.{Document, Request, Schema}
 
+  @doc """
+  Generates a Phoenix JSON:API controller for a Hawk resource.
+
+  Emits `index/2`, `show/2`, `relationship/2`, `related/2`, and — when the
+  resource has a writer — `create/2`, `update/2`, `delete/2`, plus a custom
+  action handler for each declared `Hawk.Actions` action.
+
+  ## Options
+
+    * `:resource` (required) — the `Hawk.Resource` facade.
+    * `:model` — the backing model (default: resolved from the resource).
+    * `:public` — allow public (anonymous) read access (default `false`).
+  """
   defmacro __using__(opts) do
     env = __CALLER__
     resource = Keyword.fetch!(opts, :resource) |> Macro.expand(env)
@@ -144,6 +157,7 @@ defmodule Hawk.JsonApi.Controller do
     end
   end
 
+  @doc false
   def index(conn, resource, _model, reader, params, public? \\ false) do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
@@ -167,6 +181,7 @@ defmodule Hawk.JsonApi.Controller do
     end)
   end
 
+  @doc false
   def show(conn, resource, model, %{"id" => id} = params, public? \\ false) do
     do_show(conn, resource, model, id, params, public?)
   end
@@ -234,6 +249,7 @@ defmodule Hawk.JsonApi.Controller do
 
   defp model_module(%module{}), do: module
 
+  @doc false
   def create(conn, resource, model, params, public? \\ false) do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
@@ -247,6 +263,7 @@ defmodule Hawk.JsonApi.Controller do
     end)
   end
 
+  @doc false
   def update(conn, resource, model, %{"id" => id} = params, public? \\ false) do
     do_update(conn, resource, model, id, params, public?)
   end
@@ -272,6 +289,7 @@ defmodule Hawk.JsonApi.Controller do
     end)
   end
 
+  @doc false
   def delete(conn, resource, _model, %{"id" => id}, public? \\ false) do
     do_delete(conn, resource, id, public?)
   end
@@ -297,6 +315,7 @@ defmodule Hawk.JsonApi.Controller do
     end
   end
 
+  @doc false
   def action(
         conn,
         resource,
@@ -323,6 +342,7 @@ defmodule Hawk.JsonApi.Controller do
     end)
   end
 
+  @doc false
   def relationship(
         conn,
         resource,
@@ -362,6 +382,7 @@ defmodule Hawk.JsonApi.Controller do
     end)
   end
 
+  @doc false
   def related(
         conn,
         resource,

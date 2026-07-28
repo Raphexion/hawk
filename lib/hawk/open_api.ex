@@ -5,6 +5,21 @@ defmodule Hawk.OpenApi do
 
   alias Hawk.JsonApi.Routes
 
+  @doc """
+  Composes an OpenAPI 3.1 spec map from the given Hawk resource facades.
+
+  Resources with `json_api: false` are omitted. This is the function behind
+  `mix hawk.openapi` and `Hawk.OpenApi.Controller`; call it directly only when
+  you need the spec as data.
+
+  ## Options
+
+    * `:title` — the info title (default `"Hawk API"`).
+    * `:version` — the info version (default `"1.0.0"`).
+    * `:servers` — the servers list (default `[%{url: "/"}]`).
+    * `:security` — the top-level security list (default `[]`).
+    * `:path_prefix` — a prefix applied to every path (default `""`).
+  """
   def spec(resources, opts \\ []) when is_list(resources) do
     resources = resources |> Enum.map(&normalize_resource/1) |> Enum.reject(&is_nil/1)
 

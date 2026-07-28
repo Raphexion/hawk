@@ -13,8 +13,14 @@ defmodule Hawk.Authority.Plug do
   alias Hawk.Authority
   alias Hawk.Authority.Session
 
+  @doc false
   def init(opts), do: opts
 
+  @doc """
+  Plug callback: resolves the authority from the configured `:resolver` and
+  stores it under `:hawk_authority` (or the `:assign` key), defaulting to
+  `Hawk.Authority.public/1` when the resolver returns `nil`.
+  """
   def call(conn, opts) do
     key = Keyword.get(opts, :assign, Session.default_key())
     resolver = Keyword.get(opts, :resolver, fn _conn -> nil end)

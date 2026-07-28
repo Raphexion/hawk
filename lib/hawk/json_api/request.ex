@@ -9,7 +9,7 @@ defmodule Hawk.JsonApi.Request do
   read-only short-id prefixes) also lives here.
 
   The external shape used for validation is resolved through
-  `Hawk.JsonApi.Schema.metadata/2`.
+  `Hawk.JsonApi.Schema.metadata/1`.
   """
 
   alias Hawk.JsonApi.Schema

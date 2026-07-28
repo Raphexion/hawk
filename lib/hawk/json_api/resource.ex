@@ -1,12 +1,73 @@
 defmodule Hawk.JsonApi.Resource do
   @moduledoc """
-  JSON:API adapter contract DSL for Hawk resources.
+  The JSON:API adapter DSL: the single source of a resource's external shape.
 
-  This module is the adapter-specific home for external JSON:API shape: type,
-  field names, docs, examples, computed/source-backed attributes, relationships,
-  and create/update writability.
+  A resource's sibling JSON:API adapter (`MyApp.Courses.JsonApi`) declares the
+  external `type`, attributes, relationships, per-field writability, docs, and
+  examples. Everything that renders the resource to the outside world — the
+  JSON:API document, the OpenAPI spec, the controller contract — reads from
+  this adapter through `Hawk.JsonApi.Schema.metadata/1`, so the model carries
+  no JSON:API declarations.
+
+  ## DSL
+
+    * `type/1` — the JSON:API `type` string (e.g. `"courses"`).
+    * `doc/1` — the resource description (OpenAPI schema description).
+    * `tag/1`, `tag/2` — OpenAPI operation tag; `tag/2` takes a `:description`
+      for the top-level tag entry.
+    * `group/1` — emitted as `x-resource-group`.
+    * `attribute/2` — an external attribute, with `:source`, `:writable`,
+      `:creatable`, `:updatable`, `:doc`, `:example`, `:resolver`.
+    * `relationship/2` — an external relationship, with `:source`, `:writable`,
+      `:doc`, `:example`.
+
+  ## Attribute options
+
+    * `:source` — the internal Ecto field (default: the attribute name).
+    * `:writable` — boolean shortcut setting both creatable+updatable.
+    * `:creatable` / `:updatable` — per-direction writability (default false).
+    * `:doc` / `:example` — surfaced in OpenAPI.
+    * `:resolver` — a `&fun/1` computing the attribute from the model (for
+      computed/projection attributes not backed by a field).
+
+  ## Relationship options
+
+    * `:source` — the internal association name (default: the relationship name).
+    * `:writable` / `:creatable` / `:updatable` — linkage writability.
+    * `:doc` / `:example` — surfaced in OpenAPI. The `example` describes the
+      `data` payload (a single identifier object for to-one, an array for
+      to-many) and is nested under `data` in the emitted schema.
+
+  ## Example
+
+      defmodule MyApp.Courses.JsonApi do
+        use Hawk.JsonApi.Resource
+
+        type("courses")
+        tag("Academics", description: "Academic resources.")
+        group("Courses")
+        doc("A course taught by a teacher at a school.")
+
+        attribute(:title, writable: true, doc: "Course title.", example: "Math")
+        attribute(:slug, source: :public_slug, creatable: true, updatable: false)
+
+        relationship(:school, writable: true, doc: "The offering school.")
+        relationship(:grades, doc: "Grades awarded in this course.")
+      end
+
+  ## Generated functions
+
+    * `__hawk_json_api__/0` — the adapter metadata map consumed by
+      `Hawk.JsonApi.Schema`, `Hawk.OpenApi`, and the controller.
+
+  ## See also
+
+    * `Hawk.JsonApi.Schema` — resolves adapter metadata (with caching).
+    * `Hawk.OpenApi` — composes the OpenAPI spec from adapters.
+    * `Hawk.JsonApi.Controller` — the generated controller base.
   """
 
+  @doc false
   defmacro __using__(_opts) do
     quote do
       import Hawk.JsonApi.Resource,
@@ -28,18 +89,31 @@ defmodule Hawk.JsonApi.Resource do
     end
   end
 
+  @doc """
+  Declares the JSON:API `type` string for this resource.
+  """
   defmacro type(type) when is_binary(type) do
     quote do
       @hawk_json_api_type unquote(type)
     end
   end
 
+  @doc """
+  Declares the resource description, used as the OpenAPI schema description.
+  """
   defmacro doc(doc) when is_binary(doc) do
     quote do
       @hawk_json_api_doc unquote(doc)
     end
   end
 
+  @doc """
+  Declares the OpenAPI operation tag for this resource.
+
+  With `tag/2`, pass `:description` to populate the top-level tag's description
+  (avoiding `tag-description` lint warnings). When several resources share a
+  tag name, the description from any of them wins.
+  """
   defmacro tag(tag, opts \\ []) when is_binary(tag) and is_list(opts) do
     quote do
       @hawk_json_api_tag unquote(tag)
@@ -50,16 +124,25 @@ defmodule Hawk.JsonApi.Resource do
     end
   end
 
+  @doc """
+  Declares the resource group, emitted as `x-resource-group`.
+  """
   defmacro group(group) when is_binary(group) do
     quote do
       @hawk_json_api_group unquote(group)
     end
   end
 
+  @doc """
+  Declares an external attribute. See the module docs for the option reference.
+  """
   defmacro attribute(name, opts \\ []) when is_atom(name) and is_list(opts) do
     quote_field(:hawk_json_api_attributes, name, opts, __CALLER__)
   end
 
+  @doc """
+  Declares an external relationship. See the module docs for the option reference.
+  """
   defmacro relationship(name, opts \\ []) when is_atom(name) and is_list(opts) do
     quote_field(:hawk_json_api_relationships, name, opts, __CALLER__)
   end

@@ -7,10 +7,17 @@ defmodule Hawk.Errors do
   alias Hawk.Error
   alias Hawk.MutationContext
 
+  @doc """
+  Converts a Hawk error or writer result into a JSON:API error document
+  (`%{errors: [...]}`) with client-visible `source.pointer`s.
+  """
   def to_json_api(error_or_result) do
     %{errors: Enum.map(to_errors(error_or_result), &json_api_error/1)}
   end
 
+  @doc """
+  Normalizes a Hawk error or writer result into a list of `Hawk.Error` structs.
+  """
   def to_errors(%Error{} = error), do: [error]
 
   def to_errors({:not_authorized, %MutationContext{} = context}) do
@@ -24,6 +31,10 @@ defmodule Hawk.Errors do
 
   def to_errors({:error, message}) when is_binary(message), do: [Error.error(message)]
 
+  @doc """
+  Converts a Hawk writer result into a LiveView-friendly error shape
+  (`{:error, %{field | :base => [messages]}}`).
+  """
   def to_live_view({:invalid, %MutationContext{} = context}) do
     {:error, changeset_errors(context.changeset)}
   end

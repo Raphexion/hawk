@@ -5,7 +5,7 @@ defmodule Hawk.JsonApi.Document do
   Document rendering is pure data: given a model (or collection) and render
   options, it produces the JSON:API resource objects, relationships, included
   resources, links, and pagination meta. The external shape of each resource
-  is resolved through `Hawk.JsonApi.Schema.metadata/2`, so included/related
+  is resolved through `Hawk.JsonApi.Schema.metadata/1`, so included/related
   resources discover their adapter metadata the same way the root does.
 
   ## Options
@@ -19,6 +19,14 @@ defmodule Hawk.JsonApi.Document do
 
   alias Hawk.JsonApi.Schema
 
+  @doc """
+  Renders a JSON:API document for a single model or a collection.
+
+  For a collection, emits `data` as an array plus optional pagination meta and
+  links. For a single model, emits `data` as one resource object. `included`
+  resources are rendered from the `:preloads` option. See the module docs for
+  the full option reference.
+  """
   def document(models, opts \\ [])
 
   def document(models, opts) when is_list(models) do

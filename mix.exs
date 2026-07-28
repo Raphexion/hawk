@@ -17,6 +17,68 @@ defmodule Hawk.MixProject do
         # Hawk.Test* helpers are compiled under `elixirc_paths(:test)` to
         # exercise Hawk, but they are test fixtures, not shipped code.
         ignore_modules: [~r/^Videdal\b/, Hawk.TestConn, Hawk.TestSocket]
+      ],
+      docs: docs()
+    ]
+  end
+
+  defp docs do
+    [
+      main: "Hawk",
+      source_url: "https://github.com/Raphexion/hawk",
+      groups_for_modules: [
+        "Resource facade": [Hawk.Resource],
+        "DSL modules": [
+          Hawk.Model,
+          Hawk.Reader.Resource,
+          Hawk.Writer.Resource,
+          Hawk.Policy,
+          Hawk.Actions,
+          Hawk.JsonApi.Resource,
+          Hawk.LiveView.Resource
+        ],
+        "Adapters & rendering": [
+          Hawk.JsonApi.Controller,
+          Hawk.JsonApi.Router,
+          Hawk.JsonApi.Routes,
+          Hawk.JsonApi.Document,
+          Hawk.JsonApi.Request,
+          Hawk.JsonApi.Schema,
+          Hawk.LiveView,
+          Hawk.LiveView.Page,
+          Hawk.LiveView.AuthorityHook,
+          Hawk.OpenApi,
+          Hawk.OpenApi.Controller
+        ],
+        "Runtime values": [
+          Hawk.Authority,
+          Hawk.Authority.Plug,
+          Hawk.Authority.Session,
+          Hawk.PhoenixAuth,
+          Hawk.MutationContext,
+          Hawk.RepositoryBoundary,
+          Hawk.Result,
+          Hawk.Error,
+          Hawk.Errors,
+          Hawk.Filter
+        ],
+        "Plans": [Hawk.Plan, Hawk.Plans, Hawk.Plans.Registry, Hawk.Plans.Spec, Hawk.Multi],
+        "Validation & contracts": [
+          Hawk.Resource.Validation,
+          Hawk.Resource.Convention,
+          Hawk.ResourceContract
+        ],
+        "Test helpers": [
+          Hawk.ResourceContractCase,
+          Hawk.JsonApiControllerCase,
+          Hawk.Policy.Assertions
+        ],
+        "Mix tasks": [
+          Mix.Tasks.Hawk.Gen.Resource,
+          Mix.Tasks.Hawk.Validate,
+          Mix.Tasks.Hawk.Openapi,
+          Mix.Tasks.Hawk.Plans.Spec
+        ]
       ]
     ]
   end

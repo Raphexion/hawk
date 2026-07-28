@@ -17,6 +17,7 @@ defmodule Hawk.Reader.JoinPlan do
         }
 
   @spec apply(Ecto.Query.t(), [rule()], Filter.t(), atom() | [atom()]) :: Ecto.Query.t()
+  @doc false
   def apply(query, rules, filter, sort_key) do
     active_keys = Filter.keys(filter)
 

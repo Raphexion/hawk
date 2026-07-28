@@ -1,11 +1,73 @@
 defmodule Hawk.Writer.Resource do
   @moduledoc """
-  Declarative writer DSL for Hawk resources.
+  The declarative writer DSL for a Hawk resource: `create`, `update`, `delete`,
+  and DB `constraint` steps.
 
-  The DSL generates paired form and persistence functions from the same mutation
-  pipeline so JSON:API writes and LiveView live validation cannot drift.
+  The DSL generates paired form and persistence functions from the *same*
+  mutation pipeline, so JSON:API writes and LiveView live validation cannot
+  drift: `change_create/2` / `change_update/3` build the changeset used for form
+  validation, and `create/2` / `update/3` / `delete/2` persist through the same
+  pipeline plus the repository boundary.
+
+  Every mutation goes through the resource `Policy` (create?/update?/delete?)
+  before touching the repo.
+
+  ## Options
+
+    * `:model` (required) — the `Hawk.Model` / `Ecto.Schema` to mutate.
+    * `:repo` (required) — the `Ecto.Repo` to persist through.
+    * `:policy` (required) — the `Hawk.Policy` module gating writes.
+
+  ## DSL
+
+  Inside `create` and `update` blocks:
+
+    * `cast([:field, ...])` — cast fields onto the changeset.
+    * `defaults(field: value, ...)` — apply defaults before casting.
+    * `validate_required([:field, ...])` — required-field validation.
+    * `validate(&fun/1)` — run a validator that returns a changeset.
+    * `validate_changeset(&fun/1)` — run a function receiving the changeset.
+    * `constraint(kind, field, opts)` — declare a DB constraint (see `constraint/3`).
+
+  `delete(:default)` enables the standard delete through the policy.
+
+  ## Example
+
+      defmodule MyApp.Courses.Writer do
+        use Hawk.Writer.Resource,
+          model: MyApp.Course,
+          repo: MyApp.Repo,
+          policy: MyApp.Courses.Policy
+
+        create do
+          defaults(registration_state: "draft")
+          cast([:title, :teacher_id, :registration_state])
+          validate_required([:title, :teacher_id])
+          validate(&reject_reserved_title/1)
+          constraint(:foreign_key, :teacher_id, name: :courses_teacher_id_fkey)
+        end
+
+        update do
+          cast([:title, :registration_state])
+          validate_required([:title])
+        end
+
+        delete(:default)
+      end
+
+  ## Generated functions
+
+    * `change_create/2`, `change_update/3` — form changesets (no persistence).
+    * `create/2`, `update/3`, `delete/2` — persist through the policy and repo.
+
+  ## See also
+
+    * `Hawk.Writer` — the mutation pipeline primitives.
+    * `Hawk.MutationContext` — carries the changeset + authority.
+    * `Hawk.RepositoryBoundary` — the repo insert/update/delete wrapper.
   """
 
+  @doc false
   defmacro __using__(opts) do
     model = Keyword.fetch!(opts, :model)
     repo = Keyword.fetch!(opts, :repo)
@@ -22,18 +84,30 @@ defmodule Hawk.Writer.Resource do
     end
   end
 
+  @doc """
+  Declares the create pipeline. Required: a writer without a `create` block
+  raises at compile time.
+  """
   defmacro create(do: block) do
     quote do
       @hawk_writer_create unquote(Macro.escape(block))
     end
   end
 
+  @doc """
+  Declares the update pipeline. When omitted, `update/3` and `change_update/3`
+  are not generated.
+  """
   defmacro update(do: block) do
     quote do
       @hawk_writer_update unquote(Macro.escape(block))
     end
   end
 
+  @doc """
+  Enables the standard delete through the policy. Without this, `delete/2` is
+  not generated.
+  """
   defmacro delete(:default) do
     quote do
       @hawk_writer_delete :default

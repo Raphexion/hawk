@@ -12,6 +12,18 @@ defmodule Mix.Tasks.Hawk.Gen.Resource do
   the writer skeleton is still emitted so routes exist and refuse writes.
   Pass `--web MyAppWeb` to also generate a Phoenix JSON:API controller,
   LiveView index/show modules and templates, and a router snippet.
+
+  ## Options
+
+    * `--repo` (required) — the `Ecto.Repo` module for reader/writer.
+    * `--attributes` — comma-separated field names for JSON:API attributes.
+    * `--relationships` — comma-separated association names for relationships.
+    * `--filters` — comma-separated reader filter columns.
+    * `--preloads` — comma-separated reader preload associations.
+    * `--read-only` — gate writes with `write(:never)` (writer still emitted).
+    * `--web` — the web module; also generate controller + LiveView + router.
+    * `--public` — generate LiveViews using public authority access.
+    * `--identity` — the identity field for view-backed resources.
   """
 
   use Mix.Task

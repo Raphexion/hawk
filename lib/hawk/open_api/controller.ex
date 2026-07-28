@@ -30,6 +30,9 @@ defmodule Hawk.OpenApi.Controller do
     end
   end
 
+  @doc """
+  Renders a composed OpenAPI spec as JSON:API content on the given conn.
+  """
   def show(conn, spec), do: json(conn, 200, spec)
 
   defp json(%Plug.Conn{} = conn, status, body) do

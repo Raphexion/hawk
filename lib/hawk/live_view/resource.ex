@@ -1,12 +1,69 @@
 defmodule Hawk.LiveView.Resource do
   @moduledoc """
-  LiveView adapter contract DSL for Hawk resources.
+  The LiveView adapter DSL: the internal-admin shape of a Hawk resource.
 
-  This module describes the LiveView-facing resource contract: assign names,
-  index table metadata, show fields, and allowed UI filters. It owns data
-  plumbing shape; templates still own markup and styling.
+  Where `Hawk.JsonApi.Resource` describes the external API shape, this adapter
+  describes the internal admin UI shape: assign names, the index table
+  metadata (filters, searches, sorts, columns), the show screen fields, and
+  the create/update form fields. It owns *data plumbing shape*; templates
+  still own markup and styling.
+
+  Every `filter`/`sort` declared here must also be declared by the resource's
+  `Reader` — enforced by `Hawk.ResourceContract` — so the admin UI cannot
+  expose a filter the reader does not support.
+
+  ## DSL
+
+    * `as/1` — the singular assign name (default: the resource name).
+    * `plural_as/1` — the plural assign name.
+    * `index/1` — index screen contract: `doc`, `filter`, `search`, `sort`,
+      `table`.
+    * `show/1` — show screen fields.
+    * `create_form/1` — create form fields.
+    * `update_form/1` — update form fields.
+    * `gettext/1`, `dgettext/2` — mark field labels for translation.
+
+  ## Example
+
+      defmodule MyApp.Courses.LiveView do
+        use Hawk.LiveView.Resource
+
+        as(:course)
+        plural_as(:courses)
+
+        index do
+          filter(:school_id)
+          filter(:teacher_id)
+          sort(:title)
+          table do
+            column(:title, label: "Title")
+            column(:teacher, label: "Teacher")
+          end
+        end
+
+        show do
+          field(:title)
+          field(:teacher)
+        end
+
+        create_form do
+          field(:title, label: "Title")
+          field(:teacher_id, label: "Teacher")
+        end
+      end
+
+  ## Generated functions
+
+    * `__hawk_live_view__/0` — the adapter metadata map consumed by
+      `Hawk.LiveView` helpers and templates.
+
+  ## See also
+
+    * `Hawk.LiveView` — the LiveView helpers that consume this metadata.
+    * `Hawk.Reader.Resource` — filters/sorts must be a subset of the reader's.
   """
 
+  @doc false
   defmacro __using__(_opts) do
     quote do
       import Hawk.LiveView.Resource,
@@ -25,23 +82,40 @@ defmodule Hawk.LiveView.Resource do
     end
   end
 
+  @doc """
+  Marks a field label for translation via `gettext/1`. Returns a tagged tuple
+  consumed by the LiveView label helpers.
+  """
   def gettext(msgid) when is_binary(msgid), do: {:gettext, msgid}
 
+  @doc """
+  Marks a field label for translation via `dgettext/2` (domain-scoped).
+  """
   def dgettext(domain, msgid) when is_binary(domain) and is_binary(msgid),
     do: {:dgettext, domain, msgid}
 
+  @doc """
+  Declares the singular assign name for the resource.
+  """
   defmacro as(name) when is_atom(name) do
     quote do
       @hawk_live_view_as unquote(name)
     end
   end
 
+  @doc """
+  Declares the plural assign name for the resource.
+  """
   defmacro plural_as(name) when is_atom(name) do
     quote do
       @hawk_live_view_plural_as unquote(name)
     end
   end
 
+  @doc """
+  Declares the index screen contract: filters, searches, sorts, and table
+  columns. Every `filter`/`sort` must be a subset of the reader's declarations.
+  """
   defmacro index(do: block) do
     contract = parse_index(block, __CALLER__)
 
@@ -50,6 +124,9 @@ defmodule Hawk.LiveView.Resource do
     end
   end
 
+  @doc """
+  Declares the show screen fields.
+  """
   defmacro show(do: block) do
     contract = parse_show(block, __CALLER__)
 
@@ -58,6 +135,9 @@ defmodule Hawk.LiveView.Resource do
     end
   end
 
+  @doc """
+  Declares the create form fields, used for live validation through the writer.
+  """
   defmacro create_form(do: block) do
     contract = parse_form(block, __CALLER__)
 
@@ -66,6 +146,9 @@ defmodule Hawk.LiveView.Resource do
     end
   end
 
+  @doc """
+  Declares the update form fields, used for live validation through the writer.
+  """
   defmacro update_form(do: block) do
     contract = parse_form(block, __CALLER__)
 

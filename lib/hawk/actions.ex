@@ -1,11 +1,58 @@
 defmodule Hawk.Actions do
   @moduledoc """
-  Declares JSON:API custom actions exposed under `/-actions/`.
+  The custom-actions DSL: domain operations exposed under `/-actions/`.
 
-  Resource action modules live next to `Reader` and `Writer` modules and define
-  metadata Hawk can use for controller dispatch and OpenAPI generation.
+  When a resource needs an operation that is not plain CRUD — open registration,
+  close enrollment, finalize grades — declare it as an action. Action modules
+  live next to `Reader` and `Writer` as `<Resource>.Actions`, and define both
+  metadata (for controller dispatch and OpenAPI generation) and the handler
+  function that runs the operation.
+
+  An action receives the loaded model, atomized params, and the authority, and
+  returns a `Hawk.Result` (or value) the JSON:API controller renders. It runs
+  under the same policy boundary as writes; actions are how you expose domain
+  verbs without forcing them into the writer's create/update shape.
+
+  ## Example
+
+      defmodule MyApp.Courses.Actions do
+        use Hawk.Actions
+
+        action("open-registration",
+          doc: "Open course registration and configure seats.",
+          params: [
+            seat_count: [type: :integer, doc: "Seats offered.", example: 2],
+            waitlist_count: [type: :integer, doc: "Waitlist capacity.", example: 1]
+          ]
+        )
+
+        def open_registration(course, params, authority) do
+          # ... build and persist ...
+        end
+      end
+
+  ## Options
+
+    * `:doc` — human-readable description, surfaced in OpenAPI.
+    * `:handler` — the function name implementing the action (default: the
+      dash-to-underscore form of the name, e.g. `"open-registration"` →
+      `open_registration/3`).
+    * `:params` — a keyword list or map of `{name, opts}`. Each param takes
+      `:type`, `:doc`, `:example`, used for OpenAPI generation and param
+      atomization.
+
+  ## Generated functions
+
+    * `__hawk_actions__/0` — the action metadata map, used by `Hawk.Actions.dispatch/5`
+      and OpenAPI generation.
+
+  ## See also
+
+    * `Hawk.Actions.dispatch/5` — runtime dispatch used by the JSON:API controller.
+    * `Hawk.OpenApi` — renders actions as `POST /-actions/{name}` operations.
   """
 
+  @doc false
   defmacro __using__(_opts) do
     quote do
       import Hawk.Actions, only: [action: 2]
@@ -15,6 +62,16 @@ defmodule Hawk.Actions do
     end
   end
 
+  @doc """
+  Declares a custom action under `/-actions/{name}`.
+
+  ## Options
+
+    * `:doc` — description surfaced in OpenAPI.
+    * `:handler` — the implementing function (default: the name's underscore form).
+    * `:params` — `{name, opts}` entries; each opts map supports `:type`, `:doc`,
+      `:example`.
+  """
   defmacro action(name, opts) when is_list(opts) do
     metadata = action_metadata(name, opts, __CALLER__)
 
@@ -23,6 +80,7 @@ defmodule Hawk.Actions do
     end
   end
 
+  @doc false
   defmacro __before_compile__(env) do
     actions =
       env.module
@@ -35,6 +93,12 @@ defmodule Hawk.Actions do
     end
   end
 
+  @doc """
+  Dispatches an action by name to its handler on the resource's `Actions` module.
+
+  Returns the handler's result, or `:unknown_action` when the action or handler
+  is absent. Used by the generated JSON:API controller.
+  """
   def dispatch(resource, action_name, model, params, authority)
       when is_atom(resource) and is_binary(action_name) and is_struct(model) do
     actions_module = Module.concat(resource, Actions)
@@ -52,6 +116,10 @@ defmodule Hawk.Actions do
 
   def dispatch(_resource, _action_name, _model, _params, _authority), do: :unknown_action
 
+  @doc """
+  Returns the action metadata map for a resource (`%{}` when the resource has
+  no `Actions` module).
+  """
   def actions(resource) when is_atom(resource) do
     actions_module = Module.concat(resource, Actions)
 

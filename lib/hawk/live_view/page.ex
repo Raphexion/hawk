@@ -8,6 +8,18 @@ defmodule Hawk.LiveView.Page do
 
   alias Hawk.LiveView.Page
 
+  @doc """
+  Generates a multi-resource LiveView page helper for a small workspace.
+
+  Emits `assign_page/3`, `hawk_page_sections/0`, `hawk_page_section/1`, and a
+  `hawk:delete` event handler covering several Hawk resources in one LiveView.
+  Use when one screen owns a small workspace instead of a single resource.
+
+  ## Options
+
+    * `:resources` (required) — a keyword list of `{key, [resource: facade]}`.
+    * `:sections` — page section metadata.
+  """
   defmacro __using__(opts) do
     resources =
       opts
@@ -43,6 +55,7 @@ defmodule Hawk.LiveView.Page do
     end)
   end
 
+  @doc false
   def assign_page(socket, resources, authority, specs) when is_list(specs) do
     resource_keys = Keyword.keys(specs)
 
@@ -53,6 +66,7 @@ defmodule Hawk.LiveView.Page do
     |> assign_many(resources, authority, specs)
   end
 
+  @doc false
   def handle_delete(socket, resources, %{"resource" => resource_name, "id" => id}) do
     key = fetch_resource_key!(resources, resource_name)
     authority = Map.fetch!(socket.assigns, :hawk_page_authority)

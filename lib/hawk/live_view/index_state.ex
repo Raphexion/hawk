@@ -1,10 +1,5 @@
 defmodule Hawk.LiveView.IndexState do
-  @moduledoc """
-  Normalizes LiveView index params into bounded reader options.
-
-  Index state is intentionally pure so paging, sorting, searching, and stream
-  replacement semantics can be tested without Phoenix machinery.
-  """
+  @moduledoc false
 
   @type t :: %{
           required(:filter) => Hawk.Filter.t(),

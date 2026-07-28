@@ -1,9 +1,72 @@
 defmodule Hawk.Policy do
   @moduledoc """
-  Small policy DSL for common Hawk read/write authorization shapes.
+  The read/write authorization DSL for a Hawk resource.
 
-  The DSL generates the boring policy cases while resource readers own the query
-  joins and custom filters needed to compile those policies.
+  A policy answers two questions: *who can read which rows?* (the read policy)
+  and *who can mutate?* (the write policy). The DSL generates the boring cases;
+  resource readers own the query joins and custom filters needed to *compile*
+  a read policy into an actual Ecto filter.
+
+  Read and write are deliberately separate: read access is per-role and can be
+  scoped to columns the authority carries; write access is a flat allow-list of
+  roles plus optional ownership checks.
+
+  ## Read policy
+
+  `read/1` declares which roles can read, and how their access is narrowed:
+
+      read do
+        role(:system, :all)
+        role(:public, :all)
+        role(:school_admin, scopes: [:school_id])
+        role(:teacher, scopes: [:school_id, :teacher_id])
+      end
+
+    * `role(:any, :all)` — the role sees every row. `:system` and `:public`
+      are the conventional special roles; `:public` is anonymous readonly
+      access that still goes through this policy.
+    * `role(:role, scopes: [:col, ...])` — the role only sees rows where each
+      named column equals the authority's scope of the same name. The reader
+      must declare a matching `filter/1` for each scoped column, enforced by
+      `Hawk.ResourceContract`.
+    * `role(:role, scopes: [{:external_col, :scope_key}, ...])` — map a scope to
+      a different filter column.
+    * `role(:role, filter: %{col: value})` — a static literal filter merged into
+      the scoped filter.
+
+  The generated `read_filter/1` returns `:all`, `:none`, or a filter map the
+  reader compiles into the query.
+
+  ## Write policy
+
+  `write/1` declares who can create/update/delete:
+
+      write(roles: [:school_admin])
+
+  For simple ownership-based writes, require model/changeset fields to match
+  authority scopes:
+
+      write(roles: [:teacher], owned_by: [teacher_id: :teacher_id])
+
+  `owned_by` pairs a model/changeset field with an authority scope; all pairs
+  must match for the write to proceed. `:system` always passes; `:readonly`
+  always fails. `write(:never)` disables all mutation (use this for read-only
+  resources that still keep a writer for form generation, or to hard-stop).
+
+  ## Generated functions
+
+    * `read_filter/1` — compiles an `Hawk.Authority` into `:all`, `:none`, or a
+      filter map.
+    * `create?/1`, `update?/1`, `delete?/1` — take an `Hawk.MutationContext`,
+      return a boolean.
+    * `__hawk_policy__/0` — the raw read-role declarations, used by contract
+      validation and `Hawk.Policy.Assertions`.
+
+  ## See also
+
+    * `Hawk.Authority` — the actor the policy decides against.
+    * `Hawk.Policy.Assertions` — compact read-policy matrix tests.
+    * `Hawk.MutationContext` — carries the changeset + authority for write checks.
   """
 
   defmacro __using__(_opts) do
@@ -15,6 +78,12 @@ defmodule Hawk.Policy do
     end
   end
 
+  @doc """
+  Declares the read policy: which roles can read, and how their access narrows.
+
+  With `:all`, every role can read every row. With a `do` block, enumerate
+  `role/2` entries. See the module docs for the scoping forms.
+  """
   defmacro read(:all) do
     quote do
       @hawk_policy_read_roles {:_, :all}
@@ -27,6 +96,15 @@ defmodule Hawk.Policy do
     end
   end
 
+  @doc """
+  Declares read access for a role, either `:all` or scoped to authority fields.
+
+  ## Options
+
+    * `:scopes` — a list of scope keys (atoms) or `{filter_column, scope_key}`
+      pairs. Each must have a matching reader `filter/1`.
+    * `:filter` — a static map merged into the compiled read filter.
+  """
   defmacro role(role, :all) when is_atom(role) do
     quote do
       @hawk_policy_read_roles {unquote(role), :all}
@@ -42,6 +120,9 @@ defmodule Hawk.Policy do
     end
   end
 
+  @doc """
+  Disables all mutation for this resource.
+  """
   defmacro write(:never) do
     quote do
       def create?(%Hawk.MutationContext{}), do: false
@@ -77,8 +158,10 @@ defmodule Hawk.Policy do
     end
   end
 
+  @doc false
   def owned_by?(_context, []), do: true
 
+  @doc false
   def owned_by?(%Hawk.MutationContext{} = context, ownership) when is_list(ownership) do
     Enum.all?(ownership, fn {field, scope} ->
       with {:ok, scope_value} <- Hawk.Authority.fetch_scope(context.authority, scope),
@@ -120,6 +203,7 @@ defmodule Hawk.Policy do
     end
   end
 
+  @doc false
   def read_filter(%Hawk.Authority{} = authority, read_roles) when is_list(read_roles) do
     case List.keyfind(read_roles, authority.role, 0) || List.keyfind(read_roles, :_, 0) do
       {_role, :all} -> :all

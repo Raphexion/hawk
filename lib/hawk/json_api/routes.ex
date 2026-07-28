@@ -7,6 +7,18 @@ defmodule Hawk.JsonApi.Routes do
   consistency without bringing Phoenix into Hawk's dependencies.
   """
 
+  @doc """
+  Returns the JSON:API route specs for a resource or list of resources.
+
+  Each route is a map of `{method, path, action, capability, resource}`.
+  Routes are capability-aware: `create`/`update`/`delete` only appear when the
+  resource has a writer, and `/-actions/` only when actions are enabled. Used by
+  `Hawk.OpenApi` and by tests asserting route/capability consistency.
+
+  ## Options
+
+    * `:path_prefix` — a prefix joined onto each path (default `""`).
+  """
   def routes(resource_or_resources, opts \\ [])
 
   def routes(resources, opts) when is_list(resources) do

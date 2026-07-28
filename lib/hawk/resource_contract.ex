@@ -3,6 +3,16 @@ defmodule Hawk.ResourceContract do
   Validates that a Hawk resource's declarations agree with its Ecto model.
   """
 
+  @doc """
+  Validates that a Hawk resource's declarations agree with its Ecto model and
+  reader/policy siblings: JSON:API attributes/relationships, reader preloads/
+  sorts/filters, and scoped policy filters. Raises on drift; returns `:ok`.
+
+  ## Options
+
+    * `:require_relationship_preloads` — when true, every exposed relationship
+      must be preloadable by the reader.
+  """
   def validate!(resource, model, opts \\ []) when is_atom(resource) and is_atom(model) do
     json_api = do_validate_model!(model, resolve_json_api(resource, model, opts))
     reader = resource_module(resource, :reader, Reader)

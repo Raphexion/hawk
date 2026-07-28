@@ -1,24 +1,123 @@
 defmodule Hawk.Resource do
   @moduledoc """
-  Resource facade DSL tying Hawk resource parts together.
+  Resource facade: the single entry point that ties a Hawk resource together.
 
-  `use Hawk.Resource, model: MyApp.Course` follows the conventional sibling
-  module layout and generates the public resource facade. Conventional modules
-  are expected unless explicitly disabled with `false`.
+  A Hawk resource is a set of small sibling modules — a model, a reader, a
+  policy, a writer, a JSON:API adapter, and (optionally) a LiveView adapter and
+  an actions module — that describe one domain resource. `use Hawk.Resource`
+  is the one-line declaration that resolves those siblings by convention,
+  validates their contracts against each other at compile time, and generates
+  the public facade a consumer calls: `one/1`, `all/1`, `create/2`, `update/3`,
+  `delete/2`, action delegations, and `__hawk_resource__/1` introspection.
 
-  `__using__/1` runs three distinct phases:
+  This is the golden path. Everything else in Hawk exists to give this facade
+  something to compose.
 
-    1. **Resolve** — discovers the sibling modules (Reader, Policy, Writer,
-       JsonApi, LiveView, Actions) by convention or explicit option.
-    2. **Validate** — delegates to `Hawk.Resource.Validation.validate!/1`, which
-       fails fast when a module is missing, a required function is absent, or
-       an adapter contract disagrees with the model or reader.
-    3. **Generate** — emits the facade: `__hawk_resource__/1` introspection and
-       reader/writer/action delegations.
+  ## The convention
+
+  `use Hawk.Resource, model: MyApp.Course` expects sibling modules named after
+  the facade module:
+
+  | Sibling        | Module                  | Required | Disables with        |
+  |----------------|-------------------------|----------|---------------------|
+  | model          | (the `:model` opt)      | yes      | —                   |
+  | reader         | `MyApp.Courses.Reader`  | yes      | —                   |
+  | policy         | `MyApp.Courses.Policy`  | yes      | —                   |
+  | writer         | `MyApp.Courses.Writer`  | yes      | `writer: false`     |
+  | json_api        | `MyApp.Courses.JsonApi` | yes      | `json_api: false`    |
+  | live_view       | `MyApp.Courses.LiveView`| yes      | `live_view: false`  |
+  | actions        | `MyApp.Courses.Actions` | no       | (omitted by default) |
+
+  Reader, policy, writer, JSON:API, and LiveView are *resolved by convention*
+  — they cannot be passed as options (the `:policy` and `:writer` opts raise
+  with a message pointing at the right fix). Actions is opt-in: it is only
+  wired when an `Actions` sibling exists or is supplied explicitly.
+
+  ## Compile-time phases
+
+  `__using__/1` runs three phases:
+
+    1. **Resolve** — discovers each sibling by convention or explicit option.
+       A missing *required* sibling is a compile-time warning during
+       incremental edits/codegen, and a hard error under `mix hawk.validate`
+       (see `Hawk.Resource.Validation`).
+    2. **Validate** — `Hawk.Resource.Validation.validate!/2` checks that every
+       *present* sibling has the shape Hawk needs: required functions exist,
+       and adapter contracts (JSON:API attributes/relationships, reader
+       filters/sorts/preloads, policy scopes) agree with the model and each
+       other. Present-but-malformed siblings always raise; that is real
+       contract drift, not a write-order artifact.
+    3. **Generate** — emits `__hawk_resource__/1` and the reader/writer/action
+       delegations.
+
+  ## Options
+
+    * `:model` (required) — the `Hawk.Model` (or plain `Ecto.Schema`) backing
+      the resource.
+    * `:identity` — the field used as the JSON:API `id` and member-lookup key
+      (default `:id`). Declare a non-`id` identity for view-backed projections;
+      see "ID-less and view-backed resources" in the README.
+    * `:writer` — `false` to disable the writer (read-only resource).
+    * `:json_api` — `false` to disable the JSON:API adapter.
+    * `:live_view` — `false` to disable the LiveView adapter.
+    * `:actions` — an explicit actions module, or `false`.
+
+  ## Examples
+
+  The one-line resource:
+
+      defmodule MyApp.Courses do
+        use Hawk.Resource, model: MyApp.Course
+      end
+
+  A read-only resource with no JSON:API surface:
+
+      defmodule MyApp.CourseSummaries do
+        use Hawk.Resource,
+          model: MyApp.CourseSummary,
+          writer: false,
+          json_api: false,
+          live_view: false
+      end
+
+  A view-backed projection with a declared identity:
+
+      defmodule MyApp.CourseGradeSummaries do
+        use Hawk.Resource,
+          model: MyApp.CourseGradeSummary,
+          identity: :course_id
+      end
+
+  ## Introspection
+
+  Every facade exposes `__hawk_resource__/1`, which returns the resolved
+  sibling module (or `false`) for `:model`, `:reader`, `:policy`, `:writer`,
+  `:json_api`, `:live_view`, `:actions`, the declared `:identity`, and a
+  `:capabilities` map of booleans. `mix hawk.validate`, `mix hawk.openapi`,
+  and `Hawk.Plans.Registry` all discover resources by scanning for this
+  function.
+
+  ## See also
+
+    * `Hawk.Model` — the schema DSL and association resource metadata.
+    * `Hawk.Reader.Resource` — the reader DSL (filters, sorts, preloads).
+    * `Hawk.Writer.Resource` — the writer DSL (create/update/delete).
+    * `Hawk.Policy` — the read/write policy DSL.
+    * `Hawk.Actions` — custom `/-actions/` DSL.
+    * `Hawk.JsonApi.Resource` / `Hawk.LiveView.Resource` — the adapters.
+    * `Hawk.Resource.Validation` — the compile-time and `mix hawk.validate`
+      contract gate.
   """
 
   alias Hawk.Resource.Validation
 
+  @doc """
+  Invokes the resource facade DSL.
+
+  See the module documentation for the full option reference, the sibling
+  convention, and the compile-time phases. This macro is not called directly;
+  it runs at `use Hawk.Resource, ...`.
+  """
   defmacro __using__(opts) do
     caller = __CALLER__.module
     model = Keyword.fetch!(opts, :model)
