@@ -60,7 +60,9 @@ defmodule Hawk.MixProject do
       {:ex_machina, "~> 2.8", only: :test},
       # Code quality
       {:dialyxir, "~> 1.3", only: [:dev, :test], runtime: false},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      # Documentation
+      {:ex_doc, "~> 0.40", only: :docs, runtime: false}
     ]
   end
 
