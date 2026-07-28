@@ -2,7 +2,7 @@ defmodule Videdal.Integration.StudentParentsPreloadTest.StudentsReader do
   @moduledoc false
 
   use Hawk.Reader.Resource,
-    repo: Videdal.SandboxRepo,
+    repo: Videdal.Repo,
     schema: Videdal.Student,
     policy: Videdal.Integration.StudentParentsPreloadTest.AllowAllPolicy
 
@@ -16,7 +16,7 @@ defmodule Videdal.Integration.StudentParentsPreloadTest.ParentsReader do
   @moduledoc false
 
   use Hawk.Reader.Resource,
-    repo: Videdal.SandboxRepo,
+    repo: Videdal.Repo,
     schema: Videdal.Parent,
     policy: Videdal.Integration.StudentParentsPreloadTest.AllowAllPolicy
 
@@ -37,28 +37,28 @@ defmodule Videdal.Integration.StudentParentsPreloadTest do
 
   alias Hawk.Authority
   alias Videdal.Integration.StudentParentsPreloadTest.{ParentsReader, StudentsReader}
-  alias Videdal.{Parent, ParentStudent, SandboxRepo, School, Student}
+  alias Videdal.{Parent, ParentStudent, Repo, School, Student}
 
   @moduletag :database
 
   setup do
-    Videdal.DatabaseCase.reset_schema!()
+    
     :ok
   end
 
   test "students expose parents through the many-to-many association without exposing join rows" do
-    school = SandboxRepo.insert!(%School{name: "Videdal Skole"})
-    alma = SandboxRepo.insert!(%Student{name: "Alma", school_id: school.id})
-    anna = SandboxRepo.insert!(%Parent{name: "Anna", school_id: school.id})
-    marcus = SandboxRepo.insert!(%Parent{name: "Marcus", school_id: school.id})
+    school = Repo.insert!(%School{name: "Videdal Skole"})
+    alma = Repo.insert!(%Student{name: "Alma", school_id: school.id})
+    anna = Repo.insert!(%Parent{name: "Anna", school_id: school.id})
+    marcus = Repo.insert!(%Parent{name: "Marcus", school_id: school.id})
 
-    SandboxRepo.insert!(%ParentStudent{
+    Repo.insert!(%ParentStudent{
       school_id: school.id,
       student_id: alma.id,
       parent_id: anna.id
     })
 
-    SandboxRepo.insert!(%ParentStudent{
+    Repo.insert!(%ParentStudent{
       school_id: school.id,
       student_id: alma.id,
       parent_id: marcus.id
@@ -82,14 +82,14 @@ defmodule Videdal.Integration.StudentParentsPreloadTest do
   end
 
   test "parents expose students through the inverse many-to-many association" do
-    school = SandboxRepo.insert!(%School{name: "Videdal Skole"})
-    anna = SandboxRepo.insert!(%Parent{name: "Anna", school_id: school.id})
+    school = Repo.insert!(%School{name: "Videdal Skole"})
+    anna = Repo.insert!(%Parent{name: "Anna", school_id: school.id})
 
     students =
       Enum.map(["Alma", "Birk", "Clara"], fn name ->
-        student = SandboxRepo.insert!(%Student{name: name, school_id: school.id})
+        student = Repo.insert!(%Student{name: name, school_id: school.id})
 
-        SandboxRepo.insert!(%ParentStudent{
+        Repo.insert!(%ParentStudent{
           school_id: school.id,
           student_id: student.id,
           parent_id: anna.id

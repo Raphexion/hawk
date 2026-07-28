@@ -1,17 +1,19 @@
 defmodule Videdal.LiveViews.CourseLiveTest do
-  use ExUnit.Case, async: true
+  use Videdal.DatabaseCase, async: true
 
   import Hawk.TestSocket, only: [socket: 0]
 
   alias Hawk.Authority
   alias Videdal.Course
   alias Videdal.LiveViews.{CourseCustomSaveLive, CourseLive}
-
-  @course_id Videdal.course_id()
-  @school_id Videdal.school_id()
-  @teacher_id Videdal.teacher_id()
+  alias Videdal.Repo
 
   test "default course LiveView validates and saves through generated events" do
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    school_id = school.id
+    teacher_id = teacher.id
+
     socket = CourseLive.assign_new_form(socket(), Authority.system())
 
     {:noreply, socket} =
@@ -25,27 +27,25 @@ defmodule Videdal.LiveViews.CourseLiveTest do
         %{
           "course" => %{
             "title" => "History",
-            "school_id" => @school_id,
-            "teacher_id" => @teacher_id
+            "school_id" => school.id,
+            "teacher_id" => teacher.id
           }
         },
         socket
       )
 
-    assert %Course{title: "History", school_id: @school_id, teacher_id: @teacher_id} =
+    assert %Course{title: "History", school_id: ^school_id, teacher_id: ^teacher_id} =
              socket.assigns.course
 
     assert socket.assigns.hawk_form_states.course.mode == :update
-    assert_received {:videdal_repo, :insert, %Ecto.Changeset{valid?: true}}
+
+    assert %Course{title: "History"} = Repo.get!(Course, socket.assigns.course.id)
   end
 
   test "custom save example reuses Hawk helpers and owns post-save navigation" do
-    course = %Course{
-      id: @course_id,
-      title: "Math",
-      school_id: @school_id,
-      teacher_id: @teacher_id
-    }
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    course = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Math")
 
     socket = CourseCustomSaveLive.assign_edit_form(socket(), course, Authority.system())
 
@@ -56,9 +56,11 @@ defmodule Videdal.LiveViews.CourseLiveTest do
         socket
       )
 
-    assert %Course{id: @course_id, title: "History"} = socket.assigns.course
-    assert socket.navigated_to == "/courses/#{@course_id}"
-    assert_received {:videdal_repo, :update, %Ecto.Changeset{valid?: true}}
+    course_id = course.id
+    assert %Course{id: ^course_id, title: "History"} = socket.assigns.course
+    assert socket.navigated_to == "/courses/#{course.id}"
+
+    assert %Course{title: "History"} = Repo.get!(Course, course.id)
   end
 
   defp errors_on(%Phoenix.HTML.Form{source: changeset}), do: errors_on(changeset)

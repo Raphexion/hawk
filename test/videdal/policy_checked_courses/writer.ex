@@ -3,7 +3,7 @@ defmodule Videdal.PolicyCheckedCourses.Writer do
 
   use Hawk.Writer.Resource,
     model: Videdal.Course,
-    repo: Videdal.SandboxRepo,
+    repo: Videdal.Repo,
     policy: Videdal.PolicyCheckedCourses.Policy
 
   create do
@@ -17,6 +17,6 @@ defmodule Videdal.PolicyCheckedCourses.Writer do
   def delete(%Videdal.Course{} = course, authority) do
     Hawk.MutationContext.delete(course, authority)
     |> Hawk.MutationContext.validate_policy(&Videdal.PolicyCheckedCourses.Policy.delete?/1)
-    |> Hawk.RepositoryBoundary.delete(Videdal.SandboxRepo)
+    |> Hawk.RepositoryBoundary.delete(Videdal.Repo)
   end
 end

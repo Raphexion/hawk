@@ -1,9 +1,10 @@
 defmodule Videdal.Grades.ReaderTest do
-  use ExUnit.Case, async: true
+  use Videdal.DatabaseCase, async: true
+
+  import Ecto.Query
 
   alias Hawk.Authority
-  alias Videdal.Grades
-  alias Videdal.Grades.Reader
+  alias Videdal.{Grades, Grades.Reader}
 
   test "declares relationship-heavy filters and policy-backed preloads" do
     assert Reader.filter_keys() ==
@@ -26,11 +27,8 @@ defmodule Videdal.Grades.ReaderTest do
 
   test "teacher policy filters trigger the explicit course join" do
     authority = Authority.new(:teacher, 12, scopes: %{school_id: 7, teacher_id: 12})
-    Process.put({Videdal.Repo, :all_results}, [])
+    query = Reader.preload_query(from(Videdal.Grade, as: :root), authority)
 
-    assert Grades.all(authority: authority) == []
-
-    assert_received {:videdal_repo, :all, query}
     inspected = inspect(query)
     assert inspected =~ "join: c1 in assoc(g0, :course)"
     assert inspected =~ "g0.school_id == ^7"
@@ -39,11 +37,8 @@ defmodule Videdal.Grades.ReaderTest do
 
   test "parent policy filters trigger student and parent link joins" do
     authority = Authority.new(:parent, 4, scopes: %{school_id: 7, parent_id: 4})
-    Process.put({Videdal.Repo, :all_results}, [])
+    query = Reader.preload_query(from(Videdal.Grade, as: :root), authority)
 
-    assert Grades.all(authority: authority) == []
-
-    assert_received {:videdal_repo, :all, query}
     inspected = inspect(query)
     assert inspected =~ "join: s1 in assoc(g0, :student)"
     assert inspected =~ "join: p2 in assoc(s1, :parent_students)"
@@ -52,12 +47,13 @@ defmodule Videdal.Grades.ReaderTest do
   end
 
   test "student policy conflicts with another student filter and returns no rows" do
-    authority = Authority.new(:student, 8, scopes: %{school_id: 7, student_id: 8})
-    Process.put({Videdal.Repo, :all_results}, [])
+    school = insert(:school)
+    student = insert(:student, school_id: school.id)
+    insert(:grade, school_id: school.id, student_id: student.id)
 
-    assert Grades.all(authority: authority, filter: %{student_id: 9}) == []
+    authority = Authority.new(:student, student.id, scopes: %{school_id: school.id, student_id: student.id})
+    other_student = insert(:student, school_id: school.id)
 
-    assert_received {:videdal_repo, :all, query}
-    assert inspect(query) =~ "where: false"
+    assert Grades.all(authority: authority, filter: %{student_id: other_student.id}) == []
   end
 end

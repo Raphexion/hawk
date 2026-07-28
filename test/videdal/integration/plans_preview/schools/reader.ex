@@ -1,7 +1,7 @@
 defmodule Videdal.Integration.PlansPreview.Schools.Reader do
   @moduledoc false
   use Hawk.Reader.Resource,
-    repo: Videdal.SandboxRepo,
+    repo: Videdal.Repo,
     schema: Videdal.School,
     policy: Videdal.Integration.PlansPreview.Schools.Policy
 

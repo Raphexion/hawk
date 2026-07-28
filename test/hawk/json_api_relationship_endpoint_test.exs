@@ -5,56 +5,40 @@ defmodule Hawk.JsonApiRelationshipEndpointTest.Controller do
 end
 
 defmodule Hawk.JsonApiRelationshipEndpointTest do
-  use ExUnit.Case, async: true
+  use Videdal.DatabaseCase, async: true
 
   import Hawk.TestConn, only: [conn: 1, resp: 1]
 
+  alias Hawk.Authority
   alias Hawk.JsonApiRelationshipEndpointTest.Controller
-  alias Videdal.{Course, Grade, Teacher}
-
-  @course_id Videdal.course_id()
-  @grade_id Videdal.grade_id()
-  @school_id Videdal.school_id()
-  @student_id Videdal.student_id()
-  @teacher_id Videdal.teacher_id()
 
   test "show documents include self links for resources and relationships" do
-    course = %Course{
-      id: @course_id,
-      title: "Math",
-      school_id: @school_id,
-      teacher_id: @teacher_id
-    }
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    course = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Math")
 
-    Process.put({Videdal.Repo, :all_results}, [course])
-
-    conn = Controller.show(conn(Hawk.Authority.system()), %{"id" => @course_id})
+    conn = Controller.show(conn(Authority.system()), %{"id" => course.id})
 
     assert conn.status == 200
     body = resp(conn)
-    assert body.links.self == "/courses/#{@course_id}"
-    assert body.data.links.self == "/courses/#{@course_id}"
+    assert body.links.self == "/courses/#{course.id}"
+    assert body.data.links.self == "/courses/#{course.id}"
 
     assert body.data.relationships.teacher.links.self ==
-             "/courses/#{@course_id}/relationships/teacher"
+             "/courses/#{course.id}/relationships/teacher"
 
     assert body.data.relationships.teacher.links.related ==
-             "/courses/#{@course_id}/teacher"
+             "/courses/#{course.id}/teacher"
   end
 
   test "relationship endpoint returns relationship linkage" do
-    course = %Course{
-      id: @course_id,
-      title: "Math",
-      school_id: @school_id,
-      teacher_id: @teacher_id
-    }
-
-    Process.put({Videdal.Repo, :all_results}, [course])
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    course = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Math")
 
     conn =
-      Controller.relationship(conn(Hawk.Authority.system()), %{
-        "id" => @course_id,
+      Controller.relationship(conn(Authority.system()), %{
+        "id" => course.id,
         "relationship" => "teacher"
       })
 
@@ -62,84 +46,74 @@ defmodule Hawk.JsonApiRelationshipEndpointTest do
 
     assert resp(conn) == %{
              links: %{
-               self: "/courses/#{@course_id}/relationships/teacher",
-               related: "/courses/#{@course_id}/teacher"
+               self: "/courses/#{course.id}/relationships/teacher",
+               related: "/courses/#{course.id}/teacher"
              },
-             data: %{type: "teachers", id: @teacher_id}
+             data: %{type: "teachers", id: teacher.id}
            }
   end
 
   test "related endpoint returns the related resource document" do
-    teacher = %Teacher{id: @teacher_id, name: "Ada", school_id: @school_id}
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id, name: "Ada")
+    course = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Math")
 
-    course = %Course{
-      id: @course_id,
-      title: "Math",
-      school_id: @school_id,
-      teacher_id: @teacher_id,
-      teacher: teacher
-    }
-
-    Process.put({Videdal.Repo, :all_results}, [course])
-
-    conn = Controller.related(conn(Hawk.Authority.system()), %{"id" => @course_id, "relationship" => "teacher"})
+    conn =
+      Controller.related(conn(Authority.system()), %{
+        "id" => course.id,
+        "relationship" => "teacher"
+      })
 
     assert conn.status == 200
     body = resp(conn)
-    assert body.links.self == "/teachers/#{@teacher_id}"
+    assert body.links.self == "/teachers/#{teacher.id}"
     assert body.data.type == "teachers"
-    assert body.data.id == @teacher_id
+    assert body.data.id == teacher.id
   end
 
   test "related endpoint returns collections for to-many relationships" do
-    grades = [
-      %Grade{
-        id: @grade_id,
-        score: 12,
-        school_id: @school_id,
-        student_id: @student_id,
-        course_id: @course_id
-      }
-    ]
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    student = insert(:student, school_id: school.id)
+    course = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Math")
 
-    course = %Course{
-      id: @course_id,
-      title: "Math",
-      school_id: @school_id,
-      teacher_id: @teacher_id,
-      grades: grades
-    }
+    grade =
+      insert(:grade,
+        school_id: school.id,
+        student_id: student.id,
+        course_id: course.id,
+        score: 12
+      )
 
-    Process.put({Videdal.Repo, :all_results}, [course])
-
-    conn = Controller.related(conn(Hawk.Authority.system()), %{"id" => @course_id, "relationship" => "grades"})
+    conn =
+      Controller.related(conn(Authority.system()), %{
+        "id" => course.id,
+        "relationship" => "grades"
+      })
 
     assert conn.status == 200
     body = resp(conn)
     assert body.links.self == "/grades"
-    assert [%{type: "grades", id: @grade_id}] = body.data
+    assert [grade_doc] = body.data
+    assert grade_doc.type == "grades"
+    assert grade_doc.id == grade.id
   end
 
   test "relationship endpoints reject unknown relationships" do
     hostile = "hawk_hostile_relationship_#{System.unique_integer([:positive])}"
-
-    course = %Course{
-      id: @course_id,
-      title: "Math",
-      school_id: @school_id,
-      teacher_id: @teacher_id
-    }
-
-    Process.put({Videdal.Repo, :all_results}, [course])
+    course_id = Videdal.course_id()
 
     relationship_conn =
-      Controller.relationship(conn(Hawk.Authority.system()), %{
-        "id" => @course_id,
+      Controller.relationship(conn(Authority.system()), %{
+        "id" => course_id,
         "relationship" => hostile
       })
 
     related_conn =
-      Controller.related(conn(Hawk.Authority.system()), %{"id" => @course_id, "relationship" => hostile})
+      Controller.related(conn(Authority.system()), %{
+        "id" => course_id,
+        "relationship" => hostile
+      })
 
     expected_detail = "unknown relationship #{inspect(hostile)}"
 

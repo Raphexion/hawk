@@ -9,7 +9,8 @@ defmodule Hawk.JsonApiControllerCaseTest do
     controller: Hawk.JsonApiControllerCaseTest.CoursesController,
     resource: Videdal.Courses,
     model: Videdal.Course,
-    repo: Videdal.Repo
+    repo: Videdal.Repo,
+    create_params: &__MODULE__.create_course_params/0
 
   import Hawk.TestConn, only: [resp: 1]
 
@@ -17,20 +18,30 @@ defmodule Hawk.JsonApiControllerCaseTest do
     count = Process.get(:json_api_controller_case_pre_authorities_count, 0) + 1
     Process.put(:json_api_controller_case_pre_authorities_count, count)
 
-    %{school_id: Videdal.school_id(), teacher_id: Videdal.teacher_id()}
+    school =
+      Videdal.Repo.insert!(%Videdal.School{id: Ecto.UUID.generate(), name: "Videdal Skole"})
+
+    teacher =
+      Videdal.Repo.insert!(%Videdal.Teacher{
+        id: Ecto.UUID.generate(),
+        name: "Ms. Curie",
+        school_id: school.id
+      })
+
+    %{school_id: school.id, teacher_id: teacher.id}
   end
 
   authorities pre_authorities do
     assert Process.get(:json_api_controller_case_pre_authorities_count) == 1
-    assert pre_authorities.school_id == Videdal.school_id()
+    assert is_binary(pre_authorities.school_id)
 
     %{
       principal: Hawk.Authority.new(:principal, Videdal.principal_id()),
       school_admin:
-        Hawk.Authority.new(:school_admin, Videdal.school_admin_id(), scopes: %{school_id: Videdal.school_id()}),
+        Hawk.Authority.new(:school_admin, Videdal.school_admin_id(), scopes: %{school_id: pre_authorities.school_id}),
       teacher:
-        Hawk.Authority.new(:teacher, Videdal.teacher_id(),
-          scopes: %{school_id: Videdal.school_id(), teacher_id: Videdal.teacher_id()}
+        Hawk.Authority.new(:teacher, pre_authorities.teacher_id,
+          scopes: %{school_id: pre_authorities.school_id, teacher_id: pre_authorities.teacher_id}
         ),
       unknown: Hawk.Authority.new(:unknown, Videdal.parent_id())
     }
@@ -53,9 +64,11 @@ defmodule Hawk.JsonApiControllerCaseTest do
   end
 
   test "sample generator builds multiple related models" do
-    assert [first, second, third] = sample_models(3)
+    pre = pre_authorities()
+
+    [first, second, third] = sample_models(3)
     assert {first.id, second.id, third.id} == {sample_id(1), sample_id(2), sample_id(3)}
-    assert Enum.all?([first, second, third], &(&1.school_id == Videdal.school_id()))
+    assert Enum.all?([first, second, third], &(&1.school_id == pre.school_id))
   end
 
   test "generate_sample reuses pre_sample context inside one test" do
@@ -95,4 +108,19 @@ defmodule Hawk.JsonApiControllerCaseTest do
   defp sample_id(1), do: Videdal.course_id()
   defp sample_id(2), do: Videdal.other_course_id()
   defp sample_id(3), do: Videdal.enrollment_id()
+
+  def create_course_params do
+    pre = pre_authorities()
+
+    %{
+      "data" => %{
+        "type" => "courses",
+        "attributes" => %{"title" => "Math"},
+        "relationships" => %{
+          "school" => %{"data" => %{"type" => "schools", "id" => pre.school_id}},
+          "teacher" => %{"data" => %{"type" => "teachers", "id" => pre.teacher_id}}
+        }
+      }
+    }
+  end
 end

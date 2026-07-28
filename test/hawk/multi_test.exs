@@ -1,12 +1,8 @@
 defmodule Hawk.MultiTest do
-  use ExUnit.Case, async: true
+  use Videdal.DatabaseCase, async: true
 
-  alias Hawk.Authority
-  alias Hawk.Multi
+  alias Hawk.{Authority, Multi}
 
-  @school_id Videdal.school_id()
-  @teacher_id Videdal.teacher_id()
-  @course_id Videdal.course_id()
   @authority Authority.system()
 
   describe "new/0" do
@@ -18,27 +14,26 @@ defmodule Hawk.MultiTest do
 
   describe "create/4" do
     test "adds a named create step that calls the resource facade" do
-      course = %Videdal.Course{title: "Math", school_id: @school_id, teacher_id: @teacher_id}
-
-      Process.put({Videdal.Repo, :all_results}, [course])
+      school = insert(:school)
+      teacher = insert(:teacher, school_id: school.id)
 
       multi =
         Multi.new()
-        |> Multi.create(:course, Videdal.Courses, %{title: "Math", school_id: @school_id}, @authority)
+        |> Multi.create(:course, Videdal.Courses, %{title: "Math", school_id: school.id, teacher_id: teacher.id}, @authority)
 
       assert length(multi.steps) == 1
       [step] = multi.steps
       assert step.name == :course
       assert step.op == :create
       assert step.resource == Videdal.Courses
-      assert step.attrs == %{title: "Math", school_id: @school_id}
+      assert step.attrs == %{title: "Math", school_id: school.id, teacher_id: teacher.id}
       assert step.authority == @authority
     end
   end
 
   describe "update/4" do
     test "adds a named update step" do
-      course = %Videdal.Course{id: @course_id, title: "Math"}
+      course = insert(:course)
 
       multi =
         Multi.new()
@@ -54,7 +49,7 @@ defmodule Hawk.MultiTest do
 
   describe "delete/3" do
     test "adds a named delete step" do
-      course = %Videdal.Course{id: @course_id, title: "Math"}
+      course = insert(:course)
 
       multi =
         Multi.new()
@@ -69,7 +64,7 @@ defmodule Hawk.MultiTest do
 
   describe "action/5" do
     test "adds a named action step" do
-      course = %Videdal.Course{id: @course_id, title: "Math"}
+      course = insert(:course)
 
       multi =
         Multi.new()
@@ -85,8 +80,6 @@ defmodule Hawk.MultiTest do
 
   describe "run/3" do
     test "adds a computed step whose result is threaded forward" do
-      _course = %Videdal.Course{id: @course_id, title: "Math"}
-
       multi =
         Multi.new()
         |> Multi.create(:course, Videdal.Courses, %{title: "Math"}, @authority)
@@ -101,7 +94,7 @@ defmodule Hawk.MultiTest do
 
   describe "to_list/1" do
     test "returns the steps without executing" do
-      course = %Videdal.Course{id: @course_id, title: "Math"}
+      course = insert(:course)
 
       multi =
         Multi.new()
@@ -116,9 +109,7 @@ defmodule Hawk.MultiTest do
 
   describe "execute/3" do
     test "runs all steps in a single transaction and returns results" do
-      course = %Videdal.Course{id: @course_id, title: "Math", school_id: @school_id, teacher_id: @teacher_id}
-
-      Process.put({Videdal.Repo, :all_results}, [course])
+      course = insert(:course)
 
       multi =
         Multi.new()
@@ -128,13 +119,10 @@ defmodule Hawk.MultiTest do
 
       assert Map.has_key?(results, :course)
       assert results.course.title == "Science"
-      assert_received {:videdal_repo, :transaction}
     end
 
     test "threads prior step results to run/3 steps" do
-      course = %Videdal.Course{id: @course_id, title: "Math", school_id: @school_id, teacher_id: @teacher_id}
-
-      Process.put({Videdal.Repo, :all_results}, [course])
+      course = insert(:course)
 
       multi =
         Multi.new()
@@ -143,15 +131,12 @@ defmodule Hawk.MultiTest do
 
       {:ok, results} = Multi.execute(multi, Videdal.Repo)
 
-      assert results.id == @course_id
+      assert results.id == course.id
     end
 
     test "halts and rolls back when a step fails" do
-      course = %Videdal.Course{id: @course_id, title: "Math", school_id: @school_id, teacher_id: @teacher_id}
+      course = insert(:course)
 
-      Process.put({Videdal.Repo, :all_results}, [course])
-
-      # A create that will fail validation: missing required fields.
       multi =
         Multi.new()
         |> Multi.update(:course, Videdal.Courses, course, %{title: "Science"}, @authority)
@@ -168,9 +153,7 @@ defmodule Hawk.MultiTest do
     end
 
     test "executes an action step and returns its result" do
-      course = %Videdal.Course{id: @course_id, title: "Math", school_id: @school_id, teacher_id: @teacher_id, registration_state: "draft", seat_count: 0, waitlist_count: 0}
-
-      Process.put({Videdal.Repo, :all_results}, [course])
+      course = insert(:course, registration_state: "draft", seat_count: 0, waitlist_count: 0)
 
       multi =
         Multi.new()
@@ -183,9 +166,7 @@ defmodule Hawk.MultiTest do
     end
 
     test "run/3 receives prior step results and threads its value forward" do
-      course = %Videdal.Course{id: @course_id, title: "Math", school_id: @school_id, teacher_id: @teacher_id}
-
-      Process.put({Videdal.Repo, :all_results}, [course])
+      course = insert(:course)
 
       multi =
         Multi.new()
@@ -200,9 +181,7 @@ defmodule Hawk.MultiTest do
     end
 
     test "a failed run/3 halts the multi and rolls back prior steps" do
-      course = %Videdal.Course{id: @course_id, title: "Math", school_id: @school_id, teacher_id: @teacher_id}
-
-      Process.put({Videdal.Repo, :all_results}, [course])
+      course = insert(:course)
 
       multi =
         Multi.new()

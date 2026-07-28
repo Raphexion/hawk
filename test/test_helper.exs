@@ -1,3 +1,2 @@
-Videdal.DatabaseCase.start_repo!()
-
+Videdal.Repo.start_link()
 ExUnit.start()

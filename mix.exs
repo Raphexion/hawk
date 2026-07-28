@@ -11,7 +11,13 @@ defmodule Hawk.MixProject do
       deps: deps(),
       dialyzer: dialyzer(),
       aliases: aliases(),
-      test_coverage: [summary: [threshold: 85]]
+      test_coverage: [
+        summary: [threshold: 85],
+        # Cover only the Hawk library itself. The Videdal example app and the
+        # Hawk.Test* helpers are compiled under `elixirc_paths(:test)` to
+        # exercise Hawk, but they are test fixtures, not shipped code.
+        ignore_modules: [~r/^Videdal\b/, Hawk.TestConn, Hawk.TestSocket]
+      ]
     ]
   end
 
@@ -20,9 +26,10 @@ defmodule Hawk.MixProject do
       preferred_envs: [
         "ecto.create": :test,
         "ecto.drop": :test,
+        "ecto.migrate": :test,
+        "ecto.rollback": :test,
         "ecto.setup": :test,
-        "ecto.reset": :test,
-        "test.database": :test
+        "ecto.reset": :test
       ]
     ]
   end
@@ -49,6 +56,8 @@ defmodule Hawk.MixProject do
       {:phoenix_live_view, "~> 1.0"},
       {:phoenix_ecto, "~> 4.0"},
       {:jason, "~> 1.4"},
+      # Test factories
+      {:ex_machina, "~> 2.8", only: :test},
       # Code quality
       {:dialyxir, "~> 1.3", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
@@ -60,15 +69,11 @@ defmodule Hawk.MixProject do
 
   defp aliases do
     [
-      "ecto.setup": [
-        "ecto.create --quiet",
-        "run -e \"Videdal.DatabaseCase.start_repo!(); Videdal.DatabaseCase.reset_schema!()\""
-      ],
+      "ecto.setup": ["ecto.create --quiet", "ecto.migrate --quiet"],
       "ecto.reset": ["ecto.drop --quiet", "ecto.setup"],
       # `mix test` is the complete local gate: validate every Hawk resource's
-      # contract, then run the suite. Same path CI takes.
-      test: ["hawk.validate", "test"],
-      "test.database": ["ecto.setup", "test"]
+      # contract, then run the full suite.
+      test: ["hawk.validate", "test"]
     ]
   end
 

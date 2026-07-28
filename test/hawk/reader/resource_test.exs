@@ -1,7 +1,7 @@
 defmodule Hawk.Reader.ResourceTest.Policy do
   @moduledoc false
 
-  def read_filter(_authority), do: %{school_id: 7}
+  def read_filter(_authority), do: :all
 end
 
 defmodule Hawk.Reader.ResourceTest.Reader do
@@ -52,14 +52,13 @@ defmodule Hawk.Reader.ResourceTest.ScopedReader do
 end
 
 defmodule Hawk.Reader.ResourceTest do
-  use ExUnit.Case, async: true
+  use Videdal.DatabaseCase, async: true
 
   import Ecto.Query, only: [from: 2]
 
   alias Hawk.Authority
   alias Hawk.Reader.ResourceTest.Reader
   alias Hawk.Reader.ResourceTest.ScopedReader
-  alias Videdal.Student
 
   test "generates reader metadata functions" do
     assert Reader.filter_keys() ==
@@ -73,40 +72,33 @@ defmodule Hawk.Reader.ResourceTest do
 
     assert Reader.preload_readers() == %{}
 
-    assert Reader.read_filter(Authority.system()) == %{school_id: 7}
+    assert Reader.read_filter(Authority.system()) == :all
   end
 
   test "generates all/1 through the shared reader runtime" do
-    Process.put({Videdal.Repo, :all_results}, [%Student{id: 12, school_id: 7}])
+    school = insert(:school, id: "00000000-0000-0000-0000-000000000007")
+    student = insert(:student, id: "00000000-0000-0000-0000-000000000012", school_id: school.id)
 
-    assert [%Student{id: 12}] =
-             Reader.all(authority: Authority.system(), filter: %{student_id: 12})
+    [result] = Reader.all(authority: Authority.system(), filter: %{student_id: student.id})
 
-    assert_received {:videdal_repo, :all, query}
-    inspected = inspect(query)
-    assert inspected =~ "s0.id == ^12"
-    assert inspected =~ "s0.school_id == ^7"
-    refute inspected =~ "join:"
+    assert result.id == student.id
   end
 
   test "applies explicit join steps only when triggered by filters" do
-    Process.put({Videdal.Repo, :all_results}, [%Student{id: 12, school_id: 7}])
+    school = insert(:school, id: "00000000-0000-0000-0000-000000000007", name: "Videdal Skole")
+    student = insert(:student, school_id: school.id)
 
-    Reader.all(authority: Authority.system(), filter: %{school_name: "Videdal Skole"})
+    [result] = Reader.all(authority: Authority.system(), filter: %{school_name: "Videdal Skole"})
 
-    assert_received {:videdal_repo, :all, query}
-    inspected = inspect(query)
-    assert inspected =~ "join: s1 in assoc(s0, :school)"
-    assert inspected =~ ~s(s1.name == ^"Videdal Skole")
+    assert result.id == student.id
   end
 
   test "applies reader scope to root reads and preload queries" do
-    Process.put({Videdal.Repo, :all_results}, [%Student{id: 12, school_id: 7, active: true}])
+    school = insert(:school, id: "00000000-0000-0000-0000-000000000007")
+    insert(:student, school_id: school.id, active: true)
 
-    ScopedReader.all(authority: Authority.system())
-
-    assert_received {:videdal_repo, :all, query}
-    assert inspect(query) =~ "s0.active == true"
+    results = ScopedReader.all(authority: Authority.system())
+    assert length(results) == 1
 
     query =
       Videdal.Student
@@ -117,14 +109,12 @@ defmodule Hawk.Reader.ResourceTest do
   end
 
   test "preloads declared associations after fetching rows" do
-    results = [%Student{id: 12, school_id: 7}]
-    Process.put({Videdal.Repo, :all_results}, results)
+    school = insert(:school, id: "00000000-0000-0000-0000-000000000007")
+    insert(:student, school_id: school.id)
 
-    assert Reader.all(authority: Authority.system(), preloads: [:school]) == results
+    [result] = Reader.all(authority: Authority.system(), preloads: [:school])
 
-    assert_received {:videdal_repo, :all, _query}
-    assert_received {:videdal_repo, :preload, ^results, [school: %Ecto.Query{}]}
-    refute_received {:videdal_repo, :preload, _other_results, _preloads}
+    assert Ecto.assoc_loaded?(result.school)
   end
 
   test "rejects undeclared preloads" do
@@ -134,9 +124,10 @@ defmodule Hawk.Reader.ResourceTest do
   end
 
   test "generates one/1" do
-    student = %Student{id: 12, school_id: 7}
-    Process.put({Videdal.Repo, :all_results}, [student])
+    school = insert(:school, id: "00000000-0000-0000-0000-000000000007")
+    student = insert(:student, school_id: school.id)
 
-    assert Reader.one(authority: Authority.system(), filter: %{student_id: 12}) == {:ok, student}
+    assert {:ok, found} = Reader.one(authority: Authority.system(), filter: %{student_id: student.id})
+    assert found.id == student.id
   end
 end

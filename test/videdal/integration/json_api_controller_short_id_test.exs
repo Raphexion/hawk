@@ -2,7 +2,7 @@ defmodule Videdal.Integration.JsonApiControllerShortIdTest.CourseReader do
   @moduledoc false
 
   use Hawk.Reader.Resource,
-    repo: Videdal.SandboxRepo,
+    repo: Videdal.Repo,
     schema: Videdal.Course,
     policy: Videdal.Integration.JsonApiControllerShortIdTest.Courses.Policy
 
@@ -23,7 +23,7 @@ defmodule Videdal.Integration.JsonApiControllerShortIdTest.Courses.Writer do
 
   use Hawk.Writer.Resource,
     model: Videdal.Course,
-    repo: Videdal.SandboxRepo,
+    repo: Videdal.Repo,
     policy: Videdal.Integration.JsonApiControllerShortIdTest.Courses.Policy
 
   create do
@@ -37,7 +37,7 @@ defmodule Videdal.Integration.JsonApiControllerShortIdTest.Courses.Writer do
   def delete(%Videdal.Course{} = course, authority) do
     Hawk.MutationContext.delete(course, authority)
     |> Hawk.MutationContext.validate_policy(&Videdal.Integration.JsonApiControllerShortIdTest.Courses.Policy.delete?/1)
-    |> Hawk.RepositoryBoundary.delete(Videdal.SandboxRepo)
+    |> Hawk.RepositoryBoundary.delete(Videdal.Repo)
   end
 end
 
@@ -65,13 +65,13 @@ defmodule Videdal.Integration.JsonApiControllerShortIdTest do
   import Hawk.TestConn, only: [conn: 1, resp: 1]
 
   alias Hawk.Authority
-  alias Videdal.{Course, SandboxRepo, School, Teacher}
+  alias Videdal.{Course, Repo, School, Teacher}
   alias Videdal.Integration.JsonApiControllerShortIdTest.CoursesController
 
   @moduletag :database
 
   setup do
-    Videdal.DatabaseCase.reset_schema!()
+    
     :ok
   end
 
@@ -106,10 +106,10 @@ defmodule Videdal.Integration.JsonApiControllerShortIdTest do
   end
 
   defp seed_course(id) do
-    school = SandboxRepo.insert!(%School{name: "School #{id}"})
-    teacher = SandboxRepo.insert!(%Teacher{name: "Teacher #{id}", school_id: school.id})
+    school = Repo.insert!(%School{name: "School #{id}"})
+    teacher = Repo.insert!(%Teacher{name: "Teacher #{id}", school_id: school.id})
 
-    SandboxRepo.insert!(%Course{
+    Repo.insert!(%Course{
       id: id,
       title: "Course #{id}",
       school_id: school.id,

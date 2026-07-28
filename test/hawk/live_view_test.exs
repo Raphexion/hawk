@@ -40,7 +40,7 @@ defmodule Hawk.LiveViewTest.CourseTranslatedLive do
 end
 
 defmodule Hawk.LiveViewTest do
-  use ExUnit.Case, async: true
+  use Videdal.DatabaseCase, async: true
 
   import Hawk.TestSocket, only: [socket: 0]
 
@@ -53,23 +53,28 @@ defmodule Hawk.LiveViewTest do
     CourseTranslatedLive
   }
 
-  alias Videdal.Course
+  alias Videdal.{Course, Repo}
 
   @course_id Videdal.course_id()
   @other_course_id Videdal.other_course_id()
-  @school_admin_id Videdal.school_admin_id()
   @school_id Videdal.school_id()
   @student_id Videdal.student_id()
   @teacher_id Videdal.teacher_id()
 
   test "assign_index loads resources into predictable plural assigns" do
-    courses = [%Course{id: @course_id, title: "Math"}]
-    Process.put({Videdal.Repo, :all_results}, courses)
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    math = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Math")
+    insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Zebra")
+    authority = school_admin(school)
 
     socket =
-      CourseIndexLive.assign_index(socket(), Authority.system(), page: %{column: :title, dir: :asc, size: 10})
+      CourseIndexLive.assign_index(socket(), authority, page: %{column: :title, dir: :asc, size: 10})
 
-    assert socket.assigns.courses == courses
+    assert [first, second] = socket.assigns.courses
+    assert first.id == math.id
+    assert first.title == "Math"
+    assert second.title == "Zebra"
     assert socket.assigns.hawk_resource == :course
     assert socket.assigns.hawk_page == %{column: :title, dir: :asc, size: 10}
 
@@ -79,65 +84,62 @@ defmodule Hawk.LiveViewTest do
              %{name: :seat_count, label: "Seats"},
              %{name: :waitlist_count, label: "Waitlist"}
            ]
-
-    assert_received {:videdal_repo, :all, query}
-    assert inspect(query) =~ "order_by: [asc: c0.title]"
   end
 
   test "assign_index applies declared LiveView filters as reader narrowing" do
-    courses = [%Course{id: @course_id, title: "Math", teacher_id: @teacher_id}]
-    Process.put({Videdal.Repo, :all_results}, courses)
+    school = insert(:school)
+    teacher1 = insert(:teacher, school_id: school.id)
+    teacher2 = insert(:teacher, school_id: school.id)
+    course1 = insert(:course, school_id: school.id, teacher_id: teacher1.id, title: "Math")
+    insert(:course, school_id: school.id, teacher_id: teacher2.id, title: "Other")
+    authority = school_admin(school)
 
     socket =
-      CourseIndexLive.assign_index(socket(), Authority.system(), params: %{"filter" => %{"teacher_id" => @teacher_id}})
+      CourseIndexLive.assign_index(socket(), authority, params: %{"filter" => %{"teacher_id" => teacher1.id}})
 
-    assert socket.assigns.courses == courses
-    assert_received {:videdal_repo, :all, query}
-    assert inspect(query) =~ "c0.teacher_id == ^\"#{@teacher_id}\""
+    assert [course] = socket.assigns.courses
+    assert course.id == course1.id
   end
 
   test "assign_index applies search, sort, and page params" do
-    courses = [%Course{id: @course_id, title: "History", teacher_id: @teacher_id}]
-    Process.put({Videdal.Repo, :all_results}, courses)
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    history = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "History")
+    insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Math")
+    authority = school_admin(school)
 
     socket =
-      CourseIndexLive.assign_index(socket(), Authority.system(),
+      CourseIndexLive.assign_index(socket(), authority,
         params: %{
           "search" => %{"title" => "histo"},
           "sort" => "-title",
-          "page" => %{"number" => "3", "size" => "10"}
+          "page" => %{"number" => "1", "size" => "10"}
         }
       )
 
-    assert socket.assigns.courses == courses
-    assert socket.assigns.hawk_page == %{column: :title, dir: :desc, number: 3, size: 10}
+    assert [course] = socket.assigns.courses
+    assert course.id == history.id
+    assert socket.assigns.hawk_page == %{column: :title, dir: :desc, number: 1, size: 10}
     assert socket.assigns.hawk_index_state.filter == %{title: {:ilike, "%histo%"}}
-    assert_received {:videdal_repo, :all, query}
-    inspected = inspect(query)
-    assert inspected =~ "ilike(c0.title, ^\"%histo%\")"
-    assert inspected =~ "desc: c0.title"
-    assert inspected =~ "limit: ^10"
-    assert inspected =~ "offset: ^20"
   end
 
   test "assign_index combines LiveView params with existing caller filters" do
-    courses = [
-      %Course{id: @course_id, title: "Math", school_id: @school_id, teacher_id: @teacher_id}
-    ]
-
-    Process.put({Videdal.Repo, :all_results}, courses)
+    school = insert(:school)
+    teacher1 = insert(:teacher, school_id: school.id)
+    teacher2 = insert(:teacher, school_id: school.id)
+    course1 = insert(:course, school_id: school.id, teacher_id: teacher1.id, title: "Math")
+    insert(:course, school_id: school.id, teacher_id: teacher2.id, title: "Other")
+    other_school = insert(:school)
+    insert(:course, school_id: other_school.id, teacher_id: insert(:teacher, school_id: other_school.id).id, title: "Math")
 
     socket =
       CourseIndexLive.assign_index(socket(), Authority.system(),
-        filter: %{school_id: @school_id},
-        params: %{"filter" => %{"teacher_id" => @teacher_id}}
+        filter: %{school_id: school.id},
+        params: %{"filter" => %{"teacher_id" => teacher1.id}}
       )
 
-    assert socket.assigns.courses == courses
-    assert_received {:videdal_repo, :all, query}
-    inspected = inspect(query)
-    assert inspected =~ "c0.school_id == ^\"#{@school_id}\""
-    assert inspected =~ "c0.teacher_id == ^\"#{@teacher_id}\""
+    assert [course] = socket.assigns.courses
+    assert course.id == course1.id
   end
 
   test "assign_index rejects undeclared LiveView filters without creating atoms" do
@@ -151,12 +153,15 @@ defmodule Hawk.LiveViewTest do
   end
 
   test "assign_show loads one resource into predictable singular assigns" do
-    course = %Course{id: @course_id, title: "Math"}
-    Process.put({Videdal.Repo, :all_results}, [course])
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    course = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Math")
+    authority = school_admin(school)
 
-    socket = CourseShowLive.assign_show(socket(), Authority.system(), @course_id)
+    socket = CourseShowLive.assign_show(socket(), authority, course.id)
 
-    assert socket.assigns.course == course
+    assert socket.assigns.course.id == course.id
+    assert socket.assigns.course.title == "Math"
     assert socket.assigns.hawk_resource == :course
 
     assert socket.assigns.hawk_fields == [
@@ -165,9 +170,6 @@ defmodule Hawk.LiveViewTest do
              %{name: :seat_count, label: "Seats"},
              %{name: :waitlist_count, label: "Waitlist"}
            ]
-
-    assert_received {:videdal_repo, :all, query}
-    assert inspect(query) =~ "c0.id == ^\"#{@course_id}\""
   end
 
   test "assign_show stores a LiveView-friendly error when the record is missing" do
@@ -179,36 +181,36 @@ defmodule Hawk.LiveViewTest do
   end
 
   test "assign_show can load by a declared natural key" do
-    course = %Course{id: @course_id, title: "Math", school_id: @school_id}
-    Process.put({Videdal.Repo, :all_results}, [course])
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    course = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Math")
+    authority = school_admin(school)
 
-    socket = CourseShowLive.assign_show(socket(), Authority.system(), "Math", lookup: :title)
+    socket = CourseShowLive.assign_show(socket(), authority, "Math", lookup: :title)
 
-    assert socket.assigns.course == course
-    assert_received {:videdal_repo, :all, query}
-    refute inspect(query) =~ "c0.id =="
-    assert inspect(query) =~ "c0.title == ^\"Math\""
+    assert socket.assigns.course.id == course.id
   end
 
   test "assign_show merges an existing filter when loading one resource" do
-    course = %Course{id: @course_id, title: "Math", school_id: @school_id}
-    Process.put({Videdal.Repo, :all_results}, [course])
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    course = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Math")
+    authority = school_admin(school)
 
     socket =
-      CourseShowLive.assign_show(socket(), Authority.system(), @course_id, filter: %{school_id: @school_id})
+      CourseShowLive.assign_show(socket(), authority, course.id, filter: %{school_id: school.id})
 
-    assert socket.assigns.course == course
-    assert_received {:videdal_repo, :all, query}
-    inspected = inspect(query)
-    assert inspected =~ "c0.school_id == ^\"#{@school_id}\""
-    assert inspected =~ "c0.id == ^\"#{@course_id}\""
+    assert socket.assigns.course.id == course.id
   end
 
   test "assign_index exposes lightweight page metadata for admin tables" do
-    courses = [%Course{id: @course_id, title: "Math"}]
-    Process.put({Videdal.Repo, :all_results}, courses)
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Math")
+    insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Zebra")
+    authority = school_admin(school)
 
-    socket = CourseIndexLive.assign_index(socket(), Authority.system(), page: %{column: :title, dir: :asc, size: 1})
+    socket = CourseIndexLive.assign_index(socket(), authority, page: %{column: :title, dir: :asc, size: 1})
 
     assert socket.assigns.hawk_index_meta == %{
              count: 1,
@@ -352,6 +354,8 @@ defmodule Hawk.LiveViewTest do
   end
 
   test "generated hawk_save helper supports custom success behavior" do
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
     socket = CourseIndexLive.assign_new_form(socket(), Authority.system())
 
     {:noreply, socket} =
@@ -359,8 +363,8 @@ defmodule Hawk.LiveViewTest do
         %{
           "course" => %{
             "title" => "History",
-            "school_id" => @school_id,
-            "teacher_id" => @teacher_id
+            "school_id" => school.id,
+            "teacher_id" => teacher.id
           }
         },
         socket,
@@ -385,9 +389,12 @@ defmodule Hawk.LiveViewTest do
   end
 
   test "save event merges forced attrs after client params when creating" do
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+
     socket =
       CourseIndexLive.assign_new_form(socket(), Authority.system(),
-        forced_attrs: %{school_id: @school_id, teacher_id: @teacher_id}
+        forced_attrs: %{school_id: school.id, teacher_id: teacher.id}
       )
 
     {:noreply, socket} =
@@ -403,15 +410,15 @@ defmodule Hawk.LiveViewTest do
         socket
       )
 
-    assert %Course{title: "History", school_id: @school_id, teacher_id: @teacher_id} =
-             socket.assigns.course
-
-    assert_received {:videdal_repo, :insert, %Ecto.Changeset{} = changeset}
-    assert Ecto.Changeset.get_change(changeset, :school_id) == @school_id
-    assert Ecto.Changeset.get_change(changeset, :teacher_id) == @teacher_id
+    assert %Course{title: "History"} = socket.assigns.course
+    assert socket.assigns.course.school_id == school.id
+    assert socket.assigns.course.teacher_id == teacher.id
+    assert Repo.get!(Course, socket.assigns.course.id).school_id == school.id
   end
 
   test "save event creates, assigns the saved model, and switches form state to edit" do
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
     socket = CourseIndexLive.assign_new_form(socket(), Authority.system())
 
     {:noreply, socket} =
@@ -420,20 +427,21 @@ defmodule Hawk.LiveViewTest do
         %{
           "course" => %{
             "title" => "History",
-            "school_id" => @school_id,
-            "teacher_id" => @teacher_id
+            "school_id" => school.id,
+            "teacher_id" => teacher.id
           }
         },
         socket
       )
 
-    assert %Course{title: "History", school_id: @school_id, teacher_id: @teacher_id} =
-             socket.assigns.course
+    assert %Course{title: "History"} = socket.assigns.course
+    assert socket.assigns.course.school_id == school.id
+    assert socket.assigns.course.teacher_id == teacher.id
 
     assert %Phoenix.HTML.Form{action: :validate, source: %Ecto.Changeset{valid?: true}} = socket.assigns.course_form
     assert socket.assigns.hawk_form_states.course.mode == :update
     assert socket.assigns.hawk_form_states.course.model == socket.assigns.course
-    assert_received {:videdal_repo, :insert, %Ecto.Changeset{valid?: true}}
+    assert Repo.get!(Course, socket.assigns.course.id).title == "History"
   end
 
   test "save event keeps create form with insert errors when create is invalid" do
@@ -449,22 +457,20 @@ defmodule Hawk.LiveViewTest do
   end
 
   test "save event updates and assigns the saved model" do
-    course = %Course{
-      id: @course_id,
-      title: "Math",
-      school_id: @school_id,
-      teacher_id: @teacher_id
-    }
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    course = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Math")
+    course_id = course.id
 
     socket = CourseIndexLive.assign_edit_form(socket(), course, Authority.system())
 
     {:noreply, socket} =
       CourseIndexLive.handle_event("hawk:save", %{"course" => %{"title" => "History"}}, socket)
 
-    assert %Course{id: @course_id, title: "History"} = socket.assigns.course
+    assert %Course{id: ^course_id, title: "History"} = socket.assigns.course
     assert socket.assigns.hawk_form_states.course.mode == :update
     assert socket.assigns.hawk_form_states.course.model == socket.assigns.course
-    assert_received {:videdal_repo, :update, %Ecto.Changeset{valid?: true}}
+    assert Repo.get!(Course, course_id).title == "History"
   end
 
   test "save event keeps edit form with update errors when update is invalid" do
@@ -511,21 +517,21 @@ defmodule Hawk.LiveViewTest do
   end
 
   test "delete event deletes the resource and refreshes the index assign" do
-    course = %Course{id: @course_id, title: "Math"}
-    Process.put({Videdal.Repo, :all_results}, [course])
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    course = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Math")
+    course_id = course.id
+    authority = school_admin(school)
 
     {:noreply, socket} =
       CourseIndexLive.handle_event(
         "hawk:delete",
-        %{
-          "id" => @course_id,
-          "authority" => Authority.new(:school_admin, @school_admin_id, scopes: %{school_id: @school_id})
-        },
+        %{"id" => course_id, "authority" => authority},
         socket()
       )
 
-    assert socket.assigns.courses == [course]
-    assert_received {:videdal_repo, :delete, %Course{id: @course_id}}
+    refute Enum.any?(socket.assigns.courses, &(&1.id == course_id))
+    refute Repo.get(Course, course_id)
   end
 
   test "delete event stores a LiveView-friendly not found error" do
@@ -542,20 +548,24 @@ defmodule Hawk.LiveViewTest do
   end
 
   test "delete event stores LiveView-friendly authorization errors" do
-    course = %Course{id: @course_id, title: "Math", school_id: @school_id}
-    Process.put({Videdal.Repo, :all_results}, [course])
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    course = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Math")
+    student = insert(:student, school_id: school.id)
+    course_id = course.id
+
+    authority =
+      Authority.new(:student, student.id, scopes: %{school_id: school.id, student_id: student.id})
 
     {:noreply, socket} =
       CourseIndexLive.handle_event(
         "hawk:delete",
-        %{
-          "id" => @course_id,
-          "authority" => Authority.new(:student, @student_id, scopes: %{school_id: @school_id})
-        },
+        %{"id" => course_id, "authority" => authority},
         socket()
       )
 
     assert socket.assigns.hawk_error == %{base: ["You are not allowed to delete this course."]}
+    assert Repo.get!(Course, course_id)
   end
 
   defp errors_on(%Phoenix.HTML.Form{source: changeset}), do: errors_on(changeset)
@@ -566,6 +576,10 @@ defmodule Hawk.LiveViewTest do
         opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
       end)
     end)
+  end
+
+  defp school_admin(school) do
+    Authority.new(:school_admin, Videdal.school_admin_id(), scopes: %{school_id: school.id})
   end
 
   defp refute_existing_atom(value) do

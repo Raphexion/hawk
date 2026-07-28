@@ -2,7 +2,7 @@ defmodule Videdal.Integration.GradesReaderTest.Reader do
   @moduledoc false
 
   use Hawk.Reader.Resource,
-    repo: Videdal.SandboxRepo,
+    repo: Videdal.Repo,
     schema: Videdal.Grade,
     policy: Videdal.Grades.Policy
 
@@ -50,11 +50,11 @@ defmodule Videdal.Integration.GradesReaderTest do
   use Videdal.DatabaseCase, async: false
 
   alias Hawk.Authority
-  alias Videdal.{Course, Grade, Parent, ParentStudent, SandboxRepo, School, Student, Teacher}
+  alias Videdal.{Course, Grade, Parent, ParentStudent, Repo, School, Student, Teacher}
   alias Videdal.Integration.GradesReaderTest.Reader
 
   setup do
-    Videdal.DatabaseCase.reset_schema!()
+    
     {:ok, seed_school()}
   end
 
@@ -107,46 +107,46 @@ defmodule Videdal.Integration.GradesReaderTest do
   end
 
   defp seed_school do
-    school = SandboxRepo.insert!(%School{name: "Videdal Skole"})
-    teacher = SandboxRepo.insert!(%Teacher{name: "Ms. Curie", school_id: school.id})
-    other_teacher = SandboxRepo.insert!(%Teacher{name: "Mr. Feynman", school_id: school.id})
+    school = Repo.insert!(%School{name: "Videdal Skole"})
+    teacher = Repo.insert!(%Teacher{name: "Ms. Curie", school_id: school.id})
+    other_teacher = Repo.insert!(%Teacher{name: "Mr. Feynman", school_id: school.id})
 
-    ada = SandboxRepo.insert!(%Student{name: "Ada", school_id: school.id})
-    grace = SandboxRepo.insert!(%Student{name: "Grace", school_id: school.id})
+    ada = Repo.insert!(%Student{name: "Ada", school_id: school.id})
+    grace = Repo.insert!(%Student{name: "Grace", school_id: school.id})
 
     math =
-      SandboxRepo.insert!(%Course{title: "Math", school_id: school.id, teacher_id: teacher.id})
+      Repo.insert!(%Course{title: "Math", school_id: school.id, teacher_id: teacher.id})
 
     physics =
-      SandboxRepo.insert!(%Course{
+      Repo.insert!(%Course{
         title: "Physics",
         school_id: school.id,
         teacher_id: other_teacher.id
       })
 
-    parent = SandboxRepo.insert!(%Parent{name: "Ada Parent", school_id: school.id})
+    parent = Repo.insert!(%Parent{name: "Ada Parent", school_id: school.id})
 
-    SandboxRepo.insert!(%ParentStudent{
+    Repo.insert!(%ParentStudent{
       school_id: school.id,
       parent_id: parent.id,
       student_id: ada.id
     })
 
-    SandboxRepo.insert!(%Grade{
+    Repo.insert!(%Grade{
       score: 12,
       school_id: school.id,
       student_id: ada.id,
       course_id: math.id
     })
 
-    SandboxRepo.insert!(%Grade{
+    Repo.insert!(%Grade{
       score: 10,
       school_id: school.id,
       student_id: grace.id,
       course_id: math.id
     })
 
-    SandboxRepo.insert!(%Grade{
+    Repo.insert!(%Grade{
       score: 7,
       school_id: school.id,
       student_id: ada.id,

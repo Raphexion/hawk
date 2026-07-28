@@ -2,7 +2,7 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest.CourseReader do
   @moduledoc false
 
   use Hawk.Reader.Resource,
-    repo: Videdal.SandboxRepo,
+    repo: Videdal.Repo,
     schema: Videdal.Course,
     policy: Videdal.Integration.JsonApiControllerQueryCountTest.Courses.Policy
 
@@ -21,7 +21,7 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest.GradeReader do
   @moduledoc false
 
   use Hawk.Reader.Resource,
-    repo: Videdal.SandboxRepo,
+    repo: Videdal.Repo,
     schema: Videdal.Grade,
     policy: Videdal.Integration.JsonApiControllerQueryCountTest.Courses.Policy
 
@@ -37,7 +37,7 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest.StudentReader do
   @moduledoc false
 
   use Hawk.Reader.Resource,
-    repo: Videdal.SandboxRepo,
+    repo: Videdal.Repo,
     schema: Videdal.Student,
     policy: Videdal.Integration.JsonApiControllerQueryCountTest.Courses.Policy
 
@@ -49,7 +49,7 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest.TeacherReader do
   @moduledoc false
 
   use Hawk.Reader.Resource,
-    repo: Videdal.SandboxRepo,
+    repo: Videdal.Repo,
     schema: Videdal.Teacher,
     policy: Videdal.Integration.JsonApiControllerQueryCountTest.Courses.Policy
 
@@ -62,7 +62,7 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest.Courses.Writer do
 
   use Hawk.Writer.Resource,
     model: Videdal.Course,
-    repo: Videdal.SandboxRepo,
+    repo: Videdal.Repo,
     policy: Videdal.Integration.JsonApiControllerQueryCountTest.Courses.Policy
 
   create do
@@ -78,7 +78,7 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest.Courses.Writer do
     |> Hawk.MutationContext.validate_policy(
       &Videdal.Integration.JsonApiControllerQueryCountTest.Courses.Policy.delete?/1
     )
-    |> Hawk.RepositoryBoundary.delete(Videdal.SandboxRepo)
+    |> Hawk.RepositoryBoundary.delete(Videdal.Repo)
   end
 end
 
@@ -113,7 +113,7 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest.ControllerCaseHarn
   @moduledoc false
 
   alias Hawk.Authority
-  alias Videdal.{Course, SandboxRepo, School, Teacher}
+  alias Videdal.{Course, Repo, School, Teacher}
   alias Videdal.Integration.JsonApiControllerQueryCountTest.CoursesController
 
   def __hawk_json_api_controller_case__ do
@@ -121,7 +121,7 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest.ControllerCaseHarn
       controller: CoursesController,
       resource: Videdal.Integration.JsonApiControllerQueryCountTest.Courses,
       model: Course,
-      repo: SandboxRepo,
+      repo: Repo,
       sample_count: 3,
       create_params: nil,
       update_params: nil
@@ -135,8 +135,8 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest.ControllerCaseHarn
   end
 
   def pre_sample(_pre_authorities, _authorities) do
-    school = SandboxRepo.insert!(%School{name: "Videdal Skole"})
-    teacher = SandboxRepo.insert!(%Teacher{name: "Ms. Curie", school_id: school.id})
+    school = Repo.insert!(%School{name: "Videdal Skole"})
+    teacher = Repo.insert!(%Teacher{name: "Ms. Curie", school_id: school.id})
     %{school: school, teacher: teacher}
   end
 
@@ -156,13 +156,13 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest do
   import Hawk.TestConn, only: [conn: 1, resp: 1]
 
   alias Hawk.Authority
-  alias Videdal.{Course, Grade, SandboxRepo, School, Student, Teacher}
+  alias Videdal.{Course, Grade, Repo, School, Student, Teacher}
   alias Videdal.Integration.JsonApiControllerQueryCountTest.CoursesController
 
   @moduletag :database
 
   setup do
-    Videdal.DatabaseCase.reset_schema!()
+    
     :ok
   end
 
@@ -174,7 +174,7 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest do
         CoursesController.index(conn(Authority.system()), %{"include" => "grades.student"})
       end)
 
-    Videdal.DatabaseCase.reset_schema!()
+    
     seed_courses_with_grades(5)
 
     {conn, many_course_query_count} =
@@ -277,21 +277,25 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest do
   end
 
   defp seed_courses_with_grades(count) do
-    school = SandboxRepo.insert!(%School{name: "Videdal Skole"})
-    teacher = SandboxRepo.insert!(%Teacher{name: "Ms. Curie", school_id: school.id})
+    Repo.delete_all(Grade)
+    Repo.delete_all(Course)
+    Repo.delete_all(Student)
+
+    school = Repo.insert!(%School{name: "Videdal Skole"})
+    teacher = Repo.insert!(%Teacher{name: "Ms. Curie", school_id: school.id})
 
     courses =
       Enum.map(1..count, fn index ->
-        student = SandboxRepo.insert!(%Student{name: "Student #{index}", school_id: school.id})
+        student = Repo.insert!(%Student{name: "Student #{index}", school_id: school.id})
 
         course =
-          SandboxRepo.insert!(%Course{
+          Repo.insert!(%Course{
             title: "Course #{index}",
             school_id: school.id,
             teacher_id: teacher.id
           })
 
-        SandboxRepo.insert!(%Grade{
+        Repo.insert!(%Grade{
           score: 12,
           school_id: school.id,
           student_id: student.id,

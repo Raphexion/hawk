@@ -7,12 +7,12 @@ defmodule Videdal.Integration.PlansPreviewTest do
   use Videdal.DatabaseCase, async: false
 
   alias Hawk.{Authority, Plan, Plans}
-  alias Videdal.SandboxRepo
+  alias Videdal.Repo
 
   @authority Authority.system()
 
   test "preview rolls back: no rows persist after a successful preview" do
-    assert SandboxRepo.all(Videdal.School) == []
+    assert Repo.all(Videdal.School) == []
 
     plan =
       Plan.new([
@@ -21,11 +21,11 @@ defmodule Videdal.Integration.PlansPreviewTest do
 
     {:ok, _effects} = Plans.preview(plan, @authority)
 
-    assert SandboxRepo.all(Videdal.School) == []
+    assert Repo.all(Videdal.School) == []
   end
 
   test "preview returns effects for the proposed ops" do
-    school = SandboxRepo.insert!(%Videdal.School{name: "Original"})
+    school = Repo.insert!(%Videdal.School{name: "Original"})
 
     plan =
       Plan.new([
@@ -36,7 +36,7 @@ defmodule Videdal.Integration.PlansPreviewTest do
 
     assert effects.step_1.name == "Updated"
 
-    reloaded = SandboxRepo.get!(Videdal.School, school.id)
+    reloaded = Repo.get!(Videdal.School, school.id)
     assert reloaded.name == "Original"
   end
 
@@ -49,7 +49,7 @@ defmodule Videdal.Integration.PlansPreviewTest do
     result = Plans.preview(plan, @authority)
 
     assert {:error, :step_1, _reason, _prior} = result
-    assert SandboxRepo.all(Videdal.School) == []
+    assert Repo.all(Videdal.School) == []
   end
 
   test "run commits: changes persist after a successful run" do
@@ -58,11 +58,11 @@ defmodule Videdal.Integration.PlansPreviewTest do
         %{op: :create, resource: "preview-schools", attrs: %{name: "Committed School"}}
       ])
 
-    {:ok, _effects} = Plans.run(plan, @authority, SandboxRepo)
+    {:ok, _effects} = Plans.run(plan, @authority, Repo)
 
-    [school] = SandboxRepo.all(Videdal.School)
+    [school] = Repo.all(Videdal.School)
     assert school.name == "Committed School"
 
-    SandboxRepo.delete!(school)
+    Repo.delete!(school)
   end
 end

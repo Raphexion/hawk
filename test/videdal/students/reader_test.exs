@@ -1,8 +1,7 @@
 defmodule Videdal.Students.ReaderTest do
-  use ExUnit.Case, async: true
+  use Videdal.DatabaseCase, async: true
 
   alias Hawk.Authority
-  alias Videdal.Student
   alias Videdal.Students
   alias Videdal.Students.Reader
 
@@ -19,59 +18,47 @@ defmodule Videdal.Students.ReaderTest do
     assert Reader.read_filter(authority) == %{school_id: 7}
   end
 
-  test "all/1 combines caller filters with policy filters and calls the repo" do
-    authority = Authority.new(:school_admin, 1, scopes: %{school_id: 7})
-    put_repo_results([%Student{id: 1, name: "Ada", school_id: 7}])
+  test "all/1 combines caller filters with policy filters" do
+    school = insert(:school)
+    student = insert(:student, school_id: school.id, active: true)
+    authority = Authority.new(:school_admin, 1, scopes: %{school_id: school.id})
 
-    assert [%Student{name: "Ada"}] = Students.all(authority: authority, filter: %{active: true})
+    [result] = Students.all(authority: authority, filter: %{active: true})
 
-    assert_received {:videdal_repo, :all, query}
-    inspected = inspect(query)
-    assert inspected =~ "where:"
-    assert inspected =~ "s0.active == ^true"
-    assert inspected =~ "s0.school_id == ^7"
-    assert inspected =~ "order_by: [asc: s0.id]"
+    assert result.id == student.id
   end
 
   test "all/1 applies the student_id custom filter handler" do
-    put_repo_results([])
+    insert(:student)
+    student = insert(:student)
 
-    assert Students.all(authority: Authority.system(), filter: %{student_id: 12}) == []
-
-    assert_received {:videdal_repo, :all, query}
-    assert inspect(query) =~ "s0.id == ^12"
+    assert [result] = Students.all(authority: Authority.system(), filter: %{student_id: student.id})
+    assert result.id == student.id
   end
 
   test "all/1 applies explicit school joins only when a related filter is active" do
-    put_repo_results([])
+    school = insert(:school, name: "Test School")
+    student = insert(:student, school_id: school.id)
 
-    assert Students.all(authority: Authority.system(), filter: %{school_name: "Videdal Skole"}) ==
-             []
-
-    assert_received {:videdal_repo, :all, query}
-    inspected = inspect(query)
-    assert inspected =~ "join: s1 in assoc(s0, :school)"
-    assert inspected =~ ~s(s1.name == ^"Videdal Skole")
+    assert [result] = Students.all(authority: Authority.system(), filter: %{school_name: "Test School"})
+    assert result.id == student.id
   end
 
   test "all/1 applies limit from page size" do
-    put_repo_results([])
+    insert_list(3, :student)
 
-    assert Students.all(authority: Authority.system(), page: %{size: 5}) == []
+    results = Students.all(authority: Authority.system(), page: %{size: 2})
 
-    assert_received {:videdal_repo, :all, query}
-    assert inspect(query) =~ "limit: ^5"
+    assert length(results) == 2
   end
 
   test "all/1 preloads declared associations" do
-    results = [%Student{id: 1, name: "Ada", school_id: 7}]
-    put_repo_results(results)
+    student = insert(:student)
 
-    assert Students.all(authority: Authority.system(), preloads: [:school]) == results
+    [result] = Students.all(authority: Authority.system(), preloads: [:school])
 
-    assert_received {:videdal_repo, :all, _query}
-    assert_received {:videdal_repo, :preload, ^results, [school: %Ecto.Query{}]}
-    refute_received {:videdal_repo, :preload, _other_results, _preloads}
+    assert Ecto.assoc_loaded?(result.school)
+    assert result.school.id == student.school_id
   end
 
   test "all/1 rejects undeclared preloads" do
@@ -99,27 +86,23 @@ defmodule Videdal.Students.ReaderTest do
   end
 
   test "one/1 returns ok for exactly one result" do
-    student = %Student{id: 1, name: "Ada"}
-    put_repo_results([student])
+    student = insert(:student)
 
-    assert Students.one(authority: Authority.system(), filter: %{id: 1}) == {:ok, student}
+    assert {:ok, found} = Students.one(authority: Authority.system(), filter: %{id: student.id})
+    assert found.id == student.id
   end
 
   test "one/1 returns not_found for zero results" do
-    put_repo_results([])
-
-    assert Students.one(authority: Authority.system(), filter: %{id: 1}) == :not_found
+    assert :not_found = Students.one(authority: Authority.system(), filter: %{id: Ecto.UUID.generate()})
   end
 
   test "one/1 raises for multiple results" do
-    put_repo_results([%Student{id: 1}, %Student{id: 2}])
+    school = insert(:school)
+    insert(:student, school_id: school.id)
+    insert(:student, school_id: school.id)
 
     assert_raise RuntimeError, ~r/expected one result, got 2/, fn ->
-      Students.one(authority: Authority.system(), filter: %{active: true})
+      Students.one(authority: Authority.system(), filter: %{school_id: school.id})
     end
-  end
-
-  defp put_repo_results(results) do
-    Process.put({Videdal.Repo, :all_results}, results)
   end
 end

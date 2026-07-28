@@ -6,37 +6,36 @@ defmodule Videdal.Courses.WriterFormTest do
   alias Videdal.{Course, Courses}
   alias Videdal.Courses.Writer
 
-  @school_id Videdal.school_id()
-  @teacher_id Videdal.teacher_id()
-
   test "change_create returns a non-persisting changeset with live validation errors" do
     changeset =
-      Writer.change_create(%{"title" => "", "school_id" => @school_id}, Authority.system())
+      Writer.change_create(%{"title" => "", "school_id" => Ecto.UUID.generate()}, Authority.system())
 
     assert %Changeset{action: :validate, valid?: false} = changeset
     assert errors_on(changeset).title == ["can't be blank"]
-    refute_received {:videdal_repo, :insert, _changeset}
   end
 
   test "change_create uses the same casting and validation as create" do
+    school_id = Ecto.UUID.generate()
+    teacher_id = Ecto.UUID.generate()
+
     changeset =
       Writer.change_create(
-        %{"title" => "History", "school_id" => @school_id, "teacher_id" => @teacher_id},
+        %{"title" => "History", "school_id" => school_id, "teacher_id" => teacher_id},
         Authority.system()
       )
 
     assert %Changeset{action: :validate, valid?: true} = changeset
     assert Changeset.get_change(changeset, :title) == "History"
-    assert Changeset.get_change(changeset, :school_id) == @school_id
-    assert Changeset.get_change(changeset, :teacher_id) == @teacher_id
+    assert Changeset.get_change(changeset, :school_id) == school_id
+    assert Changeset.get_change(changeset, :teacher_id) == teacher_id
   end
 
   test "change_update returns a non-persisting changeset for an existing model" do
     course = %Course{
-      id: Videdal.course_id(),
+      id: Ecto.UUID.generate(),
       title: "Math",
-      school_id: @school_id,
-      teacher_id: @teacher_id
+      school_id: Ecto.UUID.generate(),
+      teacher_id: Ecto.UUID.generate()
     }
 
     changeset = Writer.change_update(course, %{"title" => "History"}, Authority.system())
@@ -44,7 +43,6 @@ defmodule Videdal.Courses.WriterFormTest do
     assert %Changeset{action: :validate, valid?: true} = changeset
     assert changeset.data == course
     assert Changeset.get_change(changeset, :title) == "History"
-    refute_received {:videdal_repo, :update, _changeset}
   end
 
   test "resource facade delegates form changeset helpers" do

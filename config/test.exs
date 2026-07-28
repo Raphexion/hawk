@@ -1,6 +1,6 @@
 import Config
 
-config :hawk, ecto_repos: [Videdal.SandboxRepo]
+config :hawk, ecto_repos: [Videdal.Repo]
 
 repo_config =
   case System.get_env("HAWK_DATABASE_URL") do
@@ -9,7 +9,7 @@ repo_config =
         database: "hawk_test",
         hostname: "localhost",
         pool: Ecto.Adapters.SQL.Sandbox,
-        telemetry_prefix: [:videdal, :sandbox_repo],
+        telemetry_prefix: [:videdal, :repo],
         log: false
       ]
 
@@ -17,9 +17,9 @@ repo_config =
       [
         url: database_url,
         pool: Ecto.Adapters.SQL.Sandbox,
-        telemetry_prefix: [:videdal, :sandbox_repo],
+        telemetry_prefix: [:videdal, :repo],
         log: false
       ]
   end
 
-config :hawk, Videdal.SandboxRepo, repo_config
+config :hawk, Videdal.Repo, repo_config

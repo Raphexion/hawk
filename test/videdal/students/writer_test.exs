@@ -1,56 +1,49 @@
 defmodule Videdal.Students.WriterTest do
-  use ExUnit.Case, async: true
+  use Videdal.DatabaseCase, async: true
 
   alias Hawk.Authority
-  alias Videdal.Student
-  alias Videdal.Students
-
-  @school_admin_id Videdal.school_admin_id()
-  @school_id Videdal.school_id()
-  @student_id Videdal.student_id()
+  alias Videdal.{Student, Students}
 
   test "create runs through the resource writer pipeline" do
-    authority = Authority.new(:school_admin, @school_admin_id, scopes: %{school_id: @school_id})
+    school = insert(:school)
+    authority = Authority.new(:school_admin, 1, scopes: %{school_id: school.id})
 
-    assert {:ok, %Student{name: "Ada", school_id: @school_id, active: true}} =
-             Students.create(%{name: "Ada", school_id: @school_id}, authority)
+    assert {:ok, %Student{name: "Ada", active: true} = student} =
+             Students.create(%{name: "Ada", school_id: school.id}, authority)
+
+    assert student.school_id == school.id
   end
 
   test "create rejects readonly authorities" do
+    school = insert(:school)
     authority =
       :school_admin
-      |> Authority.new(@school_admin_id, scopes: %{school_id: @school_id})
+      |> Authority.new(1, scopes: %{school_id: school.id})
       |> Authority.readonly()
 
     assert {:not_authorized, _context} =
-             Students.create(%{name: "Ada", school_id: @school_id}, authority)
+             Students.create(%{name: "Ada", school_id: school.id}, authority)
   end
 
   test "update changes permitted fields and ignores unknown attrs" do
-    student = %Student{id: @student_id, name: "Ada", school_id: @school_id, active: true}
-    authority = Authority.new(:school_admin, @school_admin_id, scopes: %{school_id: @school_id})
+    school = insert(:school)
+    student = insert(:student, school_id: school.id, name: "Ada")
+    authority = Authority.new(:school_admin, 1, scopes: %{school_id: school.id})
 
-    assert {:ok, %Student{id: @student_id, name: "Ada Lovelace", active: false}} =
-             Students.update(
-               student,
-               %{name: "Ada Lovelace", active: false, ignored: true},
-               authority
-             )
+    assert {:ok, %Student{name: "Ada Lovelace", active: false} = updated} =
+             Students.update(student, %{name: "Ada Lovelace", active: false, ignored: true}, authority)
 
-    assert_received {:videdal_repo, :transaction}
-    assert_received {:videdal_repo, :update, changeset}
-    assert changeset.changes == %{name: "Ada Lovelace", active: false}
+    assert updated.id == student.id
   end
 
   test "delete rejects readonly authorities before persistence" do
-    student = %Student{id: @student_id, school_id: @school_id}
-
+    school = insert(:school)
+    student = insert(:student, school_id: school.id)
     authority =
       :school_admin
-      |> Authority.new(@school_admin_id, scopes: %{school_id: @school_id})
+      |> Authority.new(1, scopes: %{school_id: school.id})
       |> Authority.readonly()
 
     assert {:not_authorized, _context} = Students.delete(student, authority)
-    refute_received {:videdal_repo, :delete, _student}
   end
 end

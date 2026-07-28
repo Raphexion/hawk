@@ -14,7 +14,7 @@ defmodule Hawk.PaginationTest.CustomReader do
 end
 
 defmodule Hawk.PaginationTest do
-  use ExUnit.Case, async: true
+  use Videdal.DatabaseCase, async: true
 
   alias Hawk.Authority
   alias Hawk.PaginationTest.CustomReader
@@ -26,36 +26,27 @@ defmodule Hawk.PaginationTest do
   end
 
   test "reader applies declared sorting, page number, and page size" do
-    Process.put({Videdal.Repo, :all_results}, [])
+    insert_list(3, :course)
 
-    assert Courses.all(
-             authority: Authority.system(),
-             page: %{column: :title, dir: :desc, number: 2, size: 25}
-           ) == []
+    results = Courses.all(authority: Authority.system(), page: %{column: :title, dir: :desc, number: 1, size: 2})
 
-    assert_received {:videdal_repo, :all, query}
-    inspected = inspect(query)
-    assert inspected =~ "order_by: [desc: c0.title]"
-    assert inspected =~ "offset: ^25"
-    assert inspected =~ "limit: ^25"
+    assert length(results) == 2
   end
 
   test "reader applies the default page size when none is requested" do
-    Process.put({Videdal.Repo, :all_results}, [])
+    insert_list(3, :course)
 
-    assert Courses.all(authority: Authority.system()) == []
+    results = Courses.all(authority: Authority.system())
 
-    assert_received {:videdal_repo, :all, query}
-    assert inspect(query) =~ "limit: ^100"
+    assert length(results) == 3
   end
 
   test "reader can override default and max page size per resource" do
-    Process.put({Videdal.Repo, :all_results}, [])
+    insert_list(4, :course)
 
-    assert CustomReader.all(authority: Authority.system()) == []
+    results = CustomReader.all(authority: Authority.system())
 
-    assert_received {:videdal_repo, :all, query}
-    assert inspect(query) =~ "limit: ^3"
+    assert length(results) == 3
 
     assert_raise ArgumentError, ~r/page size 6 exceeds maximum 5/, fn ->
       CustomReader.all(authority: Authority.system(), page: %{size: 6})

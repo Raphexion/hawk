@@ -2,7 +2,7 @@ defmodule Videdal.Integration.ReaderPreloadTest.Reader do
   @moduledoc false
 
   use Hawk.Reader.Resource,
-    repo: Videdal.SandboxRepo,
+    repo: Videdal.Repo,
     schema: Videdal.Student,
     policy: Videdal.Integration.ReaderPreloadTest.Policy
 
@@ -24,20 +24,20 @@ defmodule Videdal.Integration.ReaderPreloadTest do
 
   alias Hawk.Authority
   alias Videdal.Integration.ReaderPreloadTest.Reader
-  alias Videdal.{SandboxRepo, School, Student}
+  alias Videdal.{Repo, School, Student}
 
   @moduletag :database
 
   setup do
-    Videdal.DatabaseCase.reset_schema!()
+    
     :ok
   end
 
   test "reader preloads are executed once for the full result set" do
-    school = SandboxRepo.insert!(%School{name: "Videdal Skole"})
+    school = Repo.insert!(%School{name: "Videdal Skole"})
 
-    SandboxRepo.insert!(%Student{name: "Ada", school_id: school.id})
-    SandboxRepo.insert!(%Student{name: "Grace", school_id: school.id})
+    Repo.insert!(%Student{name: "Ada", school_id: school.id})
+    Repo.insert!(%Student{name: "Grace", school_id: school.id})
 
     {students, query_count} =
       count_queries(fn ->
@@ -53,11 +53,11 @@ defmodule Videdal.Integration.ReaderPreloadTest do
   end
 
   test "preload policy scopes loaded relations without changing the root result set" do
-    visible_school = SandboxRepo.insert!(%School{name: "Visible Skole"})
-    hidden_school = SandboxRepo.insert!(%School{name: "Hidden Skole"})
+    visible_school = Repo.insert!(%School{name: "Visible Skole"})
+    hidden_school = Repo.insert!(%School{name: "Hidden Skole"})
 
-    SandboxRepo.insert!(%Student{name: "Ada", school_id: visible_school.id})
-    SandboxRepo.insert!(%Student{name: "Grace", school_id: hidden_school.id})
+    Repo.insert!(%Student{name: "Ada", school_id: visible_school.id})
+    Repo.insert!(%Student{name: "Grace", school_id: hidden_school.id})
 
     authority = Authority.new(:school_admin, 1, scopes: %{school_id: visible_school.id})
 
@@ -74,8 +74,8 @@ defmodule Videdal.Integration.ReaderPreloadTest do
   end
 
   test "reader without preloads performs only the base query and leaves relations unloaded" do
-    school = SandboxRepo.insert!(%School{name: "No Preload Skole"})
-    SandboxRepo.insert!(%Student{name: "Alan", school_id: school.id})
+    school = Repo.insert!(%School{name: "No Preload Skole"})
+    Repo.insert!(%Student{name: "Alan", school_id: school.id})
 
     {students, query_count} =
       count_queries(fn ->

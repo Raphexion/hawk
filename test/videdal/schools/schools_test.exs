@@ -1,14 +1,18 @@
 defmodule Videdal.SchoolsTest do
-  use ExUnit.Case, async: true
+  use Videdal.DatabaseCase, async: true
 
   alias Hawk.Authority
-  alias Videdal.{School, Schools}
+  alias Videdal.Schools
 
   test "facade delegates reader functions" do
-    school = %School{id: 7, name: "Videdal Skole"}
-    Process.put({Videdal.Repo, :all_results}, [school])
+    Videdal.Repo.delete_all(Videdal.School)
+    school = insert(:school, name: "Videdal Skole")
 
-    assert Schools.all(authority: Authority.system()) == [school]
-    assert Schools.one(authority: Authority.system(), filter: %{id: 7}) == {:ok, school}
+    assert [result] = Schools.all(authority: Authority.system())
+    assert result.id == school.id
+    assert result.name == "Videdal Skole"
+
+    assert {:ok, found} = Schools.one(authority: Authority.system(), filter: %{id: school.id})
+    assert found.id == school.id
   end
 end

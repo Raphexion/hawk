@@ -2,7 +2,7 @@ defmodule Videdal.Integration.PlansPreview.Schools.Writer do
   @moduledoc false
   use Hawk.Writer.Resource,
     model: Videdal.School,
-    repo: Videdal.SandboxRepo,
+    repo: Videdal.Repo,
     policy: Videdal.Integration.PlansPreview.Schools.Policy
 
   create do

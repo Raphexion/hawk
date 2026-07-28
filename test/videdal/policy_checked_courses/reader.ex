@@ -2,7 +2,7 @@ defmodule Videdal.PolicyCheckedCourses.Reader do
   @moduledoc false
 
   use Hawk.Reader.Resource,
-    repo: Videdal.SandboxRepo,
+    repo: Videdal.Repo,
     schema: Videdal.Course,
     policy: Videdal.Courses.Policy
 

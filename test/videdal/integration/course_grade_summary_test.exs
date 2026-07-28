@@ -2,7 +2,7 @@ defmodule Videdal.Integration.CourseGradeSummaryTest.Reader do
   @moduledoc false
 
   use Hawk.Reader.Resource,
-    repo: Videdal.SandboxRepo,
+    repo: Videdal.Repo,
     schema: Videdal.CourseGradeSummary,
     policy: Videdal.CourseGradeSummaries.Policy
 
@@ -14,11 +14,11 @@ defmodule Videdal.Integration.CourseGradeSummaryTest do
   use Videdal.DatabaseCase, async: false
 
   alias Hawk.Authority
-  alias Videdal.{Course, Grade, SandboxRepo, School, Student, Teacher}
+  alias Videdal.{Course, Grade, Repo, School, Student, Teacher}
   alias Videdal.Integration.CourseGradeSummaryTest.Reader
 
   setup do
-    Videdal.DatabaseCase.reset_schema!()
+    
     {:ok, seed_school()}
   end
 
@@ -36,22 +36,22 @@ defmodule Videdal.Integration.CourseGradeSummaryTest do
   end
 
   defp seed_school do
-    school = SandboxRepo.insert!(%School{name: "Videdal Skole"})
-    teacher = SandboxRepo.insert!(%Teacher{name: "Ms. Curie", school_id: school.id})
-    student = SandboxRepo.insert!(%Student{name: "Ada", school_id: school.id})
-    other_student = SandboxRepo.insert!(%Student{name: "Grace", school_id: school.id})
+    school = Repo.insert!(%School{name: "Videdal Skole"})
+    teacher = Repo.insert!(%Teacher{name: "Ms. Curie", school_id: school.id})
+    student = Repo.insert!(%Student{name: "Ada", school_id: school.id})
+    other_student = Repo.insert!(%Student{name: "Grace", school_id: school.id})
 
     course =
-      SandboxRepo.insert!(%Course{title: "Math", school_id: school.id, teacher_id: teacher.id})
+      Repo.insert!(%Course{title: "Math", school_id: school.id, teacher_id: teacher.id})
 
-    SandboxRepo.insert!(%Grade{
+    Repo.insert!(%Grade{
       score: 12,
       school_id: school.id,
       student_id: student.id,
       course_id: course.id
     })
 
-    SandboxRepo.insert!(%Grade{
+    Repo.insert!(%Grade{
       score: 10,
       school_id: school.id,
       student_id: other_student.id,

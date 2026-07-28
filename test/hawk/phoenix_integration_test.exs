@@ -16,23 +16,14 @@ defmodule Hawk.PhoenixIntegrationTest.OpenApiController do
 end
 
 defmodule Hawk.PhoenixIntegrationTest do
-  use ExUnit.Case, async: true
-
-  # Phoenix is a required dependency. These tests exercise the real
-  # `%Plug.Conn{}` and `%Phoenix.LiveView.Socket{}` code paths that Hawk calls
-  # directly.
+  use Videdal.DatabaseCase, async: true
 
   alias Hawk.Authority
   alias Hawk.PhoenixIntegrationTest.{CoursesController, OpenApiController}
-  alias Videdal.{Course, LiveViews.CourseLive}
-
-  @course_id Videdal.course_id()
-  @school_id Videdal.school_id()
-  @teacher_id Videdal.teacher_id()
+  alias Videdal.LiveViews.CourseLive
 
   test "JSON:API controller renders through a real Plug.Conn with the JSON:API content type" do
-    course = %Course{id: @course_id, title: "Math", school_id: @school_id, teacher_id: @teacher_id}
-    Process.put({Videdal.Repo, :all_results}, [course])
+    course = insert(:course, title: "Math")
 
     conn =
       Plug.Test.conn(:get, "/courses")
@@ -46,7 +37,7 @@ defmodule Hawk.PhoenixIntegrationTest do
     assert String.starts_with?(content_type, "application/vnd.api+json")
 
     assert %{"data" => [%{"type" => "courses", "id" => id}]} = Jason.decode!(conn.resp_body)
-    assert id == @course_id
+    assert id == course.id
   end
 
   test "OpenAPI controller renders through a real Plug.Conn" do
@@ -62,13 +53,12 @@ defmodule Hawk.PhoenixIntegrationTest do
   end
 
   test "LiveView index helpers assign through a real Phoenix.LiveView.Socket" do
-    course = %Course{id: @course_id, title: "Math", school_id: @school_id, teacher_id: @teacher_id}
-    Process.put({Videdal.Repo, :all_results}, [course])
+    insert(:course, title: "Math")
 
     socket = %Phoenix.LiveView.Socket{assigns: %{__changed__: %{}}}
     socket = CourseLive.assign_index(socket, Authority.system())
 
-    assert socket.assigns.courses == [course]
+    assert length(socket.assigns.courses) == 1
     assert socket.assigns.hawk_resource == :course
   end
 

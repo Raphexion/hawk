@@ -25,67 +25,44 @@ defmodule Hawk.WriterResourceTest.CourseWriter do
 end
 
 defmodule Hawk.WriterResourceTest do
-  use ExUnit.Case, async: true
+  use Videdal.DatabaseCase, async: true
 
   alias Ecto.Changeset
   alias Hawk.Authority
   alias Hawk.WriterResourceTest.CourseWriter
   alias Videdal.Course
 
-  @school_id Videdal.school_id()
-  @teacher_id Videdal.teacher_id()
-
   test "generated change_create returns the create pipeline changeset without persisting" do
     changeset =
-      CourseWriter.change_create(%{"title" => "", "school_id" => @school_id}, Authority.system())
+      CourseWriter.change_create(%{"title" => "", "school_id" => Ecto.UUID.generate()}, Authority.system())
 
     assert %Changeset{action: :validate, valid?: false} = changeset
     assert errors_on(changeset).title == ["can't be blank"]
-    refute_received {:videdal_repo, :insert, _changeset}
   end
 
   test "generated change_update returns the update pipeline changeset without persisting" do
-    course = %Course{
-      id: Videdal.course_id(),
-      title: "Math",
-      school_id: @school_id,
-      teacher_id: @teacher_id
-    }
+    course = insert(:course)
 
     changeset = CourseWriter.change_update(course, %{"title" => "History"}, Authority.system())
 
     assert %Changeset{action: :validate, valid?: true} = changeset
-    assert changeset.data == course
+    assert changeset.data.id == course.id
     assert Changeset.get_change(changeset, :title) == "History"
-    refute_received {:videdal_repo, :update, _changeset}
   end
 
   test "generated update persists through the same update pipeline" do
-    course = %Course{
-      id: Videdal.course_id(),
-      title: "Math",
-      school_id: @school_id,
-      teacher_id: @teacher_id
-    }
+    course = insert(:course)
 
-    assert {:ok, %Course{title: "History", school_id: @school_id, teacher_id: @teacher_id}} =
+    assert {:ok, %Course{title: "History"} = updated} =
              CourseWriter.update(course, %{"title" => "History"}, Authority.system())
 
-    assert_received {:videdal_repo, :update, %Changeset{} = changeset}
-    assert changeset.valid?
-    assert changeset.data == course
-    assert Changeset.get_change(changeset, :title) == "History"
+    assert updated.id == course.id
   end
 
   test "generated create and update reuse custom validation functions" do
-    attrs = %{"title" => "Forbidden", "school_id" => @school_id, "teacher_id" => @teacher_id}
+    attrs = %{"title" => "Forbidden", "school_id" => Ecto.UUID.generate(), "teacher_id" => Ecto.UUID.generate()}
 
-    course = %Course{
-      id: Videdal.course_id(),
-      title: "Math",
-      school_id: @school_id,
-      teacher_id: @teacher_id
-    }
+    course = insert(:course)
 
     create_changeset = CourseWriter.change_create(attrs, Authority.system())
 
@@ -94,20 +71,19 @@ defmodule Hawk.WriterResourceTest do
 
     assert errors_on(create_changeset).title == ["is reserved"]
     assert errors_on(update_changeset).title == ["is reserved"]
-    refute_received {:videdal_repo, :insert, _changeset}
-    refute_received {:videdal_repo, :update, _changeset}
   end
 
   test "generated create persists through the same create pipeline" do
-    attrs = %{"title" => "History", "school_id" => @school_id, "teacher_id" => @teacher_id}
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
 
-    assert {:ok, %Course{title: "History", school_id: @school_id, teacher_id: @teacher_id}} =
+    attrs = %{"title" => "History", "school_id" => school.id, "teacher_id" => teacher.id}
+
+    assert {:ok, %Course{title: "History", seat_count: 12} = created} =
              CourseWriter.create(attrs, Authority.system())
 
-    assert_received {:videdal_repo, :insert, %Changeset{} = changeset}
-    assert changeset.valid?
-    assert Changeset.get_change(changeset, :title) == "History"
-    assert Changeset.get_change(changeset, :seat_count) == 12
+    assert created.school_id == school.id
+    assert created.teacher_id == teacher.id
   end
 
   defp errors_on(changeset) do

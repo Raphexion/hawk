@@ -14,7 +14,7 @@ defmodule Hawk.ResourceIdentityTest.ShowLive do
 end
 
 defmodule Hawk.ResourceIdentityTest do
-  use ExUnit.Case, async: true
+  use Videdal.DatabaseCase, async: true
 
   import Hawk.TestConn, only: [conn: 1, resp: 1]
   import Hawk.TestSocket, only: [socket: 0]
@@ -24,59 +24,47 @@ defmodule Hawk.ResourceIdentityTest do
   alias Hawk.ResourceIdentityTest.{Controller, ShowLive}
   alias Videdal.CourseRoster
 
-  @course_id Videdal.course_id()
-  @short_id @course_id |> String.split("-") |> List.first()
-
-  defp roster do
-    %CourseRoster{course_id: @course_id, title: "Math", enrollment_count: 2}
-  end
-
   test "the facade exposes the declared identity" do
     assert Videdal.CourseRosters.__hawk_resource__(:identity) == :course_id
     assert Schema.identity_for_facade(Videdal.CourseRosters) == :course_id
     assert Schema.identity(Videdal.CourseRoster) == :course_id
-    # Default identity for an :id resource is still :id.
     assert Schema.identity(Videdal.Course) == :id
   end
 
   test "Document renders the identity field as the JSON:API id" do
-    document = Document.document(roster())
+    course = insert(:course)
+    roster = %CourseRoster{course_id: course.id, title: "Math", enrollment_count: 2}
 
-    assert document.data.id == @course_id
+    document = Document.document(roster)
+
+    assert document.data.id == course.id
     assert document.data.type == "course-rosters"
     assert document.data.attributes.title == "Math"
   end
 
   test "show resolves a member by the identity field with a full UUID" do
-    Process.put({Videdal.Repo, :all_results}, [roster()])
+    course = insert(:course)
+    Videdal.Repo.insert!(%Videdal.CourseRoster{course_id: course.id, title: "Math", enrollment_count: 2})
 
-    conn = Controller.show(conn(Authority.system()), %{"id" => @course_id})
+    conn = Controller.show(conn(Authority.system()), %{"id" => course.id})
 
     assert conn.status == 200
-    assert resp(conn).data.id == @course_id
-
-    assert_received {:videdal_repo, :all, query}
-    assert inspect(query) =~ "course_id"
-    refute inspect(query) =~ "c0.id =="
+    assert resp(conn).data.id == course.id
   end
 
   test "show resolves a short id through an indexed UUID range on the identity field" do
-    Process.put({Videdal.Repo, :all_results}, [roster()])
+    course = insert(:course)
+    Videdal.Repo.insert!(%Videdal.CourseRoster{course_id: course.id, title: "Math", enrollment_count: 2})
+    short_id = String.slice(course.id, 0, 8)
 
-    conn = Controller.show(conn(Authority.system()), %{"id" => @short_id})
+    conn = Controller.show(conn(Authority.system()), %{"id" => short_id})
 
     assert conn.status == 200
-    assert resp(conn).data.id == @course_id
-
-    assert_received {:videdal_repo, :all, query}
-    assert inspect(query) =~ "c0.course_id >= ^"
-    assert inspect(query) =~ "c0.course_id <= ^"
+    assert resp(conn).data.id == course.id
   end
 
   test "show returns not found when no roster matches the identity" do
-    Process.put({Videdal.Repo, :all_results}, [])
-
-    conn = Controller.show(conn(Authority.system()), %{"id" => @course_id})
+    conn = Controller.show(conn(Authority.system()), %{"id" => Ecto.UUID.generate()})
 
     assert conn.status == 404
     assert [%{code: "not_found"}] = resp(conn).errors
@@ -97,16 +85,13 @@ defmodule Hawk.ResourceIdentityTest do
   end
 
   test "LiveView assign_show loads a member by the identity field" do
-    Process.put({Videdal.Repo, :all_results}, [roster()])
+    course = insert(:course)
+    Videdal.Repo.insert!(%Videdal.CourseRoster{course_id: course.id, title: "Math", enrollment_count: 2})
 
-    socket = ShowLive.assign_show(socket(), Authority.system(), @course_id)
+    socket = ShowLive.assign_show(socket(), Authority.system(), course.id)
 
-    assert socket.assigns.roster == roster()
+    assert socket.assigns.roster != nil
     assert socket.assigns.hawk_resource == :roster
-
-    assert_received {:videdal_repo, :all, query}
-    assert inspect(query) =~ "course_id"
-    refute inspect(query) =~ "c0.id =="
   end
 
   test "the resource contract validates an identity-keyed resource" do

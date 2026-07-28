@@ -1,29 +1,23 @@
 defmodule Videdal.DatabaseCaseTest do
-  use ExUnit.Case, async: true
+  use Videdal.DatabaseCase, async: false
 
-  alias Videdal.DatabaseCase
-
-  test "start_repo! returns the running sandbox repo pid when already started" do
-    assert pid = DatabaseCase.start_repo!()
-    assert is_pid(pid)
-    assert Process.alive?(pid)
-  end
+  alias Videdal.{DatabaseCase, Repo}
 
   test "count_queries returns zero when no query events are emitted" do
-    assert DatabaseCase.count_queries(fn -> :ok end) == {:ok, 0}
+    assert {_, 0} = DatabaseCase.count_queries(fn -> :ok end)
   end
 
-  test "count_queries counts sandbox query telemetry and ignores schema migrations" do
+  test "count_queries counts repo query telemetry and ignores schema migrations" do
     assert {:done, 1} =
              DatabaseCase.count_queries(fn ->
                :telemetry.execute(
-                 [:videdal, :sandbox_repo, :query],
+                 [:videdal, :repo, :query],
                  %{},
                  %{source: "courses"}
                )
 
                :telemetry.execute(
-                 [:videdal, :sandbox_repo, :query],
+                 [:videdal, :repo, :query],
                  %{},
                  %{source: "schema_migrations"}
                )
@@ -36,10 +30,10 @@ defmodule Videdal.DatabaseCaseTest do
     ref = make_ref()
 
     DatabaseCase.handle_query_event(
-      [:videdal, :sandbox_repo, :query],
+      [:videdal, :repo, :query],
       %{},
       %{source: "courses"},
-      %{test_pid: self(), ref: ref}
+      %{test_pid: self(), ref: ref, ignored_sources: ["schema_migrations"]}
     )
 
     assert_received {^ref, :query}
@@ -49,12 +43,16 @@ defmodule Videdal.DatabaseCaseTest do
     ref = make_ref()
 
     DatabaseCase.handle_query_event(
-      [:videdal, :sandbox_repo, :query],
+      [:videdal, :repo, :query],
       %{},
       %{source: "schema_migrations"},
-      %{test_pid: self(), ref: ref}
+      %{test_pid: self(), ref: ref, ignored_sources: ["schema_migrations"]}
     )
 
     refute_received {^ref, :query}
+  end
+
+  test "the sandbox is checked out and a query works" do
+    assert Repo.all(Videdal.School) == []
   end
 end

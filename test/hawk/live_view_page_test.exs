@@ -15,71 +15,64 @@ defmodule Hawk.LiveViewPageTest.CourseWorkspaceLive do
 end
 
 defmodule Hawk.LiveViewPageTest do
-  use ExUnit.Case, async: true
+  use Videdal.DatabaseCase, async: true
 
   import Hawk.TestSocket, only: [socket: 0]
 
   alias Hawk.Authority
   alias Hawk.LiveViewPageTest.CourseWorkspaceLive
-  alias Videdal.{Course, Grade, Student}
+  alias Videdal.{Grade, Repo}
 
-  @course_id Videdal.course_id()
   @grade_id Videdal.grade_id()
-  @school_admin_id Videdal.school_admin_id()
-  @school_id Videdal.school_id()
-  @student_id Videdal.student_id()
-  @teacher_id Videdal.teacher_id()
 
   test "assign_page composes one resource and related collections into one LiveView socket" do
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    course = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Math")
+    other_course = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Other")
+    student = insert(:student, school_id: school.id, name: "Ada")
+
+    grade =
+      insert(:grade,
+        school_id: school.id,
+        student_id: student.id,
+        course_id: course.id,
+        score: 12
+      )
+
+    insert(:grade,
+      school_id: school.id,
+      student_id: student.id,
+      course_id: other_course.id,
+      score: 5
+    )
+
     authority =
-      Authority.new(:teacher, @teacher_id, scopes: %{school_id: @school_id, teacher_id: @teacher_id})
-
-    course = %Course{
-      id: @course_id,
-      title: "Math",
-      school_id: @school_id,
-      teacher_id: @teacher_id
-    }
-
-    students = [%Student{id: @student_id, name: "Ada", school_id: @school_id}]
-
-    grades = [
-      %Grade{
-        id: @grade_id,
-        score: 12,
-        school_id: @school_id,
-        student_id: @student_id,
-        course_id: @course_id
-      }
-    ]
-
-    Process.put({Videdal.Repo, :all_results, Videdal.Course}, [course])
-    Process.put({Videdal.Repo, :all_results, Videdal.Student}, students)
-    Process.put({Videdal.Repo, :all_results, Videdal.Grade}, grades)
+      Authority.new(:teacher, teacher.id, scopes: %{school_id: school.id, teacher_id: teacher.id})
 
     socket =
       CourseWorkspaceLive.assign_page(socket(), authority,
-        course: {:one, filter: %{id: @course_id}, preloads: [:teacher]},
-        students: {:all, filter: %{school_id: @school_id}, page: %{column: :id, dir: :asc}},
-        grades: {:all, filter: %{course_id: @course_id}, preloads: [:student]}
+        course: {:one, filter: %{id: course.id}, preloads: [:teacher]},
+        students: {:all, filter: %{school_id: school.id}, page: %{column: :id, dir: :asc}},
+        grades: {:all, filter: %{course_id: course.id}, preloads: [:student]}
       )
 
-    assert socket.assigns.course == course
-    assert socket.assigns.students == students
-    assert socket.assigns.grades == grades
+    assert socket.assigns.course.id == course.id
+    assert socket.assigns.course.title == "Math"
+    assert socket.assigns.course.teacher.id == teacher.id
+
+    assert [page_student] = socket.assigns.students
+    assert page_student.id == student.id
+
+    assert [page_grade] = socket.assigns.grades
+    assert page_grade.id == grade.id
+    assert page_grade.score == 12
+    assert page_grade.student.id == student.id
+
     assert socket.assigns.hawk_page_resources == [:course, :students, :grades]
 
     assert socket.assigns.hawk_page_specs[:grades] ==
-             {:all, [filter: %{course_id: @course_id}, preloads: [:student]]}
-
-    assert_received {:videdal_repo, :all, course_query}
-    assert inspect(course_query) =~ "c0.id == ^\"#{@course_id}\""
-
-    assert_received {:videdal_repo, :all, student_query}
-    assert inspect(student_query) =~ "s0.school_id == ^\"#{@school_id}\""
-
-    assert_received {:videdal_repo, :all, grade_query}
-    assert inspect(grade_query) =~ "g0.course_id == ^\"#{@course_id}\""
+             {:all, [filter: %{course_id: course.id}, preloads: [:student]]}
   end
 
   test "page modules expose workspace navigation metadata" do
@@ -97,58 +90,68 @@ defmodule Hawk.LiveViewPageTest do
   end
 
   test "assign_page records per-resource errors without stopping other resources" do
+    school = insert(:school)
+    student = insert(:student, school_id: school.id, name: "Ada")
     authority = Authority.system()
-    students = [%Student{id: @student_id, name: "Ada", school_id: @school_id}]
-
-    Process.put({Videdal.Repo, :all_results, Videdal.Course}, [])
-    Process.put({Videdal.Repo, :all_results, Videdal.Student}, students)
 
     socket =
       CourseWorkspaceLive.assign_page(socket(), authority,
         course: {:one, filter: %{id: Videdal.other_course_id()}},
-        students: {:all, filter: %{school_id: @school_id}}
+        students: {:all, filter: %{school_id: school.id}}
       )
 
-    assert socket.assigns.students == students
+    assert [page_student] = socket.assigns.students
+    assert page_student.id == student.id
     assert socket.assigns.hawk_errors == %{course: %{base: ["course was not found"]}}
   end
 
   test "delete event can target a related page resource and refresh the composed page" do
-    authority = Authority.new(:school_admin, @school_admin_id, scopes: %{school_id: @school_id})
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    student = insert(:student, school_id: school.id)
+    course = insert(:course, school_id: school.id, teacher_id: teacher.id)
 
-    grade = %Grade{
-      id: @grade_id,
-      score: 12,
-      school_id: @school_id,
-      student_id: @student_id,
-      course_id: @course_id
-    }
+    grade =
+      insert(:grade,
+        school_id: school.id,
+        student_id: student.id,
+        course_id: course.id,
+        score: 12
+      )
 
-    Process.put({Videdal.Repo, :all_results, Videdal.Grade}, [grade])
+    authority =
+      Authority.new(:school_admin, Videdal.school_admin_id(), scopes: %{school_id: school.id})
 
     socket =
-      CourseWorkspaceLive.assign_page(socket(), authority, grades: {:all, filter: %{course_id: @course_id}})
+      CourseWorkspaceLive.assign_page(socket(), authority,
+        grades: {:all, filter: %{course_id: course.id}}
+      )
+
+    assert [page_grade] = socket.assigns.grades
+    assert page_grade.id == grade.id
 
     {:noreply, socket} =
       CourseWorkspaceLive.handle_event(
         "hawk:delete",
         %{
           "resource" => "grades",
-          "id" => @grade_id,
-          "authority" => Authority.new(:student, @student_id)
+          "id" => grade.id,
+          "authority" => Authority.new(:student, student.id)
         },
         socket
       )
 
-    assert socket.assigns.grades == [grade]
-    assert_received {:videdal_repo, :delete, %Grade{id: @grade_id}}
+    assert socket.assigns.grades == []
+    refute Repo.get(Grade, grade.id)
   end
 
   test "delete event rejects declared resources that are not active on this page instance" do
     authority = Authority.system()
 
     socket =
-      CourseWorkspaceLive.assign_page(socket(), authority, course: {:one, filter: %{id: Videdal.other_course_id()}})
+      CourseWorkspaceLive.assign_page(socket(), authority,
+        course: {:one, filter: %{id: Videdal.other_course_id()}}
+      )
 
     assert_raise ArgumentError, ~r/resource :grades is not active/, fn ->
       CourseWorkspaceLive.handle_event(

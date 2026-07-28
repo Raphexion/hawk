@@ -4,21 +4,21 @@ defmodule Videdal.Integration.LiveViewPolicyFilterTest do
   import Hawk.TestSocket, only: [socket: 0]
 
   alias Hawk.Authority
-  alias Videdal.{Course, SandboxRepo, School, Teacher}
+  alias Videdal.{Course, Repo, School, Teacher}
   alias Videdal.LiveViews.PolicyCheckedCoursesLive
 
   setup do
-    Videdal.DatabaseCase.reset_schema!()
+    
 
-    school = SandboxRepo.insert!(%School{name: "Videdal Skole"})
-    teacher = SandboxRepo.insert!(%Teacher{name: "Ms. Curie", school_id: school.id})
-    other_teacher = SandboxRepo.insert!(%Teacher{name: "Mr. Feynman", school_id: school.id})
+    school = Repo.insert!(%School{name: "Videdal Skole"})
+    teacher = Repo.insert!(%Teacher{name: "Ms. Curie", school_id: school.id})
+    other_teacher = Repo.insert!(%Teacher{name: "Mr. Feynman", school_id: school.id})
 
     own_course =
-      SandboxRepo.insert!(%Course{title: "Math", school_id: school.id, teacher_id: teacher.id})
+      Repo.insert!(%Course{title: "Math", school_id: school.id, teacher_id: teacher.id})
 
     other_course =
-      SandboxRepo.insert!(%Course{
+      Repo.insert!(%Course{
         title: "Physics",
         school_id: school.id,
         teacher_id: other_teacher.id
