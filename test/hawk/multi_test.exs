@@ -85,7 +85,7 @@ defmodule Hawk.MultiTest do
 
   describe "run/3" do
     test "adds a computed step whose result is threaded forward" do
-      course = %Videdal.Course{id: @course_id, title: "Math"}
+      _course = %Videdal.Course{id: @course_id, title: "Math"}
 
       multi =
         Multi.new()
