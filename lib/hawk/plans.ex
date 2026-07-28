@@ -165,20 +165,19 @@ defmodule Hawk.Plans do
   end
 
   defp preview_with_rollback(multi, repo) do
-    {:ok, effects} =
-      repo.transaction(fn ->
-        case Multi.execute(multi, repo) do
-          {:ok, results} ->
-            repo.rollback(results)
-            results
+    repo.transaction(fn ->
+      case Multi.execute(multi, repo) do
+        {:ok, results} ->
+          repo.rollback({:ok, results})
 
-          {:error, name, reason, prior} ->
-            repo.rollback({:error, name, reason, prior})
-            {:error, name, reason, prior}
-        end
-      end)
-
-    effects
+        {:error, name, reason, prior} ->
+          repo.rollback({:error, name, reason, prior})
+      end
+    end)
+    |> case do
+      {:error, {:ok, results}} -> {:ok, results}
+      {:error, {:error, name, reason, prior}} -> {:error, name, reason, prior}
+    end
   end
 
   defp resolve_repo(multi) do

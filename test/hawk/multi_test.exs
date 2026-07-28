@@ -166,5 +166,53 @@ defmodule Hawk.MultiTest do
       {:ok, results} = Multi.execute(Multi.new(), Videdal.Repo)
       assert results == %{}
     end
+
+    test "executes an action step and returns its result" do
+      course = %Videdal.Course{id: @course_id, title: "Math", school_id: @school_id, teacher_id: @teacher_id, registration_state: "draft", seat_count: 0, waitlist_count: 0}
+
+      Process.put({Videdal.Repo, :all_results}, [course])
+
+      multi =
+        Multi.new()
+        |> Multi.action(:open, Videdal.Courses, course, "open-registration", %{seat_count: 2, waitlist_count: 1}, @authority)
+
+      {:ok, results} = Multi.execute(multi, Videdal.Repo)
+
+      assert results.open.registration_state == "open"
+      assert results.open.seat_count == 2
+    end
+
+    test "run/3 receives prior step results and threads its value forward" do
+      course = %Videdal.Course{id: @course_id, title: "Math", school_id: @school_id, teacher_id: @teacher_id}
+
+      Process.put({Videdal.Repo, :all_results}, [course])
+
+      multi =
+        Multi.new()
+        |> Multi.update(:course, Videdal.Courses, course, %{title: "Science"}, @authority)
+        |> Multi.run(:after, fn %{course: updated} -> {:ok, updated.title} end)
+        |> Multi.run(:final, fn %{after: title} -> {:ok, String.upcase(title)} end)
+
+      {:ok, results} = Multi.execute(multi, Videdal.Repo)
+
+      assert results.after == "Science"
+      assert results.final == "SCIENCE"
+    end
+
+    test "a failed run/3 halts the multi and rolls back prior steps" do
+      course = %Videdal.Course{id: @course_id, title: "Math", school_id: @school_id, teacher_id: @teacher_id}
+
+      Process.put({Videdal.Repo, :all_results}, [course])
+
+      multi =
+        Multi.new()
+        |> Multi.update(:course, Videdal.Courses, course, %{title: "Science"}, @authority)
+        |> Multi.run(:fail, fn _results -> {:error, :deliberate_failure} end)
+
+      result = Multi.execute(multi, Videdal.Repo)
+
+      assert {:error, :fail, :deliberate_failure, prior} = result
+      assert Map.has_key?(prior, :course)
+    end
   end
 end
