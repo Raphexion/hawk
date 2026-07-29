@@ -1,7 +1,7 @@
 defmodule Hawk.MixProject do
   use Mix.Project
 
-  @version "0.3.0"
+  @version "0.4.0"
   @source_url "https://github.com/Raphexion/hawk"
 
   def project do
@@ -15,7 +15,23 @@ defmodule Hawk.MixProject do
       dialyzer: dialyzer(),
       aliases: aliases(),
       test_coverage: test_coverage(),
-      docs: docs()
+      docs: docs(),
+      package: package()
+    ]
+  end
+
+  defp package do
+    [
+      licenses: ["MIT"],
+      links: %{"GitHub" => @source_url},
+      files: [
+        "lib",
+        "mix.exs",
+        "README.md",
+        "LICENSE",
+        "CHANGELOG.md",
+        ".formatter.exs"
+      ]
     ]
   end
 
