@@ -357,19 +357,31 @@ defmodule Videdal.Controllers.CoursesControllerTest do
     student3 = insert(:student, school_id: school.id)
     student4 = insert(:student, school_id: school.id)
 
-    insert(:enrollment, school_id: school.id, course_id: course.id, student_id: student1.id,
+    insert(:enrollment,
+      school_id: school.id,
+      course_id: course.id,
+      student_id: student1.id,
       enrolled_on: ~D[2026-01-01]
     )
 
-    insert(:enrollment, school_id: school.id, course_id: course.id, student_id: student2.id,
+    insert(:enrollment,
+      school_id: school.id,
+      course_id: course.id,
+      student_id: student2.id,
       enrolled_on: ~D[2026-01-02]
     )
 
-    insert(:enrollment, school_id: school.id, course_id: course.id, student_id: student3.id,
+    insert(:enrollment,
+      school_id: school.id,
+      course_id: course.id,
+      student_id: student3.id,
       enrolled_on: ~D[2026-01-03]
     )
 
-    insert(:enrollment, school_id: school.id, course_id: course.id, student_id: student4.id,
+    insert(:enrollment,
+      school_id: school.id,
+      course_id: course.id,
+      student_id: student4.id,
       enrolled_on: ~D[2026-01-04]
     )
 

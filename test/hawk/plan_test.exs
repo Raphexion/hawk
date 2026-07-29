@@ -81,11 +81,12 @@ defmodule Hawk.PlanTest do
       # Serialize: the host app stores the plan as JSON. The struct fields are
       # plain data (maps, strings, atoms) except the authoring_authority, which
       # the host app serializes separately via Hawk.Authority.Session.dump/1.
-      json = Jason.encode!(%{
-        ops: plan.ops,
-        comments: plan.comments,
-        authoring_authority: Hawk.Authority.Session.dump(plan.authoring_authority)
-      })
+      json =
+        Jason.encode!(%{
+          ops: plan.ops,
+          comments: plan.comments,
+          authoring_authority: Hawk.Authority.Session.dump(plan.authoring_authority)
+        })
 
       # Deserialize: reconstruct the plan from JSON. JSON keys/values come back as strings,
       # so the ops won't be atom-keyed. The host app is responsible for atomizing

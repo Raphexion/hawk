@@ -8,8 +8,6 @@ defmodule Videdal.Integration.LiveViewPolicyFilterTest do
   alias Videdal.LiveViews.PolicyCheckedCoursesLive
 
   setup do
-    
-
     school = Repo.insert!(%School{name: "Videdal Skole"})
     teacher = Repo.insert!(%Teacher{name: "Ms. Curie", school_id: school.id})
     other_teacher = Repo.insert!(%Teacher{name: "Mr. Feynman", school_id: school.id})

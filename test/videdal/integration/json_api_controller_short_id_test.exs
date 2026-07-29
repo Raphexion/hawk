@@ -71,7 +71,6 @@ defmodule Videdal.Integration.JsonApiControllerShortIdTest do
   @moduletag :database
 
   setup do
-    
     :ok
   end
 

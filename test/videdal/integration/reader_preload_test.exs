@@ -29,7 +29,6 @@ defmodule Videdal.Integration.ReaderPreloadTest do
   @moduletag :database
 
   setup do
-    
     :ok
   end
 

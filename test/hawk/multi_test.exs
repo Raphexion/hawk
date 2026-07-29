@@ -19,7 +19,12 @@ defmodule Hawk.MultiTest do
 
       multi =
         Multi.new()
-        |> Multi.create(:course, Videdal.Courses, %{title: "Math", school_id: school.id, teacher_id: teacher.id}, @authority)
+        |> Multi.create(
+          :course,
+          Videdal.Courses,
+          %{title: "Math", school_id: school.id, teacher_id: teacher.id},
+          @authority
+        )
 
       assert length(multi.steps) == 1
       [step] = multi.steps
@@ -157,7 +162,14 @@ defmodule Hawk.MultiTest do
 
       multi =
         Multi.new()
-        |> Multi.action(:open, Videdal.Courses, course, "open-registration", %{seat_count: 2, waitlist_count: 1}, @authority)
+        |> Multi.action(
+          :open,
+          Videdal.Courses,
+          course,
+          "open-registration",
+          %{seat_count: 2, waitlist_count: 1},
+          @authority
+        )
 
       {:ok, results} = Multi.execute(multi, Videdal.Repo)
 

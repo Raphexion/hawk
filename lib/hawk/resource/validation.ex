@@ -231,7 +231,13 @@ defmodule Hawk.Resource.Validation do
     end
   end
 
-  defp validate_belongs_to_identity!(json_api_module, _model, name, source, %Ecto.Association.BelongsTo{} = association) do
+  defp validate_belongs_to_identity!(
+         json_api_module,
+         _model,
+         name,
+         source,
+         %Ecto.Association.BelongsTo{} = association
+       ) do
     related = association.related
     related_identity = Hawk.JsonApi.Schema.identity(related)
 

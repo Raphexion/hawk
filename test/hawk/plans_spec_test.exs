@@ -20,11 +20,14 @@ defmodule Hawk.Plans.SpecTest do
 
       # :read lists the reader's filters and sorts so the AI can find records.
       # Courses declares filters (including custom handlers like :school_name) and sorts.
-      assert MapSet.new(read.filters) == MapSet.new([:id, :school_id, :teacher_id, :title, :school_name, :teacher_name])
+      assert MapSet.new(read.filters) ==
+               MapSet.new([:id, :school_id, :teacher_id, :title, :school_name, :teacher_name])
+
       assert MapSet.new(read.sorts) == MapSet.new([:id, :title])
 
       # :create lists creatable attrs and relationships by external name, with source + doc
       assert create.attrs == %{title: %{source: :title, doc: "Human-readable course title."}}
+
       assert create.relationships == %{
                school: %{source: :school, doc: "The school offering the course.", target: "schools"},
                teacher: %{source: :teacher, doc: "The teacher responsible for the course.", target: "teachers"}
@@ -32,6 +35,7 @@ defmodule Hawk.Plans.SpecTest do
 
       # :update lists updatable attrs and relationships
       assert update.attrs == %{title: %{source: :title, doc: "Human-readable course title."}}
+
       assert update.relationships == %{
                school: %{source: :school, doc: "The school offering the course.", target: "schools"},
                teacher: %{source: :teacher, doc: "The teacher responsible for the course.", target: "teachers"}
@@ -46,9 +50,14 @@ defmodule Hawk.Plans.SpecTest do
       close = Enum.find(actions, &(&1.name == "close-registration"))
 
       assert open.doc == "Open course registration and configure seats and waitlist capacity."
+
       assert open.params == %{
                seat_count: %{type: :integer, doc: "Seats offered immediately when registration opens.", example: 2},
-               waitlist_count: %{type: :integer, doc: "How many waitlist places should be tracked for this course.", example: 1}
+               waitlist_count: %{
+                 type: :integer,
+                 doc: "How many waitlist places should be tracked for this course.",
+                 example: 1
+               }
              }
 
       assert close.doc == "Close registration and finalize each student as enrolled, waitlisted, or rejected."

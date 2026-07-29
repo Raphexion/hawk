@@ -130,7 +130,12 @@ defmodule Hawk.LiveViewTest do
     course1 = insert(:course, school_id: school.id, teacher_id: teacher1.id, title: "Math")
     insert(:course, school_id: school.id, teacher_id: teacher2.id, title: "Other")
     other_school = insert(:school)
-    insert(:course, school_id: other_school.id, teacher_id: insert(:teacher, school_id: other_school.id).id, title: "Math")
+
+    insert(:course,
+      school_id: other_school.id,
+      teacher_id: insert(:teacher, school_id: other_school.id).id,
+      title: "Math"
+    )
 
     socket =
       CourseIndexLive.assign_index(socket(), Authority.system(),

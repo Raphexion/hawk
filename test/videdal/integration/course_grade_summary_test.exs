@@ -18,7 +18,6 @@ defmodule Videdal.Integration.CourseGradeSummaryTest do
   alias Videdal.Integration.CourseGradeSummaryTest.Reader
 
   setup do
-    
     {:ok, seed_school()}
   end
 

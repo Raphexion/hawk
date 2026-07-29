@@ -21,7 +21,6 @@ defmodule Videdal.Integration.CourseGradesPreloadTest do
   alias Videdal.Integration.CourseGradesPreloadTest.Reader
 
   setup do
-    
     {:ok, seed_school()}
   end
 

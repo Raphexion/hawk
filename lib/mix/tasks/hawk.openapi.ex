@@ -58,7 +58,8 @@ defmodule Mix.Tasks.Hawk.Openapi do
 
     output = Keyword.get(opts, :output) || raise ArgumentError, "mix hawk.openapi requires --output/-o"
 
-    title = Keyword.get(opts, :title) || raise ArgumentError, "mix hawk.openapi requires --title — name the host app's API"
+    title =
+      Keyword.get(opts, :title) || raise ArgumentError, "mix hawk.openapi requires --title — name the host app's API"
 
     resources =
       case resources do
@@ -92,7 +93,9 @@ defmodule Mix.Tasks.Hawk.Openapi do
   # render `info.license` as `%{name: <license>, url: <license-url>}` (url optional).
   defp put_license_opt(spec_opts, opts) do
     case Keyword.get(opts, :license) do
-      nil -> spec_opts
+      nil ->
+        spec_opts
+
       name ->
         license = %{name: name} |> maybe_put_url(Keyword.get(opts, :license_url))
         Keyword.put(spec_opts, :license, license)

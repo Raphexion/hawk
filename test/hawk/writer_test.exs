@@ -320,6 +320,7 @@ defmodule Hawk.WriterTest do
         |> Writer.constraint(:unique, :name, name: :students_name_index, message: "already exists")
 
       assert context.error == :none
+
       assert context.changeset.constraints == [
                %{
                  match: :exact,
@@ -340,6 +341,7 @@ defmodule Hawk.WriterTest do
         |> Writer.constraint(:foreign_key, :school_id, name: :students_school_id_fkey)
 
       assert context.error == :none
+
       assert context.changeset.constraints == [
                %{
                  match: :exact,

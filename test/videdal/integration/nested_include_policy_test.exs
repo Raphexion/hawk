@@ -90,7 +90,6 @@ defmodule Videdal.Integration.NestedIncludePolicyTest do
   alias Videdal.Integration.NestedIncludePolicyTest.CourseReader
 
   setup do
-    
     {:ok, seed_school()}
   end
 

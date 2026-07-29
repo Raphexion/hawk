@@ -162,7 +162,6 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest do
   @moduletag :database
 
   setup do
-    
     :ok
   end
 
@@ -174,7 +173,6 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest do
         CoursesController.index(conn(Authority.system()), %{"include" => "grades.student"})
       end)
 
-    
     seed_courses_with_grades(5)
 
     {conn, many_course_query_count} =

@@ -127,8 +127,10 @@ defmodule Hawk.OpenApiResourceAdapterTest do
         ] do
       id_param = hd(spec.paths[path][method].parameters)
       assert id_param.name == "id"
+
       assert id_param.schema == %{type: "string", format: "uuid"},
              "expected #{method} #{path} id parameter to require a full UUID"
+
       refute Map.has_key?(id_param, :description)
     end
   end

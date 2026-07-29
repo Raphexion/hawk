@@ -114,6 +114,7 @@ defmodule Mix.Tasks.Hawk.OpenapiTest do
 
     assert spec["paths"]["/courses/{id}/relationships/{relationship}"]["get"]["operationId"] ==
              "showCoursesRelationship"
+
     assert spec["paths"]["/courses/{id}/{relationship}"]["get"]["operationId"] ==
              "showCoursesRelated"
   end
@@ -127,6 +128,7 @@ defmodule Mix.Tasks.Hawk.OpenapiTest do
 
     assert spec["paths"]["/courses/{id}/-actions/open-registration"]["post"]["operationId"] ==
              "runCoursesOpenRegistration"
+
     assert spec["paths"]["/courses/{id}/-actions/close-registration"]["post"]["operationId"] ==
              "runCoursesCloseRegistration"
   end
@@ -215,9 +217,12 @@ defmodule Mix.Tasks.Hawk.OpenapiTest do
 
     Mix.Tasks.Hawk.Openapi.run([
       "Videdal.Schools",
-      "-o", output,
-      "--title", "Test API",
-      "--license", "MIT"
+      "-o",
+      output,
+      "--title",
+      "Test API",
+      "--license",
+      "MIT"
     ])
 
     spec = Jason.decode!(File.read!(output))
@@ -230,10 +235,14 @@ defmodule Mix.Tasks.Hawk.OpenapiTest do
 
     Mix.Tasks.Hawk.Openapi.run([
       "Videdal.Schools",
-      "-o", output,
-      "--title", "Test API",
-      "--license", "Apache-2.0",
-      "--license-url", "https://www.apache.org/licenses/LICENSE-2.0"
+      "-o",
+      output,
+      "--title",
+      "Test API",
+      "--license",
+      "Apache-2.0",
+      "--license-url",
+      "https://www.apache.org/licenses/LICENSE-2.0"
     ])
 
     spec = Jason.decode!(File.read!(output))

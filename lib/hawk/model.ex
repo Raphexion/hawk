@@ -128,9 +128,9 @@ defmodule Hawk.Model do
 
     primary_key_decl =
       if primary_key? do
-        quote do: @primary_key {:id, :binary_id, autogenerate: true}
+        quote do: @primary_key({:id, :binary_id, autogenerate: true})
       else
-        quote do: @primary_key false
+        quote do: @primary_key(false)
       end
 
     quote do

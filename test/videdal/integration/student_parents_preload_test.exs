@@ -42,7 +42,6 @@ defmodule Videdal.Integration.StudentParentsPreloadTest do
   @moduletag :database
 
   setup do
-    
     :ok
   end
 

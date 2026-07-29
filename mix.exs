@@ -62,7 +62,7 @@ defmodule Hawk.MixProject do
           Hawk.Errors,
           Hawk.Filter
         ],
-        "Plans": [Hawk.Plan, Hawk.Plans, Hawk.Plans.Registry, Hawk.Plans.Spec, Hawk.Multi],
+        Plans: [Hawk.Plan, Hawk.Plans, Hawk.Plans.Registry, Hawk.Plans.Spec, Hawk.Multi],
         "Validation & contracts": [
           Hawk.Resource.Validation,
           Hawk.Resource.Convention,

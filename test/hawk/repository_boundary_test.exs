@@ -16,6 +16,7 @@ defmodule Hawk.RepositoryBoundaryTest do
 
       assert {:ok, %Student{name: "Ada"} = student} =
                RepositoryBoundary.insert(context, Repo, audit: audit_to_self())
+
       assert student.school_id == school.id
 
       assert_received {:audit, %{operation: :insert, model: %Student{name: "Ada"}}}
@@ -46,6 +47,7 @@ defmodule Hawk.RepositoryBoundaryTest do
 
       assert {:ok, %Student{name: "Ada"} = student} =
                RepositoryBoundary.insert(context, Repo)
+
       assert student.school_id == school.id
     end
 
@@ -133,6 +135,7 @@ defmodule Hawk.RepositoryBoundaryTest do
 
       assert {:ok, %Student{name: "Grace"} = updated} =
                RepositoryBoundary.update(context, Repo, audit: audit_to_self())
+
       assert updated.id == student.id
 
       assert_received {:audit, %{operation: :update, model: %Student{name: "Grace"}}}

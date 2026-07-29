@@ -9,9 +9,10 @@ defmodule Hawk.PlansTest do
     test "converts plan ops into a Hawk.Multi" do
       course = insert(:course)
 
-      plan = Plan.new([
-        %{op: :update, resource: "courses", id: course.id, attrs: %{title: "Science"}}
-      ])
+      plan =
+        Plan.new([
+          %{op: :update, resource: "courses", id: course.id, attrs: %{title: "Science"}}
+        ])
 
       {:ok, multi} = Plans.to_multi(plan, @authority)
 
@@ -25,9 +26,10 @@ defmodule Hawk.PlansTest do
     test "resolves resource type strings to facades" do
       enrollment = insert(:enrollment)
 
-      plan = Plan.new([
-        %{op: :delete, resource: "enrollments", id: enrollment.id}
-      ])
+      plan =
+        Plan.new([
+          %{op: :delete, resource: "enrollments", id: enrollment.id}
+        ])
 
       {:ok, multi} = Plans.to_multi(plan, @authority)
 
@@ -39,10 +41,11 @@ defmodule Hawk.PlansTest do
     test "loads models for update/delete/action ops via the reader" do
       course = insert(:course)
 
-      plan = Plan.new([
-        %{op: :update, resource: "courses", id: course.id, attrs: %{title: "Science"}},
-        %{op: :delete, resource: "courses", id: course.id}
-      ])
+      plan =
+        Plan.new([
+          %{op: :update, resource: "courses", id: course.id, attrs: %{title: "Science"}},
+          %{op: :delete, resource: "courses", id: course.id}
+        ])
 
       {:ok, multi} = Plans.to_multi(plan, @authority)
 
@@ -54,9 +57,10 @@ defmodule Hawk.PlansTest do
     test "handles action ops" do
       course = insert(:course)
 
-      plan = Plan.new([
-        %{op: :action, resource: "courses", id: course.id, action: "open-registration", params: %{seat_count: 2}}
-      ])
+      plan =
+        Plan.new([
+          %{op: :action, resource: "courses", id: course.id, action: "open-registration", params: %{seat_count: 2}}
+        ])
 
       {:ok, multi} = Plans.to_multi(plan, @authority)
 
@@ -67,17 +71,19 @@ defmodule Hawk.PlansTest do
     end
 
     test "returns error for unknown resource type" do
-      plan = Plan.new([
-        %{op: :delete, resource: "unknown-type", id: "x"}
-      ])
+      plan =
+        Plan.new([
+          %{op: :delete, resource: "unknown-type", id: "x"}
+        ])
 
       assert {:error, {:unknown_resource, "unknown-type"}} = Plans.to_multi(plan, @authority)
     end
 
     test "returns error when a member op references a missing record" do
-      plan = Plan.new([
-        %{op: :delete, resource: "courses", id: Ecto.UUID.generate()}
-      ])
+      plan =
+        Plan.new([
+          %{op: :delete, resource: "courses", id: Ecto.UUID.generate()}
+        ])
 
       assert {:error, {:not_found, "courses", _id}} = Plans.to_multi(plan, @authority)
     end
@@ -87,9 +93,10 @@ defmodule Hawk.PlansTest do
     test "executes a plan transactionally and returns results" do
       course = insert(:course)
 
-      plan = Plan.new([
-        %{op: :update, resource: "courses", id: course.id, attrs: %{title: "Science"}}
-      ])
+      plan =
+        Plan.new([
+          %{op: :update, resource: "courses", id: course.id, attrs: %{title: "Science"}}
+        ])
 
       {:ok, results} = Plans.run(plan, @authority, Videdal.Repo)
 
@@ -100,10 +107,11 @@ defmodule Hawk.PlansTest do
     test "halts when a step fails" do
       course = insert(:course)
 
-      plan = Plan.new([
-        %{op: :update, resource: "courses", id: course.id, attrs: %{title: "Science"}},
-        %{op: :create, resource: "courses", attrs: %{}}
-      ])
+      plan =
+        Plan.new([
+          %{op: :update, resource: "courses", id: course.id, attrs: %{title: "Science"}},
+          %{op: :create, resource: "courses", attrs: %{}}
+        ])
 
       result = Plans.run(plan, @authority, Videdal.Repo)
 
@@ -115,9 +123,10 @@ defmodule Hawk.PlansTest do
     test "returns effects and rollback status without persisting" do
       course = insert(:course)
 
-      plan = Plan.new([
-        %{op: :update, resource: "courses", id: course.id, attrs: %{title: "Science"}}
-      ])
+      plan =
+        Plan.new([
+          %{op: :update, resource: "courses", id: course.id, attrs: %{title: "Science"}}
+        ])
 
       {:ok, effects} = Plans.preview(plan, @authority)
 
@@ -129,9 +138,10 @@ defmodule Hawk.PlansTest do
     end
 
     test "returns error effects when the plan is invalid" do
-      plan = Plan.new([
-        %{op: :create, resource: "courses", attrs: %{}}
-      ])
+      plan =
+        Plan.new([
+          %{op: :create, resource: "courses", attrs: %{}}
+        ])
 
       result = Plans.preview(plan, @authority)
 

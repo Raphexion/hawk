@@ -123,9 +123,7 @@ defmodule Hawk.LiveViewPageTest do
       Authority.new(:school_admin, Videdal.school_admin_id(), scopes: %{school_id: school.id})
 
     socket =
-      CourseWorkspaceLive.assign_page(socket(), authority,
-        grades: {:all, filter: %{course_id: course.id}}
-      )
+      CourseWorkspaceLive.assign_page(socket(), authority, grades: {:all, filter: %{course_id: course.id}})
 
     assert [page_grade] = socket.assigns.grades
     assert page_grade.id == grade.id
@@ -149,9 +147,7 @@ defmodule Hawk.LiveViewPageTest do
     authority = Authority.system()
 
     socket =
-      CourseWorkspaceLive.assign_page(socket(), authority,
-        course: {:one, filter: %{id: Videdal.other_course_id()}}
-      )
+      CourseWorkspaceLive.assign_page(socket(), authority, course: {:one, filter: %{id: Videdal.other_course_id()}})
 
     assert_raise ArgumentError, ~r/resource :grades is not active/, fn ->
       CourseWorkspaceLive.handle_event(

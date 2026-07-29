@@ -16,6 +16,7 @@ defmodule Videdal.Students.WriterTest do
 
   test "create rejects readonly authorities" do
     school = insert(:school)
+
     authority =
       :school_admin
       |> Authority.new(1, scopes: %{school_id: school.id})
@@ -39,6 +40,7 @@ defmodule Videdal.Students.WriterTest do
   test "delete rejects readonly authorities before persistence" do
     school = insert(:school)
     student = insert(:student, school_id: school.id)
+
     authority =
       :school_admin
       |> Authority.new(1, scopes: %{school_id: school.id})

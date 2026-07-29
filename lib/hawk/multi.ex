@@ -200,8 +200,10 @@ defmodule Hawk.Multi do
   end
 
   defp unwrap_transaction_result({:ok, {results, nil}}), do: {:ok, results}
+
   defp unwrap_transaction_result({:ok, {results, {failed_name, reason}}}),
     do: {:error, failed_name, reason, results}
+
   defp unwrap_transaction_result({:error, message}) when is_binary(message),
     do: {:error, :transaction, message, %{}}
 

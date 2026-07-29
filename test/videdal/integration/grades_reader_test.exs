@@ -54,7 +54,6 @@ defmodule Videdal.Integration.GradesReaderTest do
   alias Videdal.Integration.GradesReaderTest.Reader
 
   setup do
-    
     {:ok, seed_school()}
   end
 
