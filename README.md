@@ -26,11 +26,6 @@ and Phoenix Ecto). It does not define or supervise a concrete `Ecto.Repo`.
 Applications provide their own Repo modules, database configuration, migrations,
 authentication, and supervision tree.
 
-## Direction
-
-Hawk's current north-star design is captured in [`docs/hawk-resource-direction.md`](docs/hawk-resource-direction.md).
-The Plans design (AI-authored, human-reviewed batches) is in [`docs/hawk-plans-design.md`](docs/hawk-plans-design.md).
-
 ## Golden path
 
 A Hawk resource facade ties the resource parts together and follows convention by default:
@@ -838,8 +833,6 @@ Hawk owns the plan *struct*, the *spec renderer*, and the *execution invariants*
 plan *storage* (its own `plans` table + migration) and *plan-lifecycle auth*
 (who can create/approve a plan — a product decision). This mirrors how Hawk
 treats the `Repo`: Hawk does not define the `plans` table; the app provides it.
-
-See [`docs/hawk-plans-design.md`](docs/hawk-plans-design.md) for the full design.
 
 ```bash
 mix hawk.plans.spec -o tmp/plans.json   # generate the plan operation manifest

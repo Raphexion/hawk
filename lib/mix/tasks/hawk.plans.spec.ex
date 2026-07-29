@@ -9,7 +9,7 @@ defmodule Mix.Tasks.Hawk.Plans.Spec do
   second renderer over `Hawk.JsonApi.Routes` + `Hawk.Actions`, sitting alongside
   `mix hawk.openapi`. Where OpenAPI projects the resource surface to HTTP, this
   spec projects it to resource-shaped ops (`:read`, `:create`, `:update`,
-  `:delete`, `:action`). See `docs/hawk-plans-design.md`.
+  `:delete`, `:action`).
 
   ## Usage
 

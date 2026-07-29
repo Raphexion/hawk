@@ -22,7 +22,7 @@ defmodule Hawk.Multi do
 
       Hawk.Multi.execute(multi, MyApp.Repo)
 
-  On failure, the whole transaction rolls back. See `docs/hawk-plans-design.md`.
+  On failure, the whole transaction rolls back.
   """
 
   defstruct steps: []

@@ -15,7 +15,6 @@ defmodule Hawk.Plans do
   dry-run effects preview with full fidelity (including repo-level constraints).
   `run/3` executes and commits.
 
-  See `docs/hawk-plans-design.md` for the full design.
   """
 
   alias Hawk.Authority

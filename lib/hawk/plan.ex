@@ -6,7 +6,7 @@ defmodule Hawk.Plan do
   The plan is pure data — serializable to JSON, no storage. The host app stores
   it however it likes (its own table, its own migration, its own policy). Hawk
   owns the plan *struct* and the *execution invariants*; the host app owns plan
-  *storage* and *plan-lifecycle auth*. See `docs/hawk-plans-design.md`.
+  *storage* and *plan-lifecycle auth*.
 
   ## Plan ops
 

@@ -22,7 +22,6 @@ defmodule Hawk.Plans.Spec do
   this spec, so authoring and execution read from the same symmetric surface —
   no drift.
 
-  See `docs/hawk-plans-design.md` for the full design.
   """
 
   alias Hawk.Actions
