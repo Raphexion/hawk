@@ -1,23 +1,20 @@
 defmodule Hawk.MixProject do
   use Mix.Project
 
+  @version "0.3.0"
+  @source_url "https://github.com/Raphexion/hawk"
+
   def project do
     [
       app: :hawk,
-      version: "0.3.0",
+      version: @version,
       elixir: "~> 1.20",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       dialyzer: dialyzer(),
       aliases: aliases(),
-      test_coverage: [
-        summary: [threshold: 85],
-        # Cover only the Hawk library itself. The Videdal example app and the
-        # Hawk.Test* helpers are compiled under `elixirc_paths(:test)` to
-        # exercise Hawk, but they are test fixtures, not shipped code.
-        ignore_modules: [~r/^Videdal\b/, Hawk.TestConn, Hawk.TestSocket]
-      ],
+      test_coverage: test_coverage(),
       docs: docs()
     ]
   end
@@ -25,7 +22,7 @@ defmodule Hawk.MixProject do
   defp docs do
     [
       main: "Hawk",
-      source_url: "https://github.com/Raphexion/hawk",
+      source_url: @source_url,
       groups_for_modules: [
         "Resource facade": [Hawk.Resource],
         "DSL modules": [
@@ -138,6 +135,16 @@ defmodule Hawk.MixProject do
       # `mix test` is the complete local gate: validate every Hawk resource's
       # contract, then run the full suite.
       test: ["hawk.validate", "test"]
+    ]
+  end
+
+  defp test_coverage do
+    [
+      summary: [threshold: 85],
+      # Cover only the Hawk library itself. The Videdal example app and the
+      # Hawk.Test* helpers are compiled under `elixirc_paths(:test)` to
+      # exercise Hawk, but they are test fixtures, not shipped code.
+      ignore_modules: [~r/^Videdal\b/, Hawk.TestConn, Hawk.TestSocket]
     ]
   end
 
