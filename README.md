@@ -1,10 +1,21 @@
-# Hawk
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/Raphexion/hawk/main/assets/hawk-light.png">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Raphexion/hawk/main/assets/hawk-dark.png">
+    <img alt="hawk logo" src="https://raw.githubusercontent.com/Raphexion/hawk/main/assets/hawk-light.png" width="320">
+  </picture>
+</p>
 
+<p align="center">
 Hawk is an opinionated Phoenix backend foundation for resource-heavy systems
 that need the same policy-safe domain surface exposed through internal admin UI
 and backend APIs.
+</p>
 
-It is designed for the shape that appears in many backends: Ecto resources with
+
+# Hawk
+
+Hawk is designed for the shape that appears in many backends: Ecto resources with
 role-aware reads and writes, a JSON:API surface for clients and integrations, and
 LiveView screens for internal administration. Hawk tries to make that repeated
 middle layer boring: resource contracts, policies, readers, writers, adapters,
