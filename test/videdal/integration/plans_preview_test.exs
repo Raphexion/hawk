@@ -58,7 +58,7 @@ defmodule Videdal.Integration.PlansPreviewTest do
         %{op: :create, resource: "preview-schools", attrs: %{name: "Committed School"}}
       ])
 
-    {:ok, _effects} = Plans.run(plan, @authority, Repo)
+    {:ok, _effects} = Plans.run(plan, @authority)
 
     [school] = Repo.all(Videdal.School)
     assert school.name == "Committed School"

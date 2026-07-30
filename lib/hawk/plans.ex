@@ -13,7 +13,7 @@ defmodule Hawk.Plans do
 
   `preview/2` executes in a transaction and rolls back, giving the human a
   dry-run effects preview with full fidelity (including repo-level constraints).
-  `run/3` executes and commits.
+  `run/2` executes and commits.
 
   """
 
@@ -113,13 +113,17 @@ defmodule Hawk.Plans do
   Executes a plan in a single transaction under the reviewer's authority.
   All-or-nothing: any step failure rolls back the whole batch.
 
-  Returns `{:ok, results_map}` or `{:error, failed_step_name, reason, prior_results}`.
+  The repo is resolved from the ops' resource readers; a plan batch runs in one
+  transaction, so every op must share a single repo. `run/2` raises if the
+  ops span more than one repo, since a transaction on one repo cannot roll
+  back a write through another. Returns `{:ok, results_map}` or
+  `{:error, failed_step_name, reason, prior_results}`.
   """
-  @spec run(Plan.t(), Authority.t(), module(), keyword()) ::
+  @spec run(Plan.t(), Authority.t()) ::
           {:ok, map()} | {:error, atom(), term(), map()}
-  def run(%Plan{} = plan, %Authority{} = reviewer_authority, repo, _opts \\ []) do
+  def run(%Plan{} = plan, %Authority{} = reviewer_authority) do
     case to_multi(plan, reviewer_authority) do
-      {:ok, multi} -> Multi.execute(multi, repo)
+      {:ok, multi} -> Multi.execute(multi, resolve_repo(multi))
       {:error, reason} -> {:error, :setup, reason, %{}}
     end
   end
@@ -179,22 +183,57 @@ defmodule Hawk.Plans do
     end
   end
 
-  defp resolve_repo(multi) do
-    case Multi.to_list(multi) do
-      [%{resource: resource} | _] ->
-        reader = Module.concat(resource, Reader)
-        reader_config(reader)
-
-      [] ->
-        nil
+  # A plan batch runs in a single Ecto transaction, which can only coordinate
+  # one repo: a transaction on repo A does not roll back a write through repo
+  # B. So an atomic plan batch requires every op to share a single repo. We
+  # resolve each op's repo from its resource facade reader and raise if they
+  # diverge, rather than silently running a cross-repo batch that cannot
+  # actually roll back. A reader that exposes no repo/0 is also rejected,
+  # since a Hawk.Reader.Resource always provides one — a missing repo is a
+  # contract violation, not a signal to bypass the guard.
+  @doc false
+  def resolve_repo(multi) do
+    case repo_per_step(multi) do
+      [] -> nil
+      [repo | rest] -> enforce_single_repo!(rest, repo)
     end
   end
 
-  defp reader_config(reader) do
-    if Code.ensure_loaded?(reader) and function_exported?(reader, :repo, 0) do
-      reader.repo()
-    else
-      nil
+  defp repo_per_step(multi) do
+    multi
+    |> Multi.to_list()
+    |> Enum.map(&resource_repo/1)
+  end
+
+  defp resource_repo(%{resource: resource}) do
+    case resource.__hawk_resource__(:reader) do
+      reader when is_atom(reader) and not is_nil(reader) ->
+        if Code.ensure_loaded?(reader) and function_exported?(reader, :repo, 0) do
+          reader.repo()
+        else
+          raise ArgumentError,
+                "Hawk plan op on #{inspect(resource)} resolved reader #{inspect(reader)} " <>
+                  "which does not expose repo/0; a Hawk.Reader.Resource always provides one"
+        end
+
+      other ->
+        raise ArgumentError,
+              "Hawk plan op on #{inspect(resource)} did not resolve a reader " <>
+                "(got #{inspect(other)}); every plan op must back onto a Hawk resource with a reader"
     end
+  end
+
+  defp enforce_single_repo!(repos, repo) do
+    Enum.each(repos, fn other ->
+      unless other == repo do
+        raise ArgumentError,
+              "Hawk plan batches run in a single transaction and require all ops to " <>
+                "share one repo; found #{inspect(repo)} and #{inspect(other)}. " <>
+                "Split the plan by repo, or ensure every op's resource reader uses " <>
+                "the same repo."
+      end
+    end)
+
+    repo
   end
 end

@@ -98,7 +98,7 @@ defmodule Hawk.PlansTest do
           %{op: :update, resource: "courses", id: course.id, attrs: %{title: "Science"}}
         ])
 
-      {:ok, results} = Plans.run(plan, @authority, Videdal.Repo)
+      {:ok, results} = Plans.run(plan, @authority)
 
       assert Map.has_key?(results, :step_1)
       assert results.step_1.title == "Science"
@@ -113,7 +113,7 @@ defmodule Hawk.PlansTest do
           %{op: :create, resource: "courses", attrs: %{}}
         ])
 
-      result = Plans.run(plan, @authority, Videdal.Repo)
+      result = Plans.run(plan, @authority)
 
       assert {:error, :step_2, _reason, _prior} = result
     end
@@ -146,6 +146,66 @@ defmodule Hawk.PlansTest do
       result = Plans.preview(plan, @authority)
 
       assert {:error, :step_1, _reason, _prior} = result
+    end
+  end
+
+  describe "repo resolution" do
+    # A plan batch runs in one Ecto transaction, which can only coordinate a
+    # single repo: a transaction on repo A does not roll back a write through
+    # repo B. resolve_repo must reject a batch whose ops span more than one
+    # repo rather than silently running a cross-repo batch that cannot roll
+    # back.
+    #
+    # The mock facades are created with Module.create/3 (:temporary), so they
+    # are not persisted as .beam files and the beam-based Plans.Registry /
+    # mix hawk.validate discovery never sees them — keeping this test
+    # self-contained.
+    defp temporary_facade(reader) do
+      name = Module.concat(__MODULE__, "Facade#{:erlang.unique_integer([:positive])}")
+
+      contents =
+        quote do
+          @moduledoc false
+          def __hawk_resource__(:reader), do: unquote(reader)
+          def __hawk_resource__(_), do: nil
+        end
+
+      Module.create(name, contents, Macro.Env.location(__ENV__))
+      name
+    end
+
+    defmodule RepoA do
+      @moduledoc false
+      def repo, do: :repo_a
+    end
+
+    defmodule RepoB do
+      @moduledoc false
+      def repo, do: :repo_b
+    end
+
+    test "raises when a multi spans more than one repo" do
+      multi =
+        Hawk.Multi.new()
+        |> Hawk.Multi.create(:step_1, temporary_facade(RepoA), %{}, @authority)
+        |> Hawk.Multi.create(:step_2, temporary_facade(RepoB), %{}, @authority)
+
+      assert_raise ArgumentError, ~r/share one repo/, fn ->
+        Plans.resolve_repo(multi)
+      end
+    end
+
+    test "returns the single repo when all ops share it" do
+      multi =
+        Hawk.Multi.new()
+        |> Hawk.Multi.create(:step_1, temporary_facade(RepoA), %{}, @authority)
+        |> Hawk.Multi.create(:step_2, temporary_facade(RepoA), %{}, @authority)
+
+      assert Plans.resolve_repo(multi) == :repo_a
+    end
+
+    test "returns nil for an empty multi" do
+      assert Plans.resolve_repo(Hawk.Multi.new()) == nil
     end
   end
 end
