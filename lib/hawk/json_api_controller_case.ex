@@ -650,12 +650,12 @@ defmodule Hawk.JsonApiControllerCase do
   end
 
   defp read_allowed?(config, role_case) do
-    reader = Module.concat(config.resource, Reader)
+    reader = config.resource.__hawk_resource__(:reader)
     reader.read_filter(role_case.authority) != :none
   end
 
   defp write_allowed?(config, role_case, action) do
-    policy = Module.concat(config.resource, Policy)
+    policy = config.resource.__hawk_resource__(:policy)
     context = mutation_context(action, config.sample, role_case.authority)
 
     if function_exported?(policy, predicate(action), 1) do
