@@ -294,9 +294,15 @@ end
 ### Actions
 
 Optional imperative actions live beside `Reader` and `Writer` in `Actions.ex`.
-They are exposed under `/-actions/` and keep command-style endpoints separate
-from CRUD routes while staying JSON:API-compliant by accepting parameters in
-`meta`.
+`Actions` is an orchestration layer above them: it composes reads and writes
+through the resource reader and writer, passing the caller's authority
+straight through. There is no separate action-level policy — authorization
+comes from the layer below (the reader scopes reads via `read_filter/1`, the
+writer gates mutations via `create?/update?/delete?`), so the golden path keeps
+an action authorized by construction, with no separate check to wire up.
+Actions are exposed under `/-actions/` and keep command-style endpoints
+separate from CRUD routes while staying JSON:API-compliant by accepting
+parameters in `meta`.
 
 ```elixir
 defmodule MyApp.Courses.Actions do

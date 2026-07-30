@@ -8,10 +8,18 @@ defmodule Hawk.Actions do
   metadata (for controller dispatch and OpenAPI generation) and the handler
   function that runs the operation.
 
-  An action receives the loaded model, atomized params, and the authority, and
-  returns a `Hawk.Result` (or value) the JSON:API controller renders. It runs
-  under the same policy boundary as writes; actions are how you expose domain
-  verbs without forcing them into the writer's create/update shape.
+  `Actions` is an orchestration layer above `Reader` and `Writer`. An action
+  receives the loaded model, atomized params, and the authority, and composes
+  reads and writes through the resource reader and writer using that authority.
+  It returns a `Hawk.Result` (or value) the JSON:API controller renders.
+
+  There is no separate action-level policy. Authorization comes from the layer
+  below: the reader applies `read_filter/1` to scope what the action can read,
+  and the writer runs `create?/update?/delete?` before persisting. The golden
+  path is to compose those gated calls and pass the caller's authority straight
+  through — then the action stays authorized by construction, with no separate
+  check to wire up. Actions are how you expose domain verbs without forcing
+  them into the writer's create/update shape.
 
   ## Example
 
@@ -27,7 +35,13 @@ defmodule Hawk.Actions do
         )
 
         def open_registration(course, params, authority) do
-          # ... build and persist ...
+          # The golden path: compose reads and writes through the resource
+          # reader and writer, passing the caller's authority straight
+          # through. The reader scopes reads via read_filter/1 and the writer
+          # gates mutations via create?/update?/delete?, so the action stays
+          # authorized by construction.
+          {:ok, course} = MyApp.Courses.one(authority: authority, filter: %{id: course.id})
+          MyApp.Courses.Writer.open_registration(course, params, authority)
         end
       end
 
