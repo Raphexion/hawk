@@ -215,6 +215,7 @@ defmodule Hawk.LiveView do
       |> Keyword.delete(:params)
       |> put_reader_filter(state.filter)
       |> put_reader_page(state.page)
+      |> put_reader_sort(state.sort)
       |> Keyword.put(:authority, authority)
 
     results = resource.all(reader_opts)
@@ -428,6 +429,10 @@ defmodule Hawk.LiveView do
   defp put_reader_page(opts, page) do
     Keyword.update(opts, :page, page, &Map.merge(&1, page))
   end
+
+  defp put_reader_sort(opts, []), do: opts
+
+  defp put_reader_sort(opts, sort), do: Keyword.put(opts, :sort, sort)
 
   @doc false
   def field_label(field, opts \\ []) do

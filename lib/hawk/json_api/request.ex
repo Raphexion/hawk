@@ -296,25 +296,11 @@ defmodule Hawk.JsonApi.Request do
   defp put_sort(opts, ""), do: opts
 
   defp put_sort(opts, "-" <> column) do
-    Keyword.put(
-      opts,
-      :page,
-      Map.merge(Keyword.get(opts, :page, %{}), %{
-        column: existing_param_atom!(column, "sort column"),
-        dir: :desc
-      })
-    )
+    Keyword.put(opts, :sort, [{:desc, existing_param_atom!(column, "sort column")}])
   end
 
   defp put_sort(opts, column) do
-    Keyword.put(
-      opts,
-      :page,
-      Map.merge(Keyword.get(opts, :page, %{}), %{
-        column: existing_param_atom!(column, "sort column"),
-        dir: :asc
-      })
-    )
+    Keyword.put(opts, :sort, [{:asc, existing_param_atom!(column, "sort column")}])
   end
 
   defp parse_page(params) do

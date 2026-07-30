@@ -69,14 +69,14 @@ defmodule Hawk.LiveViewTest do
     authority = school_admin(school)
 
     socket =
-      CourseIndexLive.assign_index(socket(), authority, page: %{column: :title, dir: :asc, size: 10})
+      CourseIndexLive.assign_index(socket(), authority, sort: [{:asc, :title}], page: %{size: 10})
 
     assert [first, second] = socket.assigns.courses
     assert first.id == math.id
     assert first.title == "Math"
     assert second.title == "Zebra"
     assert socket.assigns.hawk_resource == :course
-    assert socket.assigns.hawk_page == %{column: :title, dir: :asc, size: 10}
+    assert socket.assigns.hawk_page == %{size: 10}
 
     assert socket.assigns.hawk_table == [
              %{name: :title, label: "Course"},
@@ -119,7 +119,8 @@ defmodule Hawk.LiveViewTest do
 
     assert [course] = socket.assigns.courses
     assert course.id == history.id
-    assert socket.assigns.hawk_page == %{column: :title, dir: :desc, number: 1, size: 10}
+    assert socket.assigns.hawk_page == %{number: 1, size: 10}
+    assert socket.assigns.hawk_index_state.sort == [{:desc, :title}]
     assert socket.assigns.hawk_index_state.filter == %{title: {:ilike, "%histo%"}}
   end
 
@@ -215,12 +216,13 @@ defmodule Hawk.LiveViewTest do
     insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Zebra")
     authority = school_admin(school)
 
-    socket = CourseIndexLive.assign_index(socket(), authority, page: %{column: :title, dir: :asc, size: 1})
+    socket =
+      CourseIndexLive.assign_index(socket(), authority, sort: [{:asc, :title}], page: %{size: 1})
 
     assert socket.assigns.hawk_index_meta == %{
              count: 1,
              has_more?: true,
-             page: %{column: :title, dir: :asc, size: 1},
+             page: %{size: 1},
              resource: :course,
              plural_resource: :courses
            }

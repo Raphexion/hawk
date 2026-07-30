@@ -74,8 +74,8 @@ defmodule Videdal.Students.ReaderTest do
   end
 
   test "all/1 rejects invalid sort directions" do
-    assert_raise ArgumentError, ~r/invalid sort direction :sideways/, fn ->
-      Students.all(authority: Authority.system(), page: %{dir: :sideways})
+    assert_raise ArgumentError, ~r/invalid sort clause/, fn ->
+      Students.all(authority: Authority.system(), sort: [{:sideways, :id}])
     end
   end
 

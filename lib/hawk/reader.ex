@@ -14,7 +14,7 @@ defmodule Hawk.Reader do
   alias Hawk.Reader.JoinPlan
   alias Hawk.Reader.Preloader
 
-  @allowed_options MapSet.new([:authority, :context, :filter, :page, :preloads])
+  @allowed_options MapSet.new([:authority, :context, :filter, :page, :preloads, :sort])
   @sort_dirs [:asc, :desc, :asc_nulls_first, :asc_nulls_last, :desc_nulls_first, :desc_nulls_last]
 
   @type config :: %{
@@ -84,7 +84,7 @@ defmodule Hawk.Reader do
     page = apply_default_page_size(page, Map.get(config, :default_page_size, 100))
     page = enforce_max_page_size!(page, Map.get(config, :max_page_size, 100))
 
-    sort = sort_order(config, page)
+    sort = sort_order(config, Map.get(opts, :sort, []))
     validate_sort_keys!(config, sort)
 
     config.schema
@@ -158,24 +158,44 @@ defmodule Hawk.Reader do
       context: Map.get(opts, :context, %{}),
       filter: Map.get(opts, :filter, :all),
       page: normalize_page(Map.get(opts, :page, %{})),
-      preloads: Map.get(opts, :preloads, [])
+      preloads: Map.get(opts, :preloads, []),
+      sort: normalize_sort(Map.get(opts, :sort, []))
     }
   end
 
   defp normalize_page(page) when is_map(page) do
-    dir = Map.get(page, :dir, :asc)
-
-    unless dir in @sort_dirs do
-      raise ArgumentError, "invalid sort direction #{inspect(dir)}"
-    end
+    reject_smuggled_sort_keys!(page)
 
     %{
-      column: Map.get(page, :column),
-      dir: dir,
       size: Map.get(page, :size),
-      number: Map.get(page, :number),
-      cursor: Map.get(page, :cursor)
+      number: Map.get(page, :number)
     }
+  end
+
+  # Sorting used to ride inside :page as column/dir. It is now a first-class
+  # :sort option, so a page map carrying those (or the unused :cursor) is a
+  # stale caller — reject it loudly instead of silently dropping the sort.
+  defp reject_smuggled_sort_keys!(page) do
+    Enum.each([:column, :dir, :cursor], fn key ->
+      if Map.has_key?(page, key) do
+        raise ArgumentError,
+              "Hawk reader :page no longer carries #{inspect(key)}; pass sort as a " <>
+                "separate :sort option (a keyword list of {dir, column})"
+      end
+    end)
+  end
+
+  # Sort is a first-class reader option, kept separate from pagination: a
+  # sort is a keyword list of `{dir, column}` (the same shape Ecto `order_by`
+  # takes), or `[]` to mean "apply the reader's default_sort". Directions are
+  # validated here so a bad dir fails before it reaches the query.
+  defp normalize_sort(sort) when is_list(sort) do
+    Enum.each(sort, fn
+      {dir, column} when dir in @sort_dirs and is_atom(column) -> :ok
+      other -> raise ArgumentError, "invalid sort clause #{inspect(other)}; expected {dir, column}"
+    end)
+
+    sort
   end
 
   defp apply_default_page_size(%{size: nil} = page, default_page_size),
@@ -217,10 +237,9 @@ defmodule Hawk.Reader do
     end)
   end
 
-  defp sort_order(_config, %{column: column, dir: dir})
-       when is_atom(column) and not is_nil(column), do: [{dir, column}]
+  defp sort_order(_config, [{_dir, column} | _] = sort) when is_atom(column), do: sort
 
-  defp sort_order(config, %{column: nil}) do
+  defp sort_order(config, []) do
     case Map.get(config, :default_sort, asc: :id) do
       [] -> [asc: :id]
       sort -> sort

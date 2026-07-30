@@ -4,26 +4,24 @@ defmodule Hawk.LiveView.IndexState do
   @type t :: %{
           required(:filter) => Hawk.Filter.t(),
           required(:page) => map(),
+          required(:sort) => keyword(),
           required(:stream_reset?) => true
         }
 
   @spec normalize(map(), map(), t() | nil) :: t()
   def normalize(params, live_view, current \\ nil) when is_map(params) and is_map(live_view) do
     initial? = is_nil(current)
-    current = current || %{filter: :all, page: %{}, stream_reset?: true}
+    current = current || %{filter: :all, page: %{}, sort: [], stream_reset?: true}
 
     filters = parse_filters(Map.get(params, "filter"), live_view)
     searches = parse_searches(Map.get(params, "search"), live_view)
     filter = merge_filter(current.filter, filters, searches, params)
 
-    page =
-      current.page
-      |> Map.merge(parse_sort(Map.get(params, "sort"), live_view))
-      |> Map.merge(parse_page(Map.get(params, "page")))
+    sort = parse_sort(Map.get(params, "sort"), live_view, current.sort)
+    page = Map.merge(current.page, parse_page(Map.get(params, "page")))
+    page = reset_page_on_query_change(page, current, filter, sort, initial?)
 
-    page = reset_page_on_query_change(page, current, filter, initial?)
-
-    %{filter: filter, page: page, stream_reset?: true}
+    %{filter: filter, page: page, sort: sort, stream_reset?: true}
   end
 
   defp merge_filter(current_filter, filters, searches, params) do
@@ -43,11 +41,11 @@ defmodule Hawk.LiveView.IndexState do
   defp merge_filter_maps(left, :all), do: left
   defp merge_filter_maps(left, right), do: Map.merge(left, right)
 
-  defp reset_page_on_query_change(page, _current, _filter, true), do: page
+  defp reset_page_on_query_change(page, _current, _filter, _sort, true), do: page
 
-  defp reset_page_on_query_change(page, current, filter, false) do
-    current_query = Map.take(current.page, [:column, :dir]) |> Map.put(:filter, current.filter)
-    next_query = Map.take(page, [:column, :dir]) |> Map.put(:filter, filter)
+  defp reset_page_on_query_change(page, current, filter, sort, false) do
+    current_query = %{sort: current.sort, filter: current.filter}
+    next_query = %{sort: sort, filter: filter}
 
     if current_query == next_query do
       page
@@ -113,21 +111,22 @@ defmodule Hawk.LiveView.IndexState do
     raise ArgumentError, "unsupported LiveView search operator #{inspect(metadata.operator)}"
   end
 
-  defp parse_sort(nil, _live_view), do: %{}
-  defp parse_sort("", _live_view), do: %{}
+  defp parse_sort(nil, _live_view, current), do: current
+  defp parse_sort("", _live_view, current), do: current
 
-  defp parse_sort("-" <> name, live_view), do: parse_sort_name(name, :desc, live_view)
+  defp parse_sort("-" <> name, live_view, _current), do: parse_sort_name(name, :desc, live_view)
 
-  defp parse_sort(name, live_view) when is_binary(name),
+  defp parse_sort(name, live_view, _current) when is_binary(name),
     do: parse_sort_name(name, :asc, live_view)
 
-  defp parse_sort(_sort, _live_view), do: raise(ArgumentError, "LiveView sort must be a string")
+  defp parse_sort(_sort, _live_view, _current),
+    do: raise(ArgumentError, "LiveView sort must be a string")
 
   defp parse_sort_name(name, dir, live_view) do
     allowed = live_view |> index_value(:sorts, []) |> atoms_by_name()
 
     case Map.fetch(allowed, name) do
-      {:ok, column} -> %{column: column, dir: dir}
+      {:ok, column} -> [{dir, column}]
       :error -> raise ArgumentError, "unknown LiveView sort #{inspect(name)}"
     end
   end

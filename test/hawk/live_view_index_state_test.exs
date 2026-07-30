@@ -23,7 +23,8 @@ defmodule Hawk.LiveView.IndexStateTest do
       )
 
     assert state.filter == %{title: {:ilike, "%histo%"}}
-    assert state.page == %{column: :id, dir: :asc, number: 3, size: 25}
+    assert state.sort == [{:asc, :id}]
+    assert state.page == %{number: 3, size: 25}
     assert state.stream_reset? == true
   end
 
@@ -37,8 +38,7 @@ defmodule Hawk.LiveView.IndexStateTest do
     state = IndexState.normalize(%{"page" => %{"number" => "3"}}, @live_view, current)
 
     assert state.filter == %{title: {:ilike, "%histo%"}}
-    assert state.page.column == :id
-    assert state.page.dir == :asc
+    assert state.sort == [{:asc, :id}]
     assert state.page.number == 3
   end
 
@@ -52,7 +52,8 @@ defmodule Hawk.LiveView.IndexStateTest do
     state = IndexState.normalize(%{"sort" => "-title"}, @live_view, current)
 
     assert state.filter == %{title: {:ilike, "%histo%"}}
-    assert state.page == %{column: :title, dir: :desc, number: 1}
+    assert state.sort == [{:desc, :title}]
+    assert state.page == %{number: 1}
   end
 
   test "search changes reset the page number" do
@@ -65,7 +66,8 @@ defmodule Hawk.LiveView.IndexStateTest do
     state = IndexState.normalize(%{"search" => %{"title" => "math"}}, @live_view, current)
 
     assert state.filter == %{title: {:ilike, "%math%"}}
-    assert state.page == %{column: :id, dir: :asc, number: 1}
+    assert state.sort == [{:asc, :id}]
+    assert state.page == %{number: 1}
   end
 
   test "clearing search removes that filter and resets the page number" do
@@ -78,7 +80,8 @@ defmodule Hawk.LiveView.IndexStateTest do
     state = IndexState.normalize(%{"search" => %{"title" => ""}}, @live_view, current)
 
     assert state.filter == :all
-    assert state.page == %{column: :id, dir: :asc, number: 1}
+    assert state.sort == [{:asc, :id}]
+    assert state.page == %{number: 1}
   end
 
   test "unknown search keys are rejected without creating atoms" do

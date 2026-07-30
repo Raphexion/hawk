@@ -53,7 +53,7 @@ defmodule Hawk.LiveViewPageTest do
     socket =
       CourseWorkspaceLive.assign_page(socket(), authority,
         course: {:one, filter: %{id: course.id}, preloads: [:teacher]},
-        students: {:all, filter: %{school_id: school.id}, page: %{column: :id, dir: :asc}},
+        students: {:all, filter: %{school_id: school.id}, sort: [{:asc, :id}]},
         grades: {:all, filter: %{course_id: course.id}, preloads: [:student]}
       )
 

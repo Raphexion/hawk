@@ -28,7 +28,7 @@ defmodule Hawk.PaginationTest do
   test "reader applies declared sorting, page number, and page size" do
     insert_list(3, :course)
 
-    results = Courses.all(authority: Authority.system(), page: %{column: :title, dir: :desc, number: 1, size: 2})
+    results = Courses.all(authority: Authority.system(), sort: [{:desc, :title}], page: %{number: 1, size: 2})
 
     assert length(results) == 2
   end
@@ -39,6 +39,12 @@ defmodule Hawk.PaginationTest do
     results = Courses.all(authority: Authority.system())
 
     assert length(results) == 3
+  end
+
+  test "reader rejects sort smuggled inside :page" do
+    assert_raise ArgumentError, ~r/:page no longer carries :column/, fn ->
+      Courses.all(authority: Authority.system(), page: %{column: :title, dir: :desc})
+    end
   end
 
   test "reader can override default and max page size per resource" do
@@ -55,7 +61,7 @@ defmodule Hawk.PaginationTest do
 
   test "reader rejects undeclared sort columns" do
     assert_raise ArgumentError, ~r/unsupported sort column :teacher_id/, fn ->
-      Courses.all(authority: Authority.system(), page: %{column: :teacher_id})
+      Courses.all(authority: Authority.system(), sort: [{:asc, :teacher_id}])
     end
   end
 
@@ -71,8 +77,9 @@ defmodule Hawk.PaginationTest do
              "page" => %{"number" => "2", "size" => "25"},
              "include" => "teacher,grades"
            }) == [
-             page: %{column: :title, dir: :desc, number: 2, size: 25},
-             preloads: [:teacher, :grades]
+             sort: [{:desc, :title}],
+             preloads: [:teacher, :grades],
+             page: %{number: 2, size: 25}
            ]
   end
 
