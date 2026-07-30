@@ -223,6 +223,11 @@ Nested includes such as `include=grades.student` are turned into nested Ecto
 preloads where every layer uses that resource's own reader and policy. Opening
 `courses` does not accidentally open `grades` or `students`.
 
+Every reader `preload/1` must be a relationship exposed by the resource's
+JSON:API adapter — `mix hawk.validate` rejects a preload with no matching
+relationship. A reader cannot preload an association it does not expose, so the
+reader and the external surface stay a single set of relationships.
+
 Readers apply `default_page_size` when the caller does not request a page size
 and reject requests above `max_page_size`. Both default to `100` and can be
 overridden per resource. Collection JSON:API responses include `meta.page` with
