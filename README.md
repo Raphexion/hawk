@@ -272,6 +272,15 @@ return non-persisting changesets with `action: :validate`, which is the boundary
 LiveView form helpers use for live validation errors. `create/2` and `update/3`
 keep owning persistence through the repository boundary. `delete(:default)`
 generates a policy-checked `delete/2` that crosses the same repository boundary.
+
+A read-only resource still keeps a writer sibling and declares `write(:never)`
+in its policy — writes are gated by the policy, not by omitting the writer, so a
+mutation attempt returns `403` instead of a `404`/`500` from a missing delegate.
+The `create`/`update`/`delete` blocks are required for that `403` path; the `cast`
+field lists keep the writer ready if the policy is later relaxed. Run
+`mix hawk.gen.resource MyApp.Things MyApp.Thing --read-only` to scaffold the
+whole set.
+
 Supported create/update DSL steps are `defaults/1`, `cast/1`, `validate_required/1,2`,
 `validate/1`, `validate_changeset/1`, and `constraint/2`. Custom `validate/1` functions
 can be reused in create and update pipelines when domain validation is not just
