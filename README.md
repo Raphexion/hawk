@@ -750,10 +750,15 @@ defmodule MyAppWeb.OpenApiController do
     title: "My API",
     version: "1.0.0",
     path_prefix: "/api/v1",
-    resources: [MyApp.Courses, MyApp.Grades]
+    resources: [MyApp.Courses, MyApp.Grades],
+    servers: [%{url: "https://api.example.com"}],
+    security: [%{"bearerAuth" => []}]
 end
 ```
 
+The controller serves the spec as `application/json` (an OpenAPI document is
+JSON, not a JSON:API resource). It passes `:title`, `:version`, `:path_prefix`,
+`:license`, `:servers`, and `:security` straight through to `Hawk.OpenApi.spec/2`.
 Pass resource facades when available; model modules remain supported for older
 code. Facades with `json_api: false` are omitted because this OpenAPI generator
 documents the JSON:API surface only. This exposes `spec/0` and `show/2`. The specification is composed from Hawk

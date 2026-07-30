@@ -48,6 +48,9 @@ defmodule Hawk.PhoenixIntegrationTest do
     assert conn.status == 200
     assert conn.state == :sent
 
+    [content_type] = Plug.Conn.get_resp_header(conn, "content-type")
+    assert String.starts_with?(content_type, "application/json")
+
     assert %{"openapi" => "3.1.0", "info" => %{"title" => "Integration API"}} =
              Jason.decode!(conn.resp_body)
   end

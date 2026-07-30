@@ -6,6 +6,16 @@ defmodule Videdal.Controllers.OpenApiController do
     resources: [Videdal.Courses, Videdal.Grades]
 end
 
+defmodule Videdal.Controllers.OpenApiWithExtrasController do
+  use Hawk.OpenApi.Controller,
+    title: "Videdal API",
+    version: "1.0.0",
+    path_prefix: "/api/v1",
+    resources: [Videdal.Courses],
+    servers: [%{url: "https://api.example.com"}],
+    security: [%{"bearerAuth" => []}]
+end
+
 defmodule Videdal.Controllers.OpenApiControllerTest do
   use ExUnit.Case, async: true
 
@@ -206,5 +216,20 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
     # only, not resource attributes).
     relationship = spec.paths["/api/v1/courses/{id}/relationships/{relationship}"].get
     refute Enum.any?(relationship.parameters, &(&1.name == "fields"))
+  end
+
+  test ":servers and :security pass through to the spec" do
+    spec = Videdal.Controllers.OpenApiWithExtrasController.spec()
+
+    assert spec.servers == [%{url: "https://api.example.com"}]
+    assert spec.security == [%{"bearerAuth" => []}]
+  end
+
+  test "show serves the spec as application/json" do
+    conn = Videdal.Controllers.OpenApiController.show(Hawk.TestConn.conn(), %{})
+
+    [content_type] = Plug.Conn.get_resp_header(conn, "content-type")
+    assert String.starts_with?(content_type, "application/json")
+    refute String.contains?(content_type, "vnd.api+json")
   end
 end
