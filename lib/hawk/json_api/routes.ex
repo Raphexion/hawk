@@ -11,9 +11,10 @@ defmodule Hawk.JsonApi.Routes do
   Returns the JSON:API route specs for a resource or list of resources.
 
   Each route is a map of `{method, path, action, capability, resource}`.
-  Routes are capability-aware: `create`/`update`/`delete` only appear when the
-  resource has a writer, and `/-actions/` only when actions are enabled. Used by
-  `Hawk.OpenApi` and by tests asserting route/capability consistency.
+  Routes are capability-aware: `create`/`update`/`delete` are always present
+  (the writer is a required sibling for every Hawk resource), and `/-actions/`
+  only appear when actions are enabled. Used by `Hawk.OpenApi` and by tests
+  asserting route/capability consistency.
 
   ## Options
 
@@ -64,18 +65,16 @@ defmodule Hawk.JsonApi.Routes do
 
     [
       route(resource, :get, collection_path, :index, :read),
-      writer_route(resource, :create, route(resource, :post, collection_path, :create, :write)),
+      route(resource, :post, collection_path, :create, :write),
       route(resource, :get, member_path, :show, :read),
-      writer_route(resource, :update, route(resource, :patch, member_path, :update, :write)),
-      writer_route(resource, :delete, route(resource, :delete, member_path, :delete, :write)),
+      route(resource, :patch, member_path, :update, :write),
+      route(resource, :delete, member_path, :delete, :write),
       action_route(resource, member_path),
       relationship_route(resource, member_path),
       related_route(resource, member_path)
     ]
     |> Enum.reject(&is_nil/1)
   end
-
-  defp writer_route(_resource, _action, route), do: route
 
   defp action_route(%{capabilities: %{actions: true}} = resource, member_path),
     do: route(resource, :post, member_path <> "/-actions/:action", :action, :action)

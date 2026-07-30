@@ -30,7 +30,6 @@ defmodule Hawk.LiveView do
     validate_live_view_enabled!(resource)
     as = Keyword.get(opts, :as) || infer_as!(resource)
     plural_as = Keyword.get(opts, :plural_as) || infer_plural_as(resource, as)
-    capabilities = live_view_capabilities(resource)
     live_view = live_view_metadata(resource)
     events? = Keyword.get(opts, :events, true)
     label_resolver = opts |> Keyword.get(:label_resolver) |> expand_optional_module(env)
@@ -72,24 +71,15 @@ defmodule Hawk.LiveView do
         LiveView.assign_read_form(socket, unquote(as), model, opts, unquote(Macro.escape(live_view)))
       end
 
-      unquote(quote_form_helpers(resource, as, capabilities, events?, live_view))
-      unquote(quote_delete_handler(resource, as, plural_as, capabilities, live_view, events?))
+      unquote(quote_form_helpers(resource, as, events?, live_view))
+      unquote(quote_delete_handler(resource, as, plural_as, live_view, events?))
     end
   end
 
   defp expand_optional_module(nil, _env), do: nil
   defp expand_optional_module(module, env), do: Macro.expand(module, env)
 
-  defp live_view_capabilities(resource) do
-    if Code.ensure_compiled(resource) == {:module, resource} and
-         function_exported?(resource, :__hawk_resource__, 1) do
-      resource.__hawk_resource__(:capabilities)
-    else
-      %{writer: true}
-    end
-  end
-
-  defp quote_form_helpers(resource, as, _capabilities, events?, live_view) do
+  defp quote_form_helpers(resource, as, events?, live_view) do
     if function_exported?(resource, :change_create, 2) and
          function_exported?(resource, :change_update, 3) do
       quote do
@@ -145,9 +135,9 @@ defmodule Hawk.LiveView do
     end
   end
 
-  defp quote_delete_handler(_resource, _as, _plural_as, _capabilities, _live_view, false), do: []
+  defp quote_delete_handler(_resource, _as, _plural_as, _live_view, false), do: []
 
-  defp quote_delete_handler(resource, as, plural_as, _capabilities, live_view, true) do
+  defp quote_delete_handler(resource, as, plural_as, live_view, true) do
     quote do
       def handle_event("hawk:delete", params, socket) do
         LiveView.handle_delete(

@@ -150,8 +150,6 @@ defmodule Hawk.ResourceTest do
     assert Courses.__hawk_resource__(:actions) == Hawk.ResourceTest.Courses.Actions
 
     assert Courses.__hawk_resource__(:capabilities) == %{
-             reader: true,
-             writer: true,
              json_api: true,
              live_view: true,
              actions: true

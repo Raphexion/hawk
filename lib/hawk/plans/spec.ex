@@ -67,10 +67,10 @@ defmodule Hawk.Plans.Spec do
 
     ops = ops ++ [read_op(resource)]
 
-    ops =
-      if resource.capabilities.writer,
-        do: ops ++ [create_op(resource), update_op(resource), delete_op()],
-        else: ops
+    # The writer is a required sibling for every Hawk resource, so write ops
+    # are always part of the plan surface; the reviewer's policy gates them at
+    # execution time.
+    ops = ops ++ [create_op(resource), update_op(resource), delete_op()]
 
     ops =
       if resource.capabilities.actions,

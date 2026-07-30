@@ -23,15 +23,19 @@ defmodule Hawk.Resource do
   | model          | (the `:model` opt)      | yes      | —                   |
   | reader         | `MyApp.Courses.Reader`  | yes      | —                   |
   | policy         | `MyApp.Courses.Policy`  | yes      | —                   |
-  | writer         | `MyApp.Courses.Writer`  | yes      | `writer: false`     |
+  | writer         | `MyApp.Courses.Writer`  | yes      | —                   |
   | json_api        | `MyApp.Courses.JsonApi` | yes      | `json_api: false`    |
   | live_view       | `MyApp.Courses.LiveView`| yes      | `live_view: false`  |
   | actions        | `MyApp.Courses.Actions` | no       | (omitted by default) |
 
-  Reader, policy, writer, JSON:API, and LiveView are *resolved by convention*
-  — they cannot be passed as options (the `:policy` and `:writer` opts raise
-  with a message pointing at the right fix). Actions is opt-in: it is only
-  wired when an `Actions` sibling exists or is supplied explicitly.
+  Reader, policy, and writer are *resolved by convention* — they are required
+  siblings and cannot be passed as options (the `:policy` and `:writer` opts
+  raise with a message pointing at the right fix). Writes are gated by the
+  policy, not by omitting the writer: a read-only resource keeps its writer
+  sibling and declares `write(:never)` in the policy. JSON:API and LiveView are
+  optional adapters (`json_api: false` / `live_view: false`). Actions is
+  opt-in: it is only wired when an `Actions` sibling exists or is supplied
+  explicitly.
 
   ## Compile-time phases
 
@@ -57,10 +61,12 @@ defmodule Hawk.Resource do
     * `:identity` — the field used as the JSON:API `id` and member-lookup key
       (default `:id`). Declare a non-`id` identity for view-backed projections;
       see "ID-less and view-backed resources" in the README.
-    * `:writer` — `false` to disable the writer (read-only resource).
     * `:json_api` — `false` to disable the JSON:API adapter.
     * `:live_view` — `false` to disable the LiveView adapter.
     * `:actions` — an explicit actions module, or `false`.
+
+  The writer is a required sibling and is always resolved by convention; gate
+  writes with `write(:never)` in the policy instead of trying to omit it.
 
   ## Examples
 
@@ -70,12 +76,12 @@ defmodule Hawk.Resource do
         use Hawk.Resource, model: MyApp.Course
       end
 
-  A read-only resource with no JSON:API surface:
+  A read-only resource with no JSON:API surface (the writer sibling is still
+  required; writes are refused by the policy):
 
       defmodule MyApp.CourseSummaries do
         use Hawk.Resource,
           model: MyApp.CourseSummary,
-          writer: false,
           json_api: false,
           live_view: false
       end
@@ -91,11 +97,13 @@ defmodule Hawk.Resource do
   ## Introspection
 
   Every facade exposes `__hawk_resource__/1`, which returns the resolved
-  sibling module (or `false`) for `:model`, `:reader`, `:policy`, `:writer`,
-  `:json_api`, `:live_view`, `:actions`, the declared `:identity`, and a
-  `:capabilities` map of booleans. `mix hawk.validate`, `mix hawk.openapi`,
-  and `Hawk.Plans.Registry` all discover resources by scanning for this
-  function.
+  sibling module for `:model`, `:reader`, `:policy`, `:writer`, `:actions`,
+  and the declared `:identity`; `:json_api` and `:live_view` return the adapter
+  module or `false` when disabled. The `:capabilities` map reports the
+  optional adapter flags (`:json_api`, `:live_view`, `:actions`); the reader
+  and writer are always present, so they have no capability flag. `mix
+  hawk.validate`, `mix hawk.openapi`, and `Hawk.Plans.Registry` all discover
+  resources by scanning for this function.
 
   ## See also
 
@@ -187,9 +195,10 @@ defmodule Hawk.Resource do
   defp compiled?(module), do: match?({:module, ^module}, Code.ensure_compiled(module))
 
   defp quote_introspection(modules) do
+    # Reader and writer are required siblings (always present), so they have
+    # no capability flag. The capabilities map reports only the optional
+    # adapters whose presence varies per resource.
     capabilities = %{
-      reader: modules.reader != false,
-      writer: modules.writer != false,
       json_api: modules.json_api != false,
       live_view: modules.live_view != false,
       actions: modules.actions != false

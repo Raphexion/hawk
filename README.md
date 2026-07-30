@@ -50,7 +50,6 @@ Intentional absence is explicit and disables the corresponding adapter entrypoin
 defmodule MyApp.CourseSummaries do
   use Hawk.Resource,
     model: MyApp.CourseSummary,
-    writer: false,
     json_api: false,
     live_view: false
 end
@@ -60,9 +59,10 @@ The facade generates public reader/writer/action delegations and exposes resourc
 introspection through `__hawk_resource__/1`. JSON:API rendering discovers
 sibling adapter metadata from related models' resource facades, so each resource
 has a single source of JSON:API truth. JSON:API controllers generated from
-a facade only expose actions supported by the resource capabilities: read actions
-are always available, create/update/delete require `writer`, and `/-actions/`
-requires `actions`. It also validates adapter contracts
+a facade only expose actions supported by the resource: read actions
+are always available, create/update/delete are always generated (the writer is a
+required sibling), and `/-actions/` requires an `Actions` module. Writes are
+gated by the policy, not by the controller shape. It also validates adapter contracts
 at compile time; JSON:API adapter `source:` entries must point at real model
 fields or associations, writable fields must be declared, and LiveView fields /
 filters must reference real model fields and declared reader filters.
@@ -419,9 +419,9 @@ Generated actions follow resource capabilities:
 
 - `index/2`
 - `show/2`
-- `create/2` when `writer` is enabled
-- `update/2` when `writer` is enabled
-- `delete/2` when `writer` is enabled
+- `create/2` (the writer is a required sibling; writes are gated by the policy)
+- `update/2` (the writer is a required sibling; writes are gated by the policy)
+- `delete/2` (the writer is a required sibling; writes are gated by the policy)
 - `relationship/2` for `GET .../:id/relationships/:relationship`
 - `related/2` for `GET .../:id/:relationship`
 - `action/2` for `POST .../:id/-actions/:action` when `actions` is enabled
@@ -551,9 +551,11 @@ end
 
 `use Hawk.LiveView, resource: MyApp.Courses` reads `as` and `plural_as` from
 the LiveView adapter when present, then falls back to model-based convention.
-Generated LiveView event handlers follow resource capabilities; for example,
-read-only resources with `writer: false` do not get the default `"hawk:delete"`
-handler. Show pages can load by natural keys when the reader declares the filter:
+The default `"hawk:validate"`, `"hawk:save"`, and `"hawk:delete"` event
+handlers are generated from the writer sibling (which is always present); a
+read-only resource keeps the writer and refuses writes in its policy, so the
+handlers exist but never persist. Show pages can load by natural keys when the
+reader declares the filter:
 
 ```elixir
 socket = CourseLive.assign_show(socket, authority, short_id, lookup: :short_id)
@@ -862,8 +864,9 @@ mix hawk.gen.resource MyApp.Courses MyApp.Course \
 ```
 
 This creates the facade, policy, reader, JSON:API adapter, LiveView adapter, and
-writer skeleton. Pass `--read-only` to generate `writer: false` and omit the
-writer. Pass `--web MyAppWeb` to also generate a Phoenix JSON:API controller,
+writer skeleton. Pass `--read-only` to gate writes with `write(:never)` in the
+policy; the writer skeleton is still emitted, so the routes and handlers exist
+and refuse writes. Pass `--web MyAppWeb` to also generate a Phoenix JSON:API controller,
 clickable LiveView index/show modules and templates, and a router snippet file
 beside the generated web files. The generated LiveViews use
 `Hawk.Authority.Session.authority_or_public/1`, so they work for public demos and

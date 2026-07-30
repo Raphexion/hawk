@@ -64,27 +64,6 @@ defmodule Hawk.Plans.SpecTest do
       assert close.params == %{}
     end
 
-    test "omits create/update/delete when writer capability is false" do
-      # Hawk.Resource always resolves writer by convention (the :writer opt raises),
-      # so no real fixture has writer: false. Test the capability filtering directly
-      # by calling resource_ops with a mock resource map.
-      mock = %{
-        resource: Videdal.Courses,
-        json_api: Hawk.JsonApi.Schema.metadata(Videdal.Courses),
-        capabilities: %{reader: true, writer: false, json_api: true, live_view: false, actions: false},
-        identity: :id
-      }
-
-      result = Spec.resource_ops(mock)
-      kinds = Enum.map(result.ops, & &1.op)
-
-      assert :read in kinds
-      refute :create in kinds
-      refute :update in kinds
-      refute :delete in kinds
-      refute :action in kinds
-    end
-
     test "omits action ops when actions are disabled" do
       # CourseCatalog has writer enabled but no actions module
       spec = Spec.spec([Videdal.CourseCatalog])
