@@ -53,6 +53,7 @@ defmodule Hawk.Plans.Spec do
         json_api ->
           %{
             resource: module,
+            reader: module.__hawk_resource__(:reader),
             json_api: Schema.metadata(json_api),
             capabilities: module.__hawk_resource__(:capabilities),
             identity: module.__hawk_resource__(:identity)
@@ -85,10 +86,10 @@ defmodule Hawk.Plans.Spec do
   end
 
   defp read_op(resource) do
-    reader = Module.concat(resource.resource, Reader)
+    reader = resource.reader
 
     {filters, sorts} =
-      if Code.ensure_loaded?(reader) do
+      if reader && Code.ensure_loaded?(reader) do
         {
           reader_values(reader, :filter_keys),
           reader_values(reader, :sort_keys)
