@@ -9,11 +9,11 @@ defmodule Hawk.JsonApi.Schema do
 
   The sibling JSON:API adapter (`MyApp.Courses.JsonApi`) is the single source of
   a resource's external shape. It is discovered by convention from the model's
-  resource: a generated `Hawk.Resource` facade exposes its adapter through
-  `__hawk_resource__(:json_api)`, and a hand-written facade resolves to the
-  conventional `Resource.JsonApi` module. When a resource has no JSON:API
-  surface (no adapter), a type-only default is returned so relationship type
-  resolution and error messages keep working.
+  resource: a `Hawk.Resource` facade exposes its adapter through
+  `__hawk_resource__(:json_api)`, and the model's `__hawk_resource__/0` resolves
+  the facade by convention. When a resource has no JSON:API surface (no adapter),
+  a type-only default is returned so relationship type resolution and error
+  messages keep working.
 
   `metadata/1` is memoized in `:persistent_term` (keyed by module) in `:prod`
   and `:test`, since the JSON:API shape is invariant after compile. It is left
@@ -189,8 +189,8 @@ defmodule Hawk.JsonApi.Schema do
   @doc """
   Resolves the identity field declared on a resource facade.
 
-  Falls back to `:id` when the facade does not declare one (e.g. a hand-written
-  facade or a model without a Hawk resource).
+  Falls back to `:id` when the facade does not declare one (e.g. a model without
+  a Hawk resource).
   """
   @spec identity_for_facade(module()) :: atom()
   def identity_for_facade(resource) when is_atom(resource) do

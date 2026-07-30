@@ -55,8 +55,7 @@ defmodule Videdal.Integration.JsonApiControllerShortIdTest.CoursesController do
   @moduledoc false
 
   use Hawk.JsonApi.Controller,
-    resource: Videdal.Integration.JsonApiControllerShortIdTest.Courses,
-    model: Videdal.Course
+    resource: Videdal.Integration.JsonApiControllerShortIdTest.Courses
 end
 
 defmodule Videdal.Integration.JsonApiControllerShortIdTest do

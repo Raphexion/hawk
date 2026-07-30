@@ -79,8 +79,7 @@ end
 
 defmodule Hawk.JsonApiAttributeTest.LocalizedPostsController do
   use Hawk.JsonApi.Controller,
-    resource: Hawk.JsonApiAttributeTest.LocalizedPosts,
-    model: Hawk.JsonApiAttributeTest.LocalizedPost
+    resource: Hawk.JsonApiAttributeTest.LocalizedPosts
 end
 
 defmodule Hawk.JsonApiAttributeTest do

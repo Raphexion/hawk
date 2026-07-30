@@ -1,7 +1,6 @@
 defmodule Videdal.Controllers.CoursesController do
   use Hawk.JsonApi.Controller,
-    resource: Videdal.Courses,
-    model: Videdal.Course
+    resource: Videdal.Courses
 end
 
 defmodule Videdal.Controllers.CoursesControllerTest do

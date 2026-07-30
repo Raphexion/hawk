@@ -172,7 +172,7 @@ defmodule Hawk.LiveView do
 
       true ->
         raise ArgumentError,
-              "Hawk LiveView requires :as when resource #{inspect(resource)} is not a Hawk.Resource facade"
+              "Hawk LiveView resource #{inspect(resource)} must be a Hawk.Resource facade"
     end
   end
 

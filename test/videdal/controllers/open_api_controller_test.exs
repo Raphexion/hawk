@@ -81,14 +81,17 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
     # arbitrary fragments. No style/explode hint: bracket-notation query params
     # have no clean OpenAPI serialization style.
     assert filter.schema == %{type: "object", additionalProperties: true}
+
     assert Enum.all?(
              ["id", "school_id", "teacher_id", "title", "school_name", "teacher_name"],
              &String.contains?(filter.description, &1)
            )
+
     assert String.contains?(filter.description, "eq, neq, in, not_in")
 
     assert %{name: "fields", in: "query"} =
              fields = Enum.find(parameters, &(&1.name == "fields"))
+
     assert fields.schema == %{type: "object", additionalProperties: %{type: "string"}}
   end
 

@@ -1,13 +1,11 @@
 defmodule Videdal.Controllers.AuthenticatedCoursesController do
   use Hawk.JsonApi.Controller,
-    resource: Videdal.Courses,
-    model: Videdal.Course
+    resource: Videdal.Courses
 end
 
 defmodule Videdal.Controllers.PublicCoursesController do
   use Hawk.JsonApi.Controller,
     resource: Videdal.Courses,
-    model: Videdal.Course,
     public: true
 end
 

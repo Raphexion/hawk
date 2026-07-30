@@ -20,15 +20,15 @@ defmodule Hawk.JsonApi.Controller do
 
   ## Options
 
-    * `:resource` (required) — the `Hawk.Resource` facade.
-    * `:model` — the backing model (default: resolved from the resource).
+    * `:resource` (required) — the `Hawk.Resource` facade. The backing model is
+      resolved from the facade.
     * `:public` — allow public (anonymous) read access (default `false`).
   """
   defmacro __using__(opts) do
     env = __CALLER__
     resource = Keyword.fetch!(opts, :resource) |> Macro.expand(env)
     require_facade!(resource)
-    model = controller_model!(resource, Keyword.get(opts, :model), env)
+    model = resource.__hawk_resource__(:model)
     validate_json_api_enabled!(resource)
     public? = Keyword.get(opts, :public, false)
     capabilities = resource.__hawk_resource__(:capabilities)
@@ -146,11 +146,6 @@ defmodule Hawk.JsonApi.Controller do
       end
     end
   end
-
-  defp controller_model!(_resource, model, env) when not is_nil(model),
-    do: Macro.expand(model, env)
-
-  defp controller_model!(resource, nil, _env), do: resource.__hawk_resource__(:model)
 
   defp validate_json_api_enabled!(resource) do
     if resource.__hawk_resource__(:json_api) == false do

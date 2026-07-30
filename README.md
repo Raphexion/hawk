@@ -413,7 +413,8 @@ defmodule MyAppWeb.CourseController do
 end
 ```
 
-Controllers can still pass `model:` explicitly when integrating with older hand-written facades.
+The backing model is resolved from the facade; the controller does not accept
+a `:model` opt.
 
 Generated actions follow resource capabilities:
 
@@ -581,7 +582,7 @@ defmodule MyAppWeb.CourseIndexLive do
 end
 ```
 
-When `resource:` is a `Hawk.Resource` facade, Hawk infers the singular/plural assign names from the model. Older hand-written facades can still pass `as:` explicitly.
+When `resource:` is a `Hawk.Resource` facade, Hawk infers the singular/plural assign names from the model (from the LiveView adapter `as`/`plural_as` when declared, else the model name). Pass `as:`/`plural_as:` only to override those inferred names.
 
 This provides helpers such as `assign_index/3`, `assign_show/4`, keyed form
 helpers such as `assign_new_form/2`, and default `"hawk:validate"`,
@@ -759,10 +760,10 @@ end
 The controller serves the spec as `application/json` (an OpenAPI document is
 JSON, not a JSON:API resource). It passes `:title`, `:version`, `:path_prefix`,
 `:license`, `:servers`, and `:security` straight through to `Hawk.OpenApi.spec/2`.
-Pass resource facades when available; model modules remain supported for older
-code. Facades with `json_api: false` are omitted because this OpenAPI generator
-documents the JSON:API surface only. This exposes `spec/0` and `show/2`. The specification is composed from Hawk
-resource declarations and the same `Hawk.JsonApi.Routes` route specs used for
+`Hawk.OpenApi.spec/2` takes `Hawk.Resource` facades. Facades with `json_api: false`
+are omitted because this OpenAPI generator documents the JSON:API surface only.
+The controller exposes `spec/0` and `show/2`. The specification is composed from
+Hawk resource declarations and the same `Hawk.JsonApi.Routes` route specs used for
 capability-aware routing: JSON:API adapter schemas, request bodies, error
 documents, sort parameters, pagination parameters, valid include paths, declared
 `/-actions/` operations, relationship routes, the optional `path_prefix`, and

@@ -2,8 +2,7 @@ defmodule Hawk.PhoenixIntegrationTest.CoursesController do
   @moduledoc false
 
   use Hawk.JsonApi.Controller,
-    resource: Videdal.Courses,
-    model: Videdal.Course
+    resource: Videdal.Courses
 end
 
 defmodule Hawk.PhoenixIntegrationTest.OpenApiController do

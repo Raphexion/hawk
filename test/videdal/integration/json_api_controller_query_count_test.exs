@@ -105,8 +105,7 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest.CoursesController 
   @moduledoc false
 
   use Hawk.JsonApi.Controller,
-    resource: Videdal.Integration.JsonApiControllerQueryCountTest.Courses,
-    model: Videdal.Course
+    resource: Videdal.Integration.JsonApiControllerQueryCountTest.Courses
 end
 
 defmodule Videdal.Integration.JsonApiControllerQueryCountTest.ControllerCaseHarness do

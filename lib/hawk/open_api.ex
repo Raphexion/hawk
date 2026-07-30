@@ -288,7 +288,8 @@ defmodule Hawk.OpenApi do
     %{
       name: "fields",
       in: "query",
-      description: "JSON:API sparse fieldsets (`fields[type]=a,b`). One key per resource type, value a comma-separated list of attributes/relationships to return.",
+      description:
+        "JSON:API sparse fieldsets (`fields[type]=a,b`). One key per resource type, value a comma-separated list of attributes/relationships to return.",
       schema: %{type: "object", additionalProperties: %{type: "string"}}
     }
   end
