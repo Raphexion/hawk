@@ -59,6 +59,27 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
            } in parameters
 
     assert %{name: "page[size]", in: "query", schema: %{type: "integer", minimum: 0}} in parameters
+
+    assert %{name: "page[number]", in: "query", schema: %{type: "integer", minimum: 1}} in parameters
+
+    assert %{name: "filter", in: "query"} =
+             filter = Enum.find(parameters, &(&1.name == "filter"))
+
+    # Filter is a free-form object; the declared reader filter keys are listed
+    # in the description rather than a rigid per-key schema, since JSON:API
+    # filter serialization is not standardized and custom handlers may build
+    # arbitrary fragments. No style/explode hint: bracket-notation query params
+    # have no clean OpenAPI serialization style.
+    assert filter.schema == %{type: "object", additionalProperties: true}
+    assert Enum.all?(
+             ["id", "school_id", "teacher_id", "title", "school_name", "teacher_name"],
+             &String.contains?(filter.description, &1)
+           )
+    assert String.contains?(filter.description, "eq, neq, in, not_in")
+
+    assert %{name: "fields", in: "query"} =
+             fields = Enum.find(parameters, &(&1.name == "fields"))
+    assert fields.schema == %{type: "object", additionalProperties: %{type: "string"}}
   end
 
   test "resource schemas include docs, examples, attributes, and relationships" do
@@ -165,5 +186,25 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
     assert Map.keys(open_registration.responses) == ["200", "400", "403", "404", "422"]
     assert open_registration.responses["403"].description == "Forbidden by Hawk policy"
     assert open_registration.responses["422"].description == "Validation failed"
+  end
+
+  test "show and related operations expose sparse fieldsets" do
+    spec = OpenApiController.spec()
+
+    show = spec.paths["/api/v1/courses/{id}"].get
+    fields = Enum.find(show.parameters, &(&1.name == "fields"))
+    assert fields.schema == %{type: "object", additionalProperties: %{type: "string"}}
+
+    # The teacher relationship is a to-one, so its related route exists. The
+    # path keeps the generic {relationship} placeholder (one route per
+    # resource, the relationship is a path param).
+    related = spec.paths["/api/v1/courses/{id}/{relationship}"].get
+    related_fields = Enum.find(related.parameters, &(&1.name == "fields"))
+    assert related_fields.schema == %{type: "object", additionalProperties: %{type: "string"}}
+
+    # Relationship linkage exposes no sparse fieldsets (it returns identifiers
+    # only, not resource attributes).
+    relationship = spec.paths["/api/v1/courses/{id}/relationships/{relationship}"].get
+    refute Enum.any?(relationship.parameters, &(&1.name == "fields"))
   end
 end

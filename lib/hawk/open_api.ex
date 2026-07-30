@@ -71,6 +71,7 @@ defmodule Hawk.OpenApi do
           %{
             model: model,
             resource: module,
+            reader: module.__hawk_resource__(:reader),
             json_api: json_api,
             capabilities: module.__hawk_resource__(:capabilities)
           }
@@ -179,7 +180,7 @@ defmodule Hawk.OpenApi do
     |> Map.merge(%{
       operationId: "show#{pascalize(resource.json_api.type)}",
       summary: "Show #{resource_name(resource)}",
-      parameters: [show_id_parameter()],
+      parameters: [show_id_parameter(), fields_parameter(resource)],
       responses: responses(resource, 200, data_schema(resource))
     })
   end
@@ -224,7 +225,7 @@ defmodule Hawk.OpenApi do
     |> Map.merge(%{
       operationId: "show#{pascalize(resource.json_api.type)}Related",
       summary: "Show #{resource_name(resource)} related resource",
-      parameters: [uuid_id_parameter(), relationship_parameter(resource)],
+      parameters: [uuid_id_parameter(), relationship_parameter(resource), fields_parameter(resource)],
       responses: responses(resource, 200, data_schema(resource))
     })
   end
@@ -266,9 +267,71 @@ defmodule Hawk.OpenApi do
     [
       include_parameter(resource),
       sort_parameter(resource),
-      %{name: "page[size]", in: "query", schema: %{type: "integer", minimum: 0}}
+      %{name: "page[size]", in: "query", schema: %{type: "integer", minimum: 0}},
+      %{name: "page[number]", in: "query", schema: %{type: "integer", minimum: 1}},
+      filter_parameter(resource),
+      fields_parameter(resource)
     ]
   end
+
+  # Sparse fieldsets: `fields[type]=a,b` selects which attributes to return
+  # per resource type. There is one `fields` object whose keys are resource
+  # types and whose values are comma-separated field lists. The keys are not
+  # enumerable here (they include related types discovered through includes),
+  # so the schema is intentionally free-form rather than a fixed enum.
+  defp fields_parameter(_resource) do
+    # JSON:API sparse fieldsets use bracket-notation query params
+    # (`fields[type]=a,b`), which Phoenix decodes into a nested map. OpenAPI has
+    # no clean serialization style for that, so this is a free-form object
+    # with a prose description rather than a `style` hint that would mislead
+    # code generators.
+    %{
+      name: "fields",
+      in: "query",
+      description: "JSON:API sparse fieldsets (`fields[type]=a,b`). One key per resource type, value a comma-separated list of attributes/relationships to return.",
+      schema: %{type: "object", additionalProperties: %{type: "string"}}
+    }
+  end
+
+  # JSON:API filter serialization is not standardized, so this is a free-form
+  # object rather than a rigid per-key schema: the parser accepts any subset of
+  # the reader's declared filter keys, and custom `filter/2` handlers may build
+  # arbitrary Ecto fragments from the parsed value. The declared keys and the
+  # supported operators are listed in the description so clients know the
+  # surface without the schema overpromising precision the runtime does not
+  # guarantee.
+  defp filter_parameter(resource) do
+    keys = filter_key_names(resource)
+    ops = Enum.join(filter_operators(), ", ")
+    keys_desc = if keys == [], do: "none", else: Enum.join(keys, ", ")
+
+    %{
+      name: "filter",
+      in: "query",
+      description:
+        "JSON:API-style filters over declared reader columns (`filter[key]=value` or " <>
+          "`filter[key][op]=value`). Keys: #{keys_desc}. A bare value is an equality " <>
+          "filter; a nested object uses one operator: #{ops}.",
+      schema: %{type: "object", additionalProperties: true}
+    }
+  end
+
+  defp filter_key_names(resource) do
+    resource.reader
+    |> filter_keys()
+    |> Enum.sort()
+    |> Enum.map(&to_string/1)
+  end
+
+  defp filter_keys(reader) do
+    if Code.ensure_loaded?(reader) and function_exported?(reader, :filter_keys, 0) do
+      reader.filter_keys() |> Enum.to_list()
+    else
+      []
+    end
+  end
+
+  defp filter_operators, do: ["eq", "neq", "in", "not_in", "lt", "lte", "gt", "gte", "like", "ilike"]
 
   defp include_parameter(resource) do
     %{
@@ -579,7 +642,7 @@ defmodule Hawk.OpenApi do
 
   defp include_values(resource) do
     resource.model
-    |> include_values(resource.resource |> Module.concat(Reader), 2, [])
+    |> include_values(resource.reader, 2, [])
     |> Enum.map(&external_include_value(resource, &1))
     |> Enum.sort()
   end
@@ -654,8 +717,7 @@ defmodule Hawk.OpenApi do
   end
 
   defp sort_values(resource) do
-    resource.resource
-    |> Module.concat(Reader)
+    resource.reader
     |> sort_keys()
     |> Enum.flat_map(fn key -> [to_string(key), "-#{key}"] end)
   end
