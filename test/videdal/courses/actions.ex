@@ -128,4 +128,30 @@ defmodule Videdal.Courses.Actions do
   end
 
   defp unwrap_transaction({:ok, result}), do: result
+
+  # Two-phase action: create a grade and rename the course in one transaction.
+  # `build: true` opts into the generated `submit_grade_change/3` (validate)
+  # and `submit_grade_run/3` (commit), both projected from `build_submit_grade/3`.
+
+  alias Videdal.{Courses, Grades}
+
+  action("submit-grade",
+    doc: "Create a grade and rename the course in one transaction.",
+    build: true,
+    params: [
+      score: [type: :integer, doc: "Numeric grade.", example: 7],
+      student_id: [type: :string, doc: "Student receiving the grade."]
+    ]
+  )
+
+  def build_submit_grade(%Videdal.Course{} = course, params, authority) do
+    Hawk.Multi.new()
+    |> Hawk.Multi.create(
+      :grade,
+      Grades,
+      %{score: params.score, student_id: params.student_id, course_id: course.id, school_id: course.school_id},
+      authority
+    )
+    |> Hawk.Multi.update(:course, Courses, course, %{title: course.title <> " (graded)"}, authority)
+  end
 end

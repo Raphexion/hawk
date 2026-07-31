@@ -76,4 +76,21 @@ defmodule Hawk.PhoenixAuthTest do
 
     assert %Authority{role: :teacher, scopes: %{teacher_id: 12}} = socket.assigns.hawk_authority
   end
+
+  test "normalize_role resolves a role string whose atom is not yet loaded" do
+    # Use a deliberately-unique role string that no other code path loads as an
+    # atom, so `String.to_existing_atom/1` would fail in isolation. The auth
+    # path must not crash on role strings from the database that arrive before
+    # their policy atom is loaded (the order-dependent crash that motivated
+    # this fix).
+    unique_role = "phoenix_auth_test_unique_role_#{System.unique_integer([:positive])}"
+
+    scope = Scope.for_user(%User{id: 99, role: unique_role})
+
+    assert %Authority{role: role_atom, identity: 99} =
+             PhoenixAuth.authority_from_scope(scope, role_path: [:role])
+
+    assert is_atom(role_atom)
+    assert Atom.to_string(role_atom) == unique_role
+  end
 end

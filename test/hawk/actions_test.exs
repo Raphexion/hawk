@@ -38,6 +38,7 @@ defmodule Hawk.ActionsTest do
              "ping" => %{
                name: "ping",
                handler: :ping,
+               build: nil,
                doc: "Ping the resource with a counted command.",
                params: %{
                  count: %{type: :integer, doc: "How many times to ping.", example: 3}
@@ -46,6 +47,7 @@ defmodule Hawk.ActionsTest do
              "custom-handler" => %{
                name: "custom-handler",
                handler: :run_custom,
+               build: nil,
                doc: nil,
                params: %{
                  message: %{type: :string, example: "hello"}
@@ -106,6 +108,7 @@ defmodule Hawk.ActionsTest do
     assert Hawk.Actions.actions(Hawk.ActionsTest.DuplicateResource) == %{
              "ping" => %{
                name: "ping",
+               build: nil,
                handler: :second_ping,
                doc: "second",
                params: %{}
@@ -117,9 +120,9 @@ defmodule Hawk.ActionsTest do
     course = %Videdal.Course{id: "course-1", title: "Math"}
     authority = Authority.system()
 
-    assert Hawk.Actions.actions(Videdal.Grades) == %{}
+    assert Hawk.Actions.actions(Videdal.Students) == %{}
 
-    assert Hawk.Actions.dispatch(Videdal.Grades, "ping", course, %{}, authority) ==
+    assert Hawk.Actions.dispatch(Videdal.Students, "ping", course, %{}, authority) ==
              :unknown_action
 
     assert Hawk.Actions.dispatch(Hawk.ActionsTest.DemoResource, "missing", course, %{}, authority) ==

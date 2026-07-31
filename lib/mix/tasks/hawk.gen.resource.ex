@@ -300,7 +300,7 @@ defmodule Mix.Tasks.Hawk.Gen.Resource do
       @impl true
       def mount(_params, session, socket) do
         authority = Hawk.Authority.Session.authority_or_public(session)
-        {:ok, assign_index(socket, authority, preloads: #{inspect(config.preloads)})}
+        {:ok, assign_index(socket, authority)}
       end
     end
     """)
@@ -369,7 +369,7 @@ defmodule Mix.Tasks.Hawk.Gen.Resource do
       @impl true
       def mount(%{"id" => id}, session, socket) do
         authority = Hawk.Authority.Session.authority_or_public(session)
-        {:ok, assign_show(socket, authority, id, preloads: #{inspect(config.preloads)})}
+        {:ok, assign_show(socket, authority, id)}
       end
     end
     """)

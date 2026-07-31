@@ -434,3 +434,93 @@ defmodule Videdal.Controllers.CoursesControllerTest do
     Authority.new(:school_admin, Videdal.school_admin_id(), scopes: %{school_id: school.id})
   end
 end
+
+defmodule Videdal.Controllers.CoursesControllerDryRunTest do
+  use Videdal.DatabaseCase, async: true
+
+  import Hawk.TestConn, only: [conn: 1]
+
+  alias Hawk.Authority
+  alias Videdal.Controllers.CoursesController
+  alias Videdal.{Course, Grade, Repo}
+
+  @authority Authority.system()
+
+  test "submit-grade dry-run validates without committing and reports errors" do
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    course = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Math")
+
+    conn =
+      CoursesController.action(conn(@authority), %{
+        "id" => course.id,
+        "action" => "submit-grade",
+        "dry-run" => true,
+        "meta" => %{"score" => 7, "student_id" => nil}
+      })
+
+    assert conn.status == 422
+    assert %{"errors" => errors} = Jason.decode!(conn.resp_body)
+    assert Enum.any?(errors, &String.contains?(&1["source"]["pointer"], "student_id"))
+    assert Repo.all(Grade) == []
+    assert Repo.get!(Course, course.id).title == "Math"
+  end
+
+  test "submit-grade dry-run returns 200 when all params are valid" do
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    student = insert(:student, school_id: school.id)
+    course = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Math")
+
+    conn =
+      CoursesController.action(conn(@authority), %{
+        "id" => course.id,
+        "action" => "submit-grade",
+        "dry-run" => true,
+        "meta" => %{"score" => 7, "student_id" => student.id}
+      })
+
+    assert conn.status == 200
+    assert Repo.all(Grade) == []
+  end
+
+  test "submit-grade without dry-run commits" do
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    student = insert(:student, school_id: school.id)
+    course = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Math")
+
+    conn =
+      CoursesController.action(conn(@authority), %{
+        "id" => course.id,
+        "action" => "submit-grade",
+        "meta" => %{"score" => 7, "student_id" => student.id}
+      })
+
+    assert conn.status == 200
+    assert [grade] = Repo.all(Grade)
+    assert grade.score == 7
+    assert Repo.get!(Course, course.id).title == "Math (graded)"
+  end
+
+  test "a run-only action dry-run is rejected with 400" do
+    course =
+      insert(:course,
+        school_id: insert(:school).id,
+        teacher_id: insert(:teacher).id,
+        registration_state: "draft",
+        seat_count: 0,
+        waitlist_count: 0
+      )
+
+    conn =
+      CoursesController.action(conn(@authority), %{
+        "id" => course.id,
+        "action" => "open-registration",
+        "dry-run" => true,
+        "meta" => %{"seat_count" => 2, "waitlist_count" => 1}
+      })
+
+    assert conn.status == 400
+  end
+end

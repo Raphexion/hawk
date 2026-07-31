@@ -75,11 +75,19 @@ defmodule Hawk.LiveViewTest do
     assert first.id == math.id
     assert first.title == "Math"
     assert second.title == "Zebra"
+    # Path-source columns declare the preloads; the helper derives them and
+    # loads the associations without a caller-supplied :preloads opt.
+    assert %Videdal.Teacher{} = first.teacher
+    assert %Videdal.School{} = first.school
+    assert first.teacher.id == teacher.id
+    assert first.school.id == school.id
     assert socket.assigns.hawk_resource == :course
     assert socket.assigns.hawk_page == %{size: 10}
 
     assert socket.assigns.hawk_table == [
              %{name: :title, label: "Course"},
+             %{name: :teacher_name, label: "Teacher", source: [:teacher, :name]},
+             %{name: :school_name, label: "School", source: [:school, :name]},
              %{name: :registration_state, label: "Registration"},
              %{name: :seat_count, label: "Seats"},
              %{name: :waitlist_count, label: "Waitlist"}
@@ -172,6 +180,7 @@ defmodule Hawk.LiveViewTest do
 
     assert socket.assigns.hawk_fields == [
              %{name: :title},
+             %{name: :teacher_name, label: "Teacher", source: [:teacher, :name]},
              %{name: :registration_state, label: "Registration"},
              %{name: :seat_count, label: "Seats"},
              %{name: :waitlist_count, label: "Waitlist"}

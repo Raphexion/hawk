@@ -246,6 +246,12 @@ defmodule Hawk.JsonApi.Controller do
 
   defp model_module(%module{}), do: module
 
+  defp primary_result(results, primary_model) do
+    Enum.find_value(results, fn {_name, value} ->
+      if is_struct(value, primary_model), do: value
+    end)
+  end
+
   @doc false
   def create(conn, resource, model, params, public? \\ false) do
     with_error_boundary(conn, fn ->
@@ -420,16 +426,97 @@ defmodule Hawk.JsonApi.Controller do
   end
 
   defp respond_action(conn, resource, action_name, existing, params, authority) do
-    case Hawk.Actions.dispatch(
-           resource,
-           action_name,
-           existing,
-           Map.get(params, "meta", %{}),
-           authority
-         ) do
-      :unknown_action -> json(conn, 404, action_not_found(resource, action_name))
-      result -> respond(result, conn, resource, model_module(existing), 200)
+    if dry_run?(params) do
+      respond_action_dry_run(conn, resource, action_name, existing, Map.get(params, "meta", %{}), authority)
+    else
+      dispatch_action(conn, resource, action_name, existing, Map.get(params, "meta", %{}), authority)
     end
+  end
+
+  defp dispatch_action(conn, resource, action_name, existing, meta, authority) do
+    case Hawk.Actions.dispatch(resource, action_name, existing, meta, authority) do
+      :unknown_action ->
+        json(conn, 404, action_not_found(resource, action_name))
+
+      {:ok, results} when is_map(results) and not is_struct(results) ->
+        # A two-phase Action returns a map of step name to model. Render the
+        # primary resource (the one the action is anchored to) as the JSON:API
+        # document; secondary effects are not inlined here.
+        primary = primary_result(results, resource.__hawk_resource__(:model))
+        respond({:ok, primary}, conn, resource, model_module(existing), 200)
+
+      result ->
+        respond(result, conn, resource, model_module(existing), 200)
+    end
+  end
+
+  defp dry_run?(params) do
+    case Map.get(params, "dry-run") do
+      nil -> false
+      value when value in [true, "true", "1", 1] -> true
+      _ -> false
+    end
+  end
+
+  defp respond_action_dry_run(conn, resource, action_name, existing, meta, authority) do
+    actions_module = Module.concat(resource, Actions)
+
+    with {:ok, actions} <- fetch_actions(actions_module),
+         {:ok, metadata} <- Map.fetch(actions, action_name) do
+      change_fn = change_handler_fn(metadata)
+
+      cond do
+        function_exported?(actions_module, change_fn, 3) ->
+          changesets =
+            apply(actions_module, change_fn, [
+              existing,
+              Hawk.Actions.atomize_params(meta, metadata),
+              authority
+            ])
+
+          render_dry_run(conn, changesets)
+
+        metadata.build == nil ->
+          json(conn, 400, bad_request("action #{inspect(action_name)} is run-only and does not support dry-run"))
+
+        true ->
+          json(conn, 404, action_not_found(resource, action_name))
+      end
+    else
+      _ -> json(conn, 404, action_not_found(resource, action_name))
+    end
+  end
+
+  defp change_handler_fn(%{change_handler: handler}), do: String.to_atom("#{handler}_change")
+  defp change_handler_fn(%{handler: handler}), do: String.to_atom("#{handler}_change")
+
+  defp fetch_actions(actions_module) do
+    if function_exported?(actions_module, :__hawk_actions__, 0) do
+      {:ok, actions_module.__hawk_actions__()}
+    else
+      :error
+    end
+  end
+
+  defp render_dry_run(conn, changesets) do
+    errors = Enum.flat_map(changesets, &dry_run_errors/1)
+
+    if errors == [], do: json(conn, 200, %{data: nil, meta: %{"dry-run": true}}), else: json(conn, 422, %{errors: errors})
+  end
+
+  defp dry_run_errors({step, changeset}) do
+    changeset
+    |> Ecto.Changeset.traverse_errors(&error_detail/1)
+    |> Enum.flat_map(fn {field, messages} ->
+      Enum.map(messages, &%{status: "422", code: "invalid", title: "Validation error",
+        detail: &1, source: %{pointer: "/data/#{step}/#{field}"}})
+    end)
+  end
+
+  defp error_detail({message, opts}) do
+    Enum.reduce(opts, message, fn {key, value}, acc ->
+      String.replace(acc, "%{#{key}}", to_string(value), global: false)
+    end)
   end
 
   defp respond({:ok, returned_model}, conn, _resource, _model, status) do

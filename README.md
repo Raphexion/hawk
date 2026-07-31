@@ -355,6 +355,57 @@ Request shape:
 }
 ```
 
+#### Two-phase actions: `build` for validate-without-commit
+
+An action that composes multiple writers can opt into a validate phase by
+declaring `build: true` (or `build: :fn_name`) in `action/2` and writing a
+`build_<handler>/3` function that returns a `Hawk.Multi` of facade-call steps.
+Hawk then generates `<handler>_change/3` (validate without committing) and
+`<handler>_run/3` (commit) as projections of that one `build_<handler>/3`, so
+the two phases cannot drift — the same shape that keeps a writer's
+`change_create`/`create` in sync, lifted to a batch.
+
+```elixir
+defmodule MyApp.Courses.Actions do
+  use Hawk.Actions
+
+  alias MyApp.{Courses, Grades}
+
+  action "submit-grade",
+    doc: "Create a grade and rename the course in one transaction.",
+    build: true,
+    params: [
+      score: [type: :integer, doc: "Numeric grade.", example: 7],
+      student_id: [type: :string, doc: "Student receiving the grade."]
+    ]
+
+  def build_submit_grade(course, params, authority) do
+    Hawk.Multi.new()
+    |> Hawk.Multi.create(:grade, Grades, %{score: params.score, student_id: params.student_id, course_id: course.id, school_id: course.school_id}, authority)
+    |> Hawk.Multi.update(:course, Courses, course, %{title: course.title <> " (graded)"}, authority)
+  end
+end
+```
+
+`<handler>_change/3` returns a map of step name to non-persisting changeset
+(via `Hawk.Multi.to_changesets/1`); `<handler>_run/3` commits the whole batch
+in one transaction (via `Hawk.Multi.execute/2`). `Hawk.Actions.dispatch/5`
+routes a two-phase action's commit to `<handler>_run/3` automatically.
+
+JSON:API and LiveView share the same action: `POST /-actions/submit-grade`
+commits, and `POST /-actions/submit-grade` with `dry-run: true` validates and
+returns a JSON:API error document without committing. In a LiveView,
+`hawk_validate_action/6` drives live form validation and `hawk_action/6`
+commits, returning the full results map (every step's model) to an `on_success`
+callback.
+
+A multi containing `:action` or `:run` steps cannot be validated without
+committing (their effects depend on execution), so `to_changesets/1` raises for
+them. An action built around such steps is **run-only**: keep the hand-written
+`<handler>/3` (no `build:`), and the LiveView validates what it can from the
+underlying writers' `change_*` directly. The contract accepts that some
+actions are run-only and cannot be live-validated.
+
 ## Authority
 
 Hawk does not authenticate users itself. Apps can use the small session/assign
@@ -551,12 +602,14 @@ defmodule MyApp.Courses.LiveView do
     table do
       column(:title, label: "Course")
       column(:registration_state)
+      column(:teacher_name, label: "Teacher", source: [:teacher, :name])
     end
   end
 
   show do
     field(:title)
     field(:registration_state, label: "State")
+    field(:teacher_name, label: "Teacher", source: [:teacher, :name])
   end
 
   create_form do
@@ -590,6 +643,30 @@ text field into an `:ilike` filter, so `%{"search" => %{"title" => "histo"}}`
 becomes `%{title: {:ilike, "%histo%"}}`. Sort and search changes reset the page
 number to `1`; page changes keep the current query state. Policies remain the
 security boundary and are shared with JSON:API reads.
+
+#### Preloads are declared by `source:` paths
+
+A `column` or `field` (index and show) accepts a `source:` path to reach a
+field through an association: `column(:teacher_name, source: [:teacher, :name])`.
+The LiveView adapter declares the shape; the reader owns loading (it must
+`preload` the association); `mix hawk.validate` enforces that every association a
+`source:` path reaches is a declared reader preload — the same invariant that
+holds reader preloads to JSON:API relationships, applied to the LiveView
+adapter. `assign_index` and `assign_show` derive the preloads from the adapter,
+so there is no runtime `preloads:` option to keep in sync; the caller-supplied
+`preloads:` opt is rejected.
+
+A single-element path (`field(:students, source: [:students])`) declares a
+whole association to preload and display (typically a collection the template
+iterates). A deeper path whose leaf is an association
+(`field(:grades, source: [:grades, :student])`) produces a nested preload
+(`grades: [:student]`) for a collection whose elements reach their own
+associations.
+
+Form fields (`create_form`/`update_form`) do not accept `source:` paths — they
+bind to root-model attrs the writer casts, mirroring JSON:API's
+writable-`belongs_to`→FK rule. A read-only display beside a form uses a `show`
+field, not a form field.
 
 ### LiveView helpers
 

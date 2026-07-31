@@ -112,6 +112,79 @@ defmodule Hawk.MultiTest do
     end
   end
 
+  describe "to_changesets/1" do
+    test "validates create and update steps without committing" do
+      school = insert(:school)
+      teacher = insert(:teacher, school_id: school.id)
+      course = insert(:course, school_id: school.id, teacher_id: teacher.id)
+
+      multi =
+        Multi.new()
+        |> Multi.create(
+          :grade,
+          Videdal.Grades,
+          %{score: 7, school_id: school.id, student_id: teacher.id, course_id: course.id},
+          @authority
+        )
+        |> Multi.update(:course, Videdal.Courses, course, %{title: "Science"}, @authority)
+
+      changesets = Multi.to_changesets(multi)
+
+      assert %Ecto.Changeset{} = changesets.grade
+      assert changesets.grade.changes.score == 7
+      assert changesets.grade.action == :validate
+      assert %Ecto.Changeset{} = changesets.course
+      assert changesets.course.changes.title == "Science"
+    end
+
+    test "does not touch the repo" do
+      course = insert(:course)
+
+      {changesets, count} =
+        count_queries(fn ->
+          Multi.to_changesets(
+            Multi.new()
+            |> Multi.update(:course, Videdal.Courses, course, %{title: "Science"}, @authority)
+          )
+        end)
+
+      assert Map.has_key?(changesets, :course)
+      assert count == 0
+    end
+
+    test "omits delete steps (no changeset to validate)" do
+      course = insert(:course)
+
+      multi =
+        Multi.new()
+        |> Multi.update(:course, Videdal.Courses, course, %{title: "Science"}, @authority)
+        |> Multi.delete(:gone, Videdal.Courses, course, @authority)
+
+      changesets = Multi.to_changesets(multi)
+      assert Map.has_key?(changesets, :course)
+      refute Map.has_key?(changesets, :gone)
+    end
+
+    test "raises for :run steps (run-only multis cannot be live-validated)" do
+      multi =
+        Multi.new()
+        |> Multi.update(:course, Videdal.Courses, insert(:course), %{title: "X"}, @authority)
+        |> Multi.run(:derived, fn _results -> {:ok, :x} end)
+
+      assert_raise ArgumentError, ~r/run-only/, fn -> Multi.to_changesets(multi) end
+    end
+
+    test "raises for :action steps (run-only multis cannot be live-validated)" do
+      course = insert(:course, registration_state: "draft", seat_count: 0, waitlist_count: 0)
+
+      multi =
+        Multi.new()
+        |> Multi.action(:open, Videdal.Courses, course, "open-registration", %{seat_count: 2}, @authority)
+
+      assert_raise ArgumentError, ~r/run-only/, fn -> Multi.to_changesets(multi) end
+    end
+  end
+
   describe "execute/3" do
     test "runs all steps in a single transaction and returns results" do
       course = insert(:course)

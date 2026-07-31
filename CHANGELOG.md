@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Two-phase Actions.** An action declaring `build: true` (or `build: :fn`)
+  opts into a validate-without-commit phase: write a single `build_<handler>/3`
+  that returns a `Hawk.Multi` of facade-call steps, and Hawk generates
+  `<handler>_change/3` (validate) and `<handler>_run/3` (commit) as projections
+  of it, so the two phases cannot drift. `Hawk.Actions.dispatch/5` routes a
+  two-phase action's commit to `<handler>_run/3`. Run-only actions (no `build:`)
+  keep their hand-written handler and have no validate phase.
+
+- **`Hawk.Multi.to_changesets/1`.** Validates a multi's `:create`/`:update`
+  steps through the facade `change_*` functions without committing, returning a
+  map of step name to changeset. `:action`/`:run` steps raise — a multi using
+  them is run-only and cannot be live-validated.
+
+- **JSON:API action dry-run.** `POST /-actions/:action` with `dry-run: true`
+  validates a two-phase action and returns a JSON:API error document without
+  committing. Run-only actions reject dry-run with `400`.
+
+- **LiveView `hawk_validate_action/6` / `hawk_action/6`.** Drive an action
+  from a LiveView form: live validation through the action's `change` phase,
+  commit through `run`, with `on_success` receiving the full results map.
+
+- **LiveView `source:` path preloads.** `column`/`field` (index and show)
+  accept a `source:` path (e.g. `[:teacher, :name]`) reaching an association.
+  The LiveView adapter declares the shape; the reader owns loading; `mix
+  hawk.validate` enforces every path association is a declared reader preload
+  (symmetric to the JSON:API relationship ⊆ reader-preload check).
+  `assign_index`/`assign_show` derive preloads from the adapter; the runtime
+  `preloads:` opt is rejected. Form fields do not accept paths — they bind to
+  root-model attrs the writer casts.
+
 ## [0.5.0] - 2026-07-30
 
 ### Changed

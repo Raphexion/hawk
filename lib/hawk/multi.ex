@@ -176,6 +176,71 @@ defmodule Hawk.Multi do
   def to_list(%__MODULE__{steps: steps}), do: steps
 
   @doc """
+  Validates every declarable step without committing, returning a map of
+  step name to non-persisting changeset.
+
+  This is the validate phase of a multi: each `:create`/`:update` step is run
+  through its resource facade's `change_create/2` / `change_update/3`, which
+  build a changeset with `action: :validate` and run the writer pipeline
+  (including the policy `create?/update?` check) without crossing the
+  repository boundary. `:delete` steps have no changeset to validate and are
+  omitted from the result; their policy gate runs at commit.
+
+  A multi containing `:action` or `:run` steps cannot be validated without
+  committing — those ops' effects depend on execution (see `run/3`'s dry-run
+  caveat). `to_changesets/1` raises for such multis, so an Action built around
+  them is run-only and must be validated by other means (e.g. validating the
+  underlying writers' `change_*` directly).
+
+  ## Example
+
+      multi =
+        Hawk.Multi.new()
+        |> Hawk.Multi.create(:grade, MyApp.Grades, %{score: 7, student_id: sid}, authority)
+        |> Hawk.Multi.update(:course, MyApp.Courses, course, %{graded_count: n}, authority)
+
+      %{grade: grade_changeset, course: course_changeset} = Hawk.Multi.to_changesets(multi)
+
+  """
+  @spec to_changesets(t()) :: %{atom() => Ecto.Changeset.t()}
+  def to_changesets(%__MODULE__{steps: steps}) do
+    Enum.reduce(steps, %{}, fn step, acc ->
+      case step.op do
+        :create ->
+          validate_form_contract!(step.resource, :change_create, 2, :create)
+          changeset = step.resource.change_create(step.attrs, step.authority)
+          Map.put(acc, step.name, changeset)
+
+        :update ->
+          validate_form_contract!(step.resource, :change_update, 3, :update)
+          changeset = step.resource.change_update(step.model, step.attrs, step.authority)
+          Map.put(acc, step.name, changeset)
+
+        :delete ->
+          acc
+
+        op when op in [:action, :run] ->
+          raise ArgumentError,
+                "Hawk.Multi.to_changesets/1 cannot validate a #{inspect(op)} step " <>
+                  "(#{inspect(step.name)}); a multi using :action or :run is run-only " <>
+                  "and cannot be live-validated"
+      end
+    end)
+  end
+
+  defp validate_form_contract!(resource, function, arity, op) do
+    unless function_exported?(resource, function, arity) do
+      raise ArgumentError,
+            "Hawk.Multi.to_changesets/1 cannot validate a #{inspect(op)} step for " <>
+              "#{inspect(resource)}: the facade does not expose #{function}/#{arity}. " <>
+              "A multi :create/:update step is only validatable when its writer is a " <>
+              "Hawk.Writer.Resource (or otherwise defines #{function}/#{arity}); " <>
+              "a resource with a hand-written writer that omits the form boundary " <>
+              "is run-only in a multi."
+    end
+  end
+
+  @doc """
   Executes all steps in a single repo transaction, threading prior results
   forward. All-or-nothing: any step failure halts and rolls back the whole
   transaction.

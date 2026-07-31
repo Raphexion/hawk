@@ -277,6 +277,7 @@ defmodule Hawk.Resource.Validation do
 
     validate_live_view_fields!(
       model,
+      reader,
       live_view_module,
       :index,
       Map.get(index, :table, [])
@@ -284,6 +285,7 @@ defmodule Hawk.Resource.Validation do
 
     validate_live_view_fields!(
       model,
+      reader,
       live_view_module,
       :show,
       Map.get(live_view[:show] || %{}, :fields, [])
@@ -291,6 +293,7 @@ defmodule Hawk.Resource.Validation do
 
     validate_live_view_fields!(
       model,
+      reader,
       live_view_module,
       :create_form,
       Map.get(live_view[:create_form] || %{}, :fields, [])
@@ -298,6 +301,7 @@ defmodule Hawk.Resource.Validation do
 
     validate_live_view_fields!(
       model,
+      reader,
       live_view_module,
       :update_form,
       Map.get(live_view[:update_form] || %{}, :fields, [])
@@ -353,15 +357,89 @@ defmodule Hawk.Resource.Validation do
   defp computed_attribute?(%{resolver: resolver}) when is_function(resolver, 2), do: true
   defp computed_attribute?(_metadata), do: false
 
-  defp validate_live_view_fields!(model, live_view_module, kind, fields) do
+  defp validate_live_view_fields!(model, reader, live_view_module, kind, fields) do
+    preload_keys = reader_preload_keys(reader)
+
     Enum.each(fields, fn metadata ->
       name = Map.fetch!(metadata, :name)
       source = Map.get(metadata, :source, name)
-
-      if is_nil(model.__schema__(:type, source)) do
-        raise ArgumentError,
-              "Hawk resource live_view module #{inspect(live_view_module)} #{kind} field #{inspect(name)} source #{inspect(source)} must reference a field on #{inspect(model)}"
-      end
+      validate_live_view_field!(model, live_view_module, kind, name, source, preload_keys)
     end)
+  end
+
+  defp validate_live_view_field!(model, live_view_module, kind, name, source, _preload_keys)
+       when is_atom(source) do
+    if is_nil(model.__schema__(:type, source)) do
+      raise ArgumentError,
+            "Hawk resource live_view module #{inspect(live_view_module)} #{kind} field #{inspect(name)} " <>
+              "source #{inspect(source)} must reference a field on #{inspect(model)}"
+    end
+  end
+
+  defp validate_live_view_field!(_model, live_view_module, kind, name, [association | _rest], _preload_keys)
+       when kind in [:create_form, :update_form] and is_atom(association) do
+    raise ArgumentError,
+          "Hawk resource live_view module #{inspect(live_view_module)} #{kind} field #{inspect(name)} " <>
+            "uses a path source #{inspect(association)}; form fields bind to root-model attrs the " <>
+            "writer casts, not preloaded associations. Render a related value with a show field instead"
+  end
+
+  defp validate_live_view_field!(model, live_view_module, kind, name, [association | rest], preload_keys)
+       when is_atom(association) do
+    case model.__schema__(:association, association) do
+      nil ->
+        raise ArgumentError,
+              "Hawk resource live_view module #{inspect(live_view_module)} #{kind} field #{inspect(name)} " <>
+                "source #{inspect([association | rest])} must reference an association on #{inspect(model)}"
+
+      association_meta ->
+        unless MapSet.member?(preload_keys, association) do
+          raise ArgumentError,
+                "Hawk resource live_view module #{inspect(live_view_module)} #{kind} field #{inspect(name)} " <>
+                  "reaches association #{inspect(association)}, which must be declared as a reader preload"
+        end
+
+        validate_path_tail(association_meta.related, live_view_module, kind, name, rest)
+    end
+  end
+
+  defp validate_path_tail(_related, _live_view_module, _kind, _name, []), do: :ok
+
+  defp validate_path_tail(related, live_view_module, kind, name, [key | rest]) when is_atom(key) do
+    cond do
+      not is_nil(related.__schema__(:type, key)) ->
+        # Leaf field — the display target. Nothing more to preload.
+        :ok
+
+      association = related.__schema__(:association, key) ->
+        # A nested association in the path must be preloaded by *its* resource's
+        # reader, not just exist on the schema — otherwise the contract passes
+        # but the runtime preload fails (the exact drift this check prevents).
+        nested_preloads = reader_preload_keys(Hawk.Resource.Convention.reader_module(related))
+
+        unless MapSet.member?(nested_preloads, key) do
+          raise ArgumentError,
+                "Hawk resource live_view module #{inspect(live_view_module)} #{kind} field " <>
+                  "#{inspect(name)} reaches nested association #{inspect(key)} on " <>
+                  "#{inspect(related)}, which must be declared as a reader preload by " <>
+                  "#{inspect(Hawk.Resource.Convention.reader_module(related))}"
+        end
+
+        validate_path_tail(association.related, live_view_module, kind, name, rest)
+
+      true ->
+        raise ArgumentError,
+              "Hawk resource live_view module #{inspect(live_view_module)} #{kind} field " <>
+                "#{inspect(name)} path #{inspect(key)} must reference a field or association on " <>
+                "#{inspect(related)}"
+    end
+  end
+
+  defp reader_preload_keys(reader) do
+    if Code.ensure_loaded?(reader) and function_exported?(reader, :preload_keys, 0) do
+      reader.preload_keys()
+    else
+      MapSet.new()
+    end
   end
 end

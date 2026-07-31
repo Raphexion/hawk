@@ -16,6 +16,8 @@ defmodule Videdal.Courses.LiveView do
 
     table do
       column(:title, label: "Course")
+      column(:teacher_name, label: "Teacher", source: [:teacher, :name])
+      column(:school_name, label: "School", source: [:school, :name])
       column(:registration_state, label: "Registration")
       column(:seat_count, label: "Seats")
       column(:waitlist_count, label: "Waitlist")
@@ -24,6 +26,7 @@ defmodule Videdal.Courses.LiveView do
 
   show do
     field(:title)
+    field(:teacher_name, label: "Teacher", source: [:teacher, :name])
     field(:registration_state, label: "Registration")
     field(:seat_count, label: "Seats")
     field(:waitlist_count, label: "Waitlist")

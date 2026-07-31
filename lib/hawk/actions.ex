@@ -96,13 +96,33 @@ defmodule Hawk.Actions do
 
   @doc false
   defmacro __before_compile__(env) do
+    resource = Hawk.Actions.resource_module(env.module)
+
     actions =
       env.module
       |> Module.get_attribute(:hawk_actions)
       |> Enum.reverse()
+      |> Enum.map(&maybe_rebind_handler(env.module, &1))
       |> Map.new(fn metadata -> {metadata.name, metadata} end)
 
+    # An Action opts into the two-phase form by declaring `build: true` (or
+    # `build: :fn_name`) in `action/2`. The author writes a single
+    # `build_<handler>/3` (or the named fn) that returns a `Hawk.Multi` of
+    # facade-call steps. `Hawk.Actions` then generates `<handler>_change/3`
+    # (validate without committing) and `<handler>_run/3` (commit) as projections
+    # of that one build fn, so the two phases cannot drift, and rebinds the
+    # action's `:handler` to `<handler>_run` so dispatch calls the commit. An
+    # Action without `build:` stays run-only: the hand-written `<handler>/3` is
+    # the commit path and there is no validate phase. Multiple actions per module
+    # mix freely — each action carries its own build fn.
+    generated =
+      env.module
+      |> Module.get_attribute(:hawk_actions)
+      |> Enum.reverse()
+      |> Enum.flat_map(&generate_change_run(env.module, resource, &1))
+
     quote do
+      unquote_splicing(generated)
       def __hawk_actions__, do: unquote(Macro.escape(actions))
     end
   end
@@ -153,7 +173,65 @@ defmodule Hawk.Actions do
     end
   end
 
-  defp atomize_params(params, metadata) when is_map(params) do
+  @doc false
+  def resource_module(actions_module) do
+    actions_module
+    |> Module.split()
+    |> Enum.drop(-1)
+    |> Module.concat()
+  end
+
+  defp maybe_rebind_handler(module, %{build: build} = metadata) when is_atom(build) and not is_nil(build) do
+    if Module.defines?(module, {build, 3}) do
+      run_fn = String.to_atom("#{metadata.handler}_run")
+
+      metadata
+      |> Map.put(:change_handler, metadata.handler)
+      |> Map.put(:handler, run_fn)
+    else
+      raise ArgumentError,
+            "Hawk action #{inspect(metadata.name)} declared `build: #{inspect(build)}` " <>
+              "but #{inspect(module)} does not define #{build}/3"
+    end
+  end
+
+  defp maybe_rebind_handler(_module, metadata), do: metadata
+
+  defp generate_change_run(module, resource, %{build: build, handler: handler})
+       when is_atom(build) and not is_nil(build) do
+    if Module.defines?(module, {build, 3}) do
+      change_fn = String.to_atom("#{handler}_change")
+      run_fn = String.to_atom("#{handler}_run")
+
+      [quote do
+        @doc false
+        def unquote(change_fn)(model, params, authority) do
+          unquote(build)(model, params, authority)
+          |> Hawk.Multi.to_changesets()
+        end
+
+        @doc false
+        def unquote(run_fn)(model, params, authority) do
+          unquote(build)(model, params, authority)
+          |> Hawk.Multi.execute(unquote(resource).Reader.repo())
+        end
+      end]
+    else
+      []
+    end
+  end
+
+  defp generate_change_run(_module, _resource, _metadata), do: []
+
+  @doc """
+  Atomizes a raw params map against an action's declared `params:` schema,
+  dropping keys the action does not declare.
+
+  Used by `Hawk.Actions.dispatch/5` before applying the handler, and exposed
+  so LiveView helpers can atomize the same way before calling a generated
+  `<handler>_change/3`.
+  """
+  def atomize_params(params, metadata) when is_map(params) do
     allowed_by_name = Map.new(Map.keys(metadata.params), &{to_string(&1), &1})
 
     Enum.reduce(params, %{}, fn
@@ -168,16 +246,23 @@ defmodule Hawk.Actions do
     end)
   end
 
-  defp atomize_params(_params, _metadata), do: %{}
+  def atomize_params(_params, _metadata), do: %{}
 
   defp action_metadata(name, opts, caller) do
     name = literal!(name, caller)
     handler = opts |> Keyword.get(:handler, default_handler(name)) |> literal!(caller)
     doc = opts |> Keyword.get(:doc) |> maybe_literal(caller)
     params = opts |> Keyword.get(:params, []) |> params_metadata(caller)
+    build = build_fn(opts[:build], handler, caller)
 
-    %{name: name, handler: handler, doc: doc, params: params}
+    %{name: name, handler: handler, doc: doc, params: params, build: build}
   end
+
+  defp build_fn(nil, _handler, _caller), do: nil
+
+  defp build_fn(true, handler, _caller), do: String.to_atom("build_#{handler}")
+
+  defp build_fn(fn_name, _handler, caller) when is_atom(fn_name), do: literal!(fn_name, caller)
 
   defp params_metadata(params, caller) when is_list(params) do
     params

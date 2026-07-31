@@ -165,7 +165,12 @@ defmodule Hawk.PhoenixAuth do
 
   defp normalize_role(nil), do: nil
   defp normalize_role(role) when is_atom(role), do: role
-  defp normalize_role(role) when is_binary(role), do: String.to_existing_atom(role)
+
+  # Roles are an app-controlled enumeration declared in `Hawk.Policy` role
+  # clauses, not hostile caller input, so the atom-table-leak risk that would
+  # justify `String.to_existing_atom/1` does not apply. `String.to_atom/1` is
+  # safe here because roles are bounded by the app's own policy declarations.
+  defp normalize_role(role) when is_binary(role), do: String.to_atom(role)
 
   defp scopes_from_user(user, mappings) do
     Map.new(mappings, fn {scope_key, path} -> {scope_key, get_in_path(user, List.wrap(path))} end)

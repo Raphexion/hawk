@@ -209,14 +209,18 @@ defmodule Hawk.LiveView do
   @doc false
   def assign_index(socket, resource, as, plural_as, authority, opts, live_view) do
     state = IndexState.normalize(Keyword.get(opts, :params, %{}), live_view)
+    model = resource.__hawk_resource__(:model)
+    preloads = derive_preloads(live_view_table(live_view), model)
 
     reader_opts =
       opts
+      |> reject_preloads_opt!()
       |> Keyword.delete(:params)
       |> put_reader_filter(state.filter)
       |> put_reader_page(state.page)
       |> put_reader_sort(state.sort)
       |> Keyword.put(:authority, authority)
+      |> put_reader_preloads(preloads)
 
     results = resource.all(reader_opts)
     page = Keyword.get(reader_opts, :page, %{})
@@ -239,12 +243,16 @@ defmodule Hawk.LiveView do
   def assign_show(socket, resource, as, authority, id, opts, live_view) do
     identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
     lookup = Keyword.get(opts, :lookup, identity)
+    model = resource.__hawk_resource__(:model)
+    preloads = derive_preloads(live_view_fields(live_view), model)
 
     opts =
       opts
+      |> reject_preloads_opt!()
       |> Keyword.delete(:lookup)
       |> Keyword.put(:authority, authority)
       |> Keyword.update(:filter, %{lookup => normalize_id(id)}, &Map.put(&1, lookup, normalize_id(id)))
+      |> put_reader_preloads(preloads)
 
     case resource.one(opts) do
       {:ok, model} ->
@@ -419,6 +427,101 @@ defmodule Hawk.LiveView do
     end
   end
 
+  @doc """
+  Validates a two-phase Action without committing, assigning the per-step
+  changesets for live form rendering.
+
+  The Action must declare `build: true` (or `build: :fn`) so that
+  `<handler>_change/3` is generated. For a run-only Action (no `build:`), this
+  assigns `:hawk_action_run_only` so the template can render a "validate by
+  submitting" fallback.
+
+  Assigns `:hawk_action_changesets` (`%{step_name => changeset}`) on success.
+  """
+  def hawk_validate_action(socket, resource, action_name, model, params, opts \\ []) do
+    authority = action_authority(socket, opts)
+    actions_module = Module.concat(resource, Actions)
+    metadata = action_metadata!(actions_module, action_name)
+    change_fn =
+      case metadata do
+        %{change_handler: handler} -> String.to_atom("#{handler}_change")
+        _ -> String.to_atom("#{metadata.handler}_change")
+      end
+
+    cond do
+      function_exported?(actions_module, change_fn, 3) ->
+        changesets =
+          apply(actions_module, change_fn, [
+            model,
+            Hawk.Actions.atomize_params(params, metadata),
+            authority
+          ])
+
+        {:noreply, assign(socket, :hawk_action_changesets, changesets)}
+
+      metadata.build == nil ->
+        {:noreply, assign(socket, :hawk_action_run_only, true)}
+
+      true ->
+        {:noreply, assign(socket, :hawk_error, %{base: ["action #{action_name} is not validatable"]})}
+    end
+  end
+
+  @doc """
+  Commits an Action and applies the result to the socket.
+
+  Routes through `Hawk.Actions.dispatch/5`, so a two-phase Action commits via
+  its generated `<handler>_run/3` and a run-only Action commits via its
+  hand-written handler. The `on_success` callback (set via `opts`) receives
+  `(socket, results)` where `results` is the dispatch result — a map of step
+  name to model for a two-phase Action, or the handler's single return value
+  for a run-only Action.
+  """
+  def hawk_action(socket, resource, action_name, model, params, opts \\ []) do
+    authority = action_authority(socket, opts)
+
+    result = Hawk.Actions.dispatch(resource, action_name, model, params, authority)
+
+    case result do
+      {:ok, results} ->
+        socket = assign(socket, :hawk_action_results, results)
+
+        case Keyword.get(opts, :on_success) do
+          nil -> {:noreply, socket}
+          callback when is_function(callback, 2) -> {:noreply, callback.(socket, results)}
+        end
+
+      {:invalid, _context} = result ->
+        {:noreply, assign(socket, :hawk_error, live_error(result))}
+
+      {:not_authorized, _context} = result ->
+        {:noreply, assign(socket, :hawk_error, live_error(result))}
+
+      {:error, name, reason, _prior} ->
+        {:noreply,
+         assign(socket, :hawk_error, %{base: ["action step #{inspect(name)} failed: #{inspect(reason)}"]})}
+
+      other ->
+        {:noreply, assign(socket, :hawk_error, %{base: ["action failed: #{inspect(other)}"]})}
+    end
+  end
+
+  defp action_authority(socket, opts) do
+    Keyword.get(opts, :authority) || socket.assigns[:hawk_authority] || Hawk.Authority.public()
+  end
+
+  defp action_metadata!(actions_module, action_name) do
+    actions = actions_module.__hawk_actions__()
+
+    case Map.fetch(actions, action_name) do
+      {:ok, metadata} ->
+        metadata
+
+      :error ->
+        raise ArgumentError, "unknown action #{inspect(action_name)} for #{inspect(actions_module)}"
+    end
+  end
+
   defp put_reader_filter(opts, :all), do: opts
 
   defp put_reader_filter(opts, filter),
@@ -434,6 +537,25 @@ defmodule Hawk.LiveView do
 
   defp put_reader_sort(opts, sort), do: Keyword.put(opts, :sort, sort)
 
+  defp put_reader_preloads(opts, []), do: opts
+
+  defp put_reader_preloads(opts, preloads), do: Keyword.put(opts, :preloads, preloads)
+
+  # The LiveView adapter is the single source of preloads: `assign_index` /
+  # `assign_show` derive them from declared `source:` path columns and fields.
+  # A caller-supplied `:preloads` would be a second source and drift from the
+  # adapter, so it is rejected. Pass `preloads:` on the reader or page helper
+  # for explicit control outside the adapter contract.
+  defp reject_preloads_opt!(opts) do
+    if Keyword.has_key?(opts, :preloads) do
+      raise ArgumentError,
+            "Hawk.LiveView assign_index/assign_show derive preloads from the LiveView " <>
+              "adapter's `source:` paths; pass :preloads on the reader or assign_page instead"
+    end
+
+    opts
+  end
+
   @doc false
   def field_label(field, opts \\ []) do
     field
@@ -444,12 +566,25 @@ defmodule Hawk.LiveView do
   @doc false
   def field_value(model, field) when is_map(field) do
     source = Map.get(field, :source, Map.fetch!(field, :name))
-    value = Map.get(model, source)
+    value = resolve_source(model, source)
 
     field
     |> Map.get(:format)
     |> apply_field_format(value, model, field)
   end
+
+  defp resolve_source(model, source) when is_atom(source), do: Map.get(model, source)
+
+  defp resolve_source(model, [association | rest]) when is_atom(association) do
+    case Map.get(model, association) do
+      %Ecto.Association.NotLoaded{} -> nil
+      nil -> nil
+      related -> walk_path(related, rest)
+    end
+  end
+
+  defp walk_path(value, []), do: value
+  defp walk_path(model, [key | rest]) when is_atom(key), do: walk_path(Map.get(model, key), rest)
 
   defp resolve_label({:gettext, msgid} = label, resolver),
     do: resolve_with_app(label, resolver, msgid)
@@ -484,6 +619,97 @@ defmodule Hawk.LiveView do
 
   defp live_view_table(live_view), do: live_view |> Map.get(:index, %{}) |> Map.get(:table, [])
   defp live_view_fields(live_view), do: live_view |> Map.get(:show, %{}) |> Map.get(:fields, [])
+
+  @doc false
+  def derive_preloads(fields) do
+    fields
+    |> Enum.reduce(%{}, &merge_preload_spec(&1, &2))
+    |> spec_to_list()
+  end
+
+  @doc false
+  def derive_preloads(fields, model) do
+    fields
+    |> Enum.reduce(%{}, &merge_preload_spec(&1, &2, model))
+    |> spec_to_list()
+  end
+
+  defp merge_preload_spec(field, acc) do
+    case Map.get(field, :source) do
+      [_ | _] = path -> merge_paths(acc, preload_path(path))
+      _other -> acc
+    end
+  end
+
+  defp merge_preload_spec(field, acc, model) do
+    case Map.get(field, :source) do
+      [_ | _] = path -> merge_paths(acc, preload_path(path, model))
+      _other -> acc
+    end
+  end
+
+  # A path source `[a, b, ..., z]` reaches associations `a, b, ...` and displays
+  # the leaf `z`. The leaf is a field (or a whole association shown directly
+  # when the path has one element), not a preload. So for a multi-element path,
+  # drop the leaf and preload the remaining association chain; for a single
+  # element, preload it.
+  defp preload_path([single]), do: %{single => nil}
+
+  defp preload_path([_leaf | _] = path) do
+    path |> Enum.drop(-1) |> build_nested()
+  end
+
+  defp build_nested([single]), do: %{single => nil}
+  defp build_nested([head | rest]), do: %{head => build_nested(rest)}
+
+  # Model-aware variant: walk the path keeping every element that is an
+  # association on the current schema, stopping at the first field (the display
+  # leaf). This handles both display paths (`[:student, :name]` → preload
+  # `:student`) and collection-iteration paths whose leaf is itself an
+  # association (`[:grades, :student]` → preload `grades: [:student]`).
+  defp preload_path(path, model), do: preload_path(path, model, %{})
+
+  defp preload_path([head | rest], model, acc) do
+    case model.__schema__(:association, head) do
+      nil ->
+        acc
+
+      association ->
+        nested = build_nested_from(rest, association.related)
+        merge_paths(acc, %{head => nested})
+    end
+  end
+
+  defp build_nested_from([], _model), do: nil
+
+  defp build_nested_from([head | rest], model) do
+    case model.__schema__(:association, head) do
+      nil ->
+        nil
+
+      association ->
+        case build_nested_from(rest, association.related) do
+          nil -> %{head => nil}
+          nested -> %{head => nested}
+        end
+    end
+  end
+
+  defp merge_paths(acc, spec) when is_map(acc) and is_map(spec) do
+    Map.merge(acc, spec, fn _k, left, right -> merge_nested(left, right) end)
+  end
+
+  defp merge_nested(nil, nil), do: nil
+  defp merge_nested(nil, right), do: right
+  defp merge_nested(left, nil), do: left
+  defp merge_nested(left, right) when is_map(left) and is_map(right), do: merge_paths(left, right)
+
+  defp spec_to_list(spec) when is_map(spec) do
+    Enum.map(spec, fn
+      {key, nil} -> key
+      {key, nested} -> {key, spec_to_list(nested)}
+    end)
+  end
 
   defp put_form_state(socket, as, state) do
     states = socket.assigns |> Map.get(:hawk_form_states, %{}) |> Map.put(as, state)
