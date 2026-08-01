@@ -120,7 +120,7 @@ defmodule Hawk.ResourceTest do
 
   alias Hawk.ResourceTest.{Course, Courses, CourseSummaries, CustomFacade}
 
-  test "convention resource facade delegates reader, writer, and actions" do
+  test "convention resource facade delegates reader, writer, and action dispatch" do
     authority = Hawk.Authority.system()
     course = %Course{id: Videdal.course_id(), title: "Math"}
 
@@ -133,8 +133,7 @@ defmodule Hawk.ResourceTest do
 
     assert Courses.delete(course, authority) == {:delete, course, authority}
 
-    assert Courses.open_registration(course, %{seat_count: 10}, authority) ==
-             {:open_registration, course, %{seat_count: 10}, authority}
+    refute function_exported?(Courses, :open_registration, 3)
 
     assert Courses.action("open-registration", course, %{seat_count: 10}, authority) ==
              {:open_registration, course, %{seat_count: 10}, authority}

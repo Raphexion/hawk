@@ -135,13 +135,13 @@ defmodule Hawk.Actions do
   """
   def dispatch(resource, action_name, model, params, authority)
       when is_atom(resource) and is_binary(action_name) and is_struct(model) do
-    actions_module = Module.concat(resource, Actions)
+    actions_module = actions_module(resource)
 
-    with true <- Code.ensure_loaded?(actions_module),
-         {:ok, actions} <- fetch_actions(actions_module),
+    with module when is_atom(module) and module != false <- actions_module,
+         {:ok, actions} <- fetch_actions(module),
          {:ok, metadata} <- Map.fetch(actions, action_name),
-         true <- function_exported?(actions_module, metadata.handler, 3) do
-      apply(actions_module, metadata.handler, [model, atomize_params(params, metadata), authority])
+         true <- function_exported?(module, metadata.handler, 3) do
+      apply(module, metadata.handler, [model, atomize_params(params, metadata), authority])
     else
       false -> :unknown_action
       :error -> :unknown_action
@@ -155,13 +155,20 @@ defmodule Hawk.Actions do
   no `Actions` module).
   """
   def actions(resource) when is_atom(resource) do
-    actions_module = Module.concat(resource, Actions)
-
-    with true <- Code.ensure_loaded?(actions_module),
-         {:ok, actions} <- fetch_actions(actions_module) do
+    with module when is_atom(module) and module != false <- actions_module(resource),
+         {:ok, actions} <- fetch_actions(module) do
       actions
     else
       _other -> %{}
+    end
+  end
+
+  @doc false
+  def actions_module(resource) when is_atom(resource) do
+    if Code.ensure_loaded?(resource) and function_exported?(resource, :__hawk_resource__, 1) do
+      resource.__hawk_resource__(:actions)
+    else
+      Hawk.Resource.available_actions_module(Module.concat(resource, Actions))
     end
   end
 
@@ -203,19 +210,21 @@ defmodule Hawk.Actions do
       change_fn = String.to_atom("#{handler}_change")
       run_fn = String.to_atom("#{handler}_run")
 
-      [quote do
-        @doc false
-        def unquote(change_fn)(model, params, authority) do
-          unquote(build)(model, params, authority)
-          |> Hawk.Multi.to_changesets()
-        end
+      [
+        quote do
+          @doc false
+          def unquote(change_fn)(model, params, authority) do
+            unquote(build)(model, params, authority)
+            |> Hawk.Multi.to_changesets()
+          end
 
-        @doc false
-        def unquote(run_fn)(model, params, authority) do
-          unquote(build)(model, params, authority)
-          |> Hawk.Multi.execute(unquote(resource).Reader.repo())
+          @doc false
+          def unquote(run_fn)(model, params, authority) do
+            unquote(build)(model, params, authority)
+            |> Hawk.Multi.execute(unquote(resource).Reader.repo())
+          end
         end
-      end]
+      ]
     else
       []
     end

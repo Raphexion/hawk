@@ -31,7 +31,6 @@ defmodule Hawk.JsonApi.Controller do
     model = resource.__hawk_resource__(:model)
     validate_json_api_enabled!(resource)
     public? = Keyword.get(opts, :public, false)
-    capabilities = resource.__hawk_resource__(:capabilities)
     reader = resource.__hawk_resource__(:reader)
 
     quote do
@@ -57,7 +56,7 @@ defmodule Hawk.JsonApi.Controller do
       end
 
       unquote(quote_writer_actions(resource, model, public?))
-      unquote(quote_custom_action(resource, model, public?, capabilities))
+      unquote(quote_custom_action(resource, model, public?))
 
       def relationship(conn, params) do
         JsonApiController.relationship(
@@ -131,9 +130,7 @@ defmodule Hawk.JsonApi.Controller do
     end
   end
 
-  defp quote_custom_action(_resource, _model, _public?, %{actions: false}), do: []
-
-  defp quote_custom_action(resource, model, public?, _capabilities) do
+  defp quote_custom_action(resource, model, public?) do
     quote do
       def action(conn, params) do
         JsonApiController.action(
@@ -459,16 +456,17 @@ defmodule Hawk.JsonApi.Controller do
   end
 
   defp respond_action_dry_run(conn, resource, action_name, existing, meta, authority) do
-    actions_module = Module.concat(resource, Actions)
+    actions_module = Hawk.Actions.actions_module(resource)
 
-    with {:ok, actions} <- fetch_actions(actions_module),
+    with module when is_atom(module) and module != false <- actions_module,
+         {:ok, actions} <- fetch_actions(module),
          {:ok, metadata} <- Map.fetch(actions, action_name) do
       change_fn = change_handler_fn(metadata)
 
       cond do
-        function_exported?(actions_module, change_fn, 3) ->
+        function_exported?(module, change_fn, 3) ->
           changesets =
-            apply(actions_module, change_fn, [
+            apply(module, change_fn, [
               existing,
               Hawk.Actions.atomize_params(meta, metadata),
               authority
@@ -501,15 +499,25 @@ defmodule Hawk.JsonApi.Controller do
   defp render_dry_run(conn, changesets) do
     errors = Enum.flat_map(changesets, &dry_run_errors/1)
 
-    if errors == [], do: json(conn, 200, %{data: nil, meta: %{"dry-run": true}}), else: json(conn, 422, %{errors: errors})
+    if errors == [],
+      do: json(conn, 200, %{data: nil, meta: %{"dry-run": true}}),
+      else: json(conn, 422, %{errors: errors})
   end
 
   defp dry_run_errors({step, changeset}) do
     changeset
     |> Ecto.Changeset.traverse_errors(&error_detail/1)
     |> Enum.flat_map(fn {field, messages} ->
-      Enum.map(messages, &%{status: "422", code: "invalid", title: "Validation error",
-        detail: &1, source: %{pointer: "/data/#{step}/#{field}"}})
+      Enum.map(
+        messages,
+        &%{
+          status: "422",
+          code: "invalid",
+          title: "Validation error",
+          detail: &1,
+          source: %{pointer: "/data/#{step}/#{field}"}
+        }
+      )
     end)
   end
 

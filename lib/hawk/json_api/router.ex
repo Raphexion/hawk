@@ -4,8 +4,9 @@ defmodule Hawk.JsonApi.Router do
 
   `import Hawk.JsonApi.Router` inside a Phoenix router and call
   `hawk_json_api/3` to emit ordinary router DSL calls (`get/3`, `post/3`,
-  `patch/3`, `delete/3`) from `Hawk.JsonApi.Routes`. Routes are capability-aware:
-  only actions the resource supports are emitted.
+  `patch/3`, `delete/3`) from `Hawk.JsonApi.Routes`. The custom-action route is
+  a stable dispatch route; the controller returns not found when no matching
+  action exists.
 
   ## Example
 

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **No more stale-bake of sibling metadata in generated consumers.**
+  `Hawk.LiveView` helpers now pass the resource facade and resolve
+  `__hawk_live_view__/0` at runtime; `Hawk.Resource.action/4` resolves
+  `Actions.__hawk_actions__/0` at runtime through `Hawk.Actions.dispatch/5`.
+  Facades no longer generate one public function per action, and JSON:API
+  controllers expose a stable `action/2` entrypoint that returns not found when
+  no matching action exists. See the "Compile-time contracts and runtime
+  lookup" section in the README.
+
 ### Added
 
 - **Two-phase Actions.** An action declaring `build: true` (or `build: :fn`)

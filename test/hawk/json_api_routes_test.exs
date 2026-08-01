@@ -23,13 +23,14 @@ defmodule Hawk.JsonApiRoutesTest do
            ]
   end
 
-  test "routes omit action endpoints when actions capability is absent" do
+  test "routes include the stable action dispatch endpoint" do
     assert Routes.routes(Videdal.CourseCatalog) == [
              route(:get, "/course-catalog", :index, :read, Videdal.CourseCatalog),
              route(:post, "/course-catalog", :create, :write, Videdal.CourseCatalog),
              route(:get, "/course-catalog/:id", :show, :read, Videdal.CourseCatalog),
              route(:patch, "/course-catalog/:id", :update, :write, Videdal.CourseCatalog),
              route(:delete, "/course-catalog/:id", :delete, :write, Videdal.CourseCatalog),
+             route(:post, "/course-catalog/:id/-actions/:action", :action, :action, Videdal.CourseCatalog),
              route(
                :get,
                "/course-catalog/:id/relationships/:relationship",
@@ -59,6 +60,13 @@ defmodule Hawk.JsonApiRoutesTest do
              route(:patch, "/api/v1/course-catalog/:id", :update, :write, Videdal.CourseCatalog),
              route(:delete, "/api/v1/course-catalog/:id", :delete, :write, Videdal.CourseCatalog),
              route(
+               :post,
+               "/api/v1/course-catalog/:id/-actions/:action",
+               :action,
+               :action,
+               Videdal.CourseCatalog
+             ),
+             route(
                :get,
                "/api/v1/course-catalog/:id/relationships/:relationship",
                :relationship,
@@ -79,7 +87,7 @@ defmodule Hawk.JsonApiRoutesTest do
     assert_controller_exports!(CourseRoutesController, Routes.routes(Videdal.Courses))
     assert_controller_exports!(CourseCatalogController, Routes.routes(Videdal.CourseCatalog))
 
-    refute function_exported?(CourseCatalogController, :action, 2)
+    assert function_exported?(CourseCatalogController, :action, 2)
   end
 
   defp assert_controller_exports!(controller, routes) do

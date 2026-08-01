@@ -55,14 +55,14 @@ defmodule MyApp.CourseSummaries do
 end
 ```
 
-The facade generates public reader/writer/action delegations and exposes resource
-introspection through `__hawk_resource__/1`. JSON:API rendering discovers
+The facade generates public reader/writer functions plus `action/4`, and exposes
+resource introspection through `__hawk_resource__/1`. JSON:API rendering discovers
 sibling adapter metadata from related models' resource facades, so each resource
-has a single source of JSON:API truth. JSON:API controllers generated from
-a facade only expose actions supported by the resource: read actions
-are always available, create/update/delete are always generated (the writer is a
-required sibling), and `/-actions/` requires an `Actions` module. Writes are
-gated by the policy, not by the controller shape. It also validates adapter contracts
+has a single source of JSON:API truth. JSON:API controllers generate a stable
+`action/2` entrypoint; at runtime it returns not found when no matching action
+module or action exists. Read actions are always available, create/update/delete
+are always generated (the writer is a required sibling), and writes are gated by
+the policy, not by the controller shape. It also validates adapter contracts
 at compile time; JSON:API adapter `source:` entries must point at real model
 fields or associations, writable fields must be declared, and LiveView fields /
 filters must reference real model fields and declared reader filters.
@@ -338,7 +338,8 @@ end
 ```
 
 Route action requests to the generated controller `action/2` function, for
-example:
+example. The resource facade dispatches through `<Resource>.action/4`; it does
+not generate one public function per action.
 
 ```elixir
 post "/courses/:id/-actions/:action", CourseController, :action
@@ -1117,3 +1118,29 @@ Applications should import Hawk's formatter settings so the DSL stays tidy:
   inputs: ["{mix,.formatter}.exs", "{config,lib,test}/**/*.{ex,exs}"]
 ]
 ```
+
+## Compile-time contracts and runtime lookup
+
+Hawk macros generate stable entrypoints, not snapshots of sibling metadata. The
+safe boundary is: bake module references and explicit local options; call
+functions to read sibling metadata when the generated code runs.
+
+That means:
+
+- `Hawk.LiveView` generated helpers pass the resource facade and explicit local
+  options. Runtime helpers read `resource.__hawk_resource__(:live_view)` and
+  `__hawk_live_view__/0` when assigning tables, fields, forms, and default
+  assign names.
+- `<Resource>.action/4` is the only facade action entrypoint. It resolves the
+  current `Actions` module metadata and dispatches by name at runtime; facades
+  do not generate one public function per action.
+- JSON:API controllers generate a stable `action/2` function and let runtime
+  dispatch decide whether an action exists.
+
+### Rule for Hawk contributors
+
+When a macro-generated function consumes sibling metadata, **bake how to ask,
+not the answer**. `Macro.escape/1` is fine for values owned by the macro call
+itself, such as literal options or a DSL block compiled into the same module. It
+is not fine for metadata owned by another sibling module, such as
+`__hawk_live_view__/0`, `__hawk_actions__/0`, or `__hawk_json_api__/0`.

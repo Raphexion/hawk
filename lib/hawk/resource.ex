@@ -8,7 +8,7 @@ defmodule Hawk.Resource do
   is the one-line declaration that resolves those siblings by convention,
   validates their contracts against each other at compile time, and generates
   the public facade a consumer calls: `one/1`, `all/1`, `create/2`, `update/3`,
-  `delete/2`, action delegations, and `__hawk_resource__/1` introspection.
+  `delete/2`, `action/4`, and `__hawk_resource__/1` introspection.
 
   This is the golden path. Everything else in Hawk exists to give this facade
   something to compose.
@@ -33,9 +33,9 @@ defmodule Hawk.Resource do
   raise with a message pointing at the right fix). Writes are gated by the
   policy, not by omitting the writer: a read-only resource keeps its writer
   sibling and declares `write(:never)` in the policy. JSON:API and LiveView are
-  optional adapters (`json_api: false` / `live_view: false`). Actions is
-  opt-in: it is only wired when an `Actions` sibling exists or is supplied
-  explicitly.
+  optional adapters (`json_api: false` / `live_view: false`). `action/4` is
+  always present and resolves the `Actions` sibling at runtime, returning
+  `:unknown_action` when no action module or action exists.
 
   ## Compile-time phases
 
@@ -51,8 +51,8 @@ defmodule Hawk.Resource do
        filters/sorts/preloads, policy scopes) agree with the model and each
        other. Present-but-malformed siblings always raise; that is real
        contract drift, not a write-order artifact.
-    3. **Generate** — emits `__hawk_resource__/1` and the reader/writer/action
-       delegations.
+    3. **Generate** — emits `__hawk_resource__/1`, reader/writer delegates,
+       form-helper delegates, and runtime action dispatch.
 
   ## Options
 
@@ -163,13 +163,17 @@ defmodule Hawk.Resource do
       identity: identity
     }
 
+    runtime_modules = %{
+      actions: runtime_module(caller, opts, :actions, Actions, env)
+    }
+
     Validation.validate!(modules, :compile)
 
     quote do
-      unquote(quote_introspection(modules))
+      unquote(quote_introspection(modules, runtime_modules))
       unquote(quote_reader_delegates(modules.reader))
       unquote(quote_writer_delegates(modules.writer))
-      unquote(quote_action_delegates(caller, modules.actions))
+      unquote(quote_action_dispatch(caller))
     end
   end
 
@@ -192,39 +196,61 @@ defmodule Hawk.Resource do
     end
   end
 
+  defp runtime_module(caller, opts, key, suffix, env) do
+    case Keyword.fetch(opts, key) do
+      {:ok, false} -> false
+      {:ok, module} -> Macro.expand(module, env)
+      :error -> Module.concat(caller, suffix)
+    end
+  end
+
   defp compiled?(module), do: match?({:module, ^module}, Code.ensure_compiled(module))
 
-  defp quote_introspection(modules) do
-    # Reader and writer are required siblings (always present), so they have
-    # no capability flag. The capabilities map reports only the optional
-    # adapters whose presence varies per resource.
-    capabilities = %{
-      json_api: modules.json_api != false,
-      live_view: modules.live_view != false,
-      actions: modules.actions != false
-    }
+  @doc false
+  def available_actions_module(false), do: false
 
-    entries = [
-      {:model, modules.model},
-      {:reader, modules.reader},
-      {:policy, modules.policy},
-      {:writer, modules.writer},
-      {:json_api, modules.json_api},
-      {:live_view, modules.live_view},
-      {:actions, modules.actions},
-      {:identity, modules.identity},
-      {:capabilities, Macro.escape(capabilities)}
-    ]
+  def available_actions_module(module) when is_atom(module) do
+    if Code.ensure_loaded?(module) and function_exported?(module, :__hawk_actions__, 0) do
+      module
+    else
+      false
+    end
+  end
 
-    clauses =
-      Enum.map(entries, fn {key, value} ->
-        quote do
-          def __hawk_resource__(unquote(key)), do: unquote(value)
-        end
-      end)
+  @doc false
+  def call_writer_change(writer, function, args) when is_atom(writer) and is_atom(function) and is_list(args) do
+    arity = length(args)
+
+    if Code.ensure_loaded?(writer) and function_exported?(writer, function, arity) do
+      apply(writer, function, args)
+    else
+      raise ArgumentError,
+            "Hawk resource writer module #{inspect(writer)} must define #{function}/#{arity} " <>
+              "to use generated form helpers"
+    end
+  end
+
+  defp quote_introspection(modules, runtime_modules) do
+    json_api? = modules.json_api != false
+    live_view? = modules.live_view != false
 
     quote do
-      (unquote_splicing(clauses))
+      def __hawk_resource__(:model), do: unquote(modules.model)
+      def __hawk_resource__(:reader), do: unquote(modules.reader)
+      def __hawk_resource__(:policy), do: unquote(modules.policy)
+      def __hawk_resource__(:writer), do: unquote(modules.writer)
+      def __hawk_resource__(:json_api), do: unquote(modules.json_api)
+      def __hawk_resource__(:live_view), do: unquote(modules.live_view)
+      def __hawk_resource__(:actions), do: Hawk.Resource.available_actions_module(unquote(runtime_modules.actions))
+      def __hawk_resource__(:identity), do: unquote(modules.identity)
+
+      def __hawk_resource__(:capabilities) do
+        %{
+          json_api: unquote(json_api?),
+          live_view: unquote(live_view?),
+          actions: __hawk_resource__(:actions) != false
+        }
+      end
     end
   end
 
@@ -247,45 +273,19 @@ defmodule Hawk.Resource do
   end
 
   defp quote_writer_form_delegates(writer) do
-    if function_exported?(writer, :change_create, 2) and
-         function_exported?(writer, :change_update, 3) do
-      quote do
-        def change_create(attrs, authority), do: unquote(writer).change_create(attrs, authority)
+    quote do
+      def change_create(attrs, authority),
+        do: Hawk.Resource.call_writer_change(unquote(writer), :change_create, [attrs, authority])
 
-        def change_update(model, attrs, authority),
-          do: unquote(writer).change_update(model, attrs, authority)
-      end
-    else
-      []
+      def change_update(model, attrs, authority),
+        do: Hawk.Resource.call_writer_change(unquote(writer), :change_update, [model, attrs, authority])
     end
   end
 
-  defp quote_action_delegates(_resource, false), do: []
-
-  defp quote_action_delegates(_resource, actions_module) do
-    actions = actions_module.__hawk_actions__()
-    direct_delegates = Enum.map(actions, &quote_action_delegate(actions_module, &1))
-
+  defp quote_action_dispatch(resource) do
     quote do
-      unquote_splicing(direct_delegates)
-
       def action(name, model, params, authority) when is_binary(name) do
-        with {:ok, metadata} <- Map.fetch(unquote(Macro.escape(actions)), name),
-             true <- function_exported?(unquote(actions_module), metadata.handler, 3) do
-          apply(unquote(actions_module), metadata.handler, [model, params, authority])
-        else
-          _other -> :unknown_action
-        end
-      end
-    end
-  end
-
-  defp quote_action_delegate(actions_module, {_name, metadata}) do
-    handler = metadata.handler
-
-    quote do
-      def unquote(handler)(model, params, authority) do
-        unquote(actions_module).unquote(handler)(model, params, authority)
+        Hawk.Actions.dispatch(unquote(resource), name, model, params, authority)
       end
     end
   end

@@ -72,6 +72,8 @@ defmodule Hawk.JsonApiRouterTest do
              {:get, "/api/v1/course-catalog/:id", Videdal.Controllers.CourseCatalogController, :show},
              {:patch, "/api/v1/course-catalog/:id", Videdal.Controllers.CourseCatalogController, :update},
              {:delete, "/api/v1/course-catalog/:id", Videdal.Controllers.CourseCatalogController, :delete},
+             {:post, "/api/v1/course-catalog/:id/-actions/:action", Videdal.Controllers.CourseCatalogController,
+              :action},
              {:get, "/api/v1/course-catalog/:id/relationships/:relationship",
               Videdal.Controllers.CourseCatalogController, :relationship},
              {:get, "/api/v1/course-catalog/:id/:relationship", Videdal.Controllers.CourseCatalogController, :related}

@@ -106,7 +106,7 @@ defmodule Videdal.ResourceFacadeTest do
     assert LiveView.__hawk_live_view__().as == :course
   end
 
-  test "course facade delegates reads, CRUD mutations, and actions through sibling modules" do
+  test "course facade delegates reads, CRUD mutations, and action dispatch through sibling modules" do
     school = insert(:school)
     teacher = insert(:teacher, school_id: school.id)
     school_id = school.id
@@ -130,7 +130,7 @@ defmodule Videdal.ResourceFacadeTest do
     assert updated.title == "Advanced Math"
 
     assert {:ok, opened} =
-             Courses.open_registration(course, %{seat_count: 2, waitlist_count: 1}, authority)
+             Courses.action("open-registration", course, %{seat_count: 2, waitlist_count: 1}, authority)
 
     assert opened.registration_state == "open"
     assert opened.seat_count == 2
@@ -170,7 +170,7 @@ defmodule Videdal.ResourceFacadeTest do
       enrolled_on: ~D[2026-01-03]
     )
 
-    assert {:ok, closed} = Courses.close_registration(open_course, %{}, authority)
+    assert {:ok, closed} = Courses.action("close-registration", open_course, %{}, authority)
     assert closed.registration_state == "closed"
 
     assert {:ok, deleted} = Courses.delete(course, authority)

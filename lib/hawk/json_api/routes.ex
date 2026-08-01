@@ -1,9 +1,9 @@
 defmodule Hawk.JsonApi.Routes do
   @moduledoc """
-  Resource-capability-aware JSON:API route specs.
+  JSON:API route specs for Hawk resources.
 
   This is a framework-light route description layer. Phoenix router helpers can
-  consume these specs later, while tests can already assert route/capability
+  consume these specs later, while tests can already assert route/controller
   consistency without bringing Phoenix into Hawk's dependencies.
   """
 
@@ -11,10 +11,10 @@ defmodule Hawk.JsonApi.Routes do
   Returns the JSON:API route specs for a resource or list of resources.
 
   Each route is a map of `{method, path, action, capability, resource}`.
-  Routes are capability-aware: `create`/`update`/`delete` are always present
-  (the writer is a required sibling for every Hawk resource), and `/-actions/`
-  only appear when actions are enabled. Used by `Hawk.OpenApi` and by tests
-  asserting route/capability consistency.
+  `create`/`update`/`delete` are always present because the writer is a required
+  sibling for every Hawk resource. `/-actions/:action` is also a stable dispatch
+  route; the controller returns not found when no matching action exists. Used by
+  `Hawk.OpenApi` and by tests asserting route/controller consistency.
 
   ## Options
 
@@ -26,7 +26,7 @@ defmodule Hawk.JsonApi.Routes do
     Enum.flat_map(resources, &routes(&1, opts))
   end
 
-  def routes(%{json_api: _json_api, capabilities: _capabilities} = resource, opts) do
+  def routes(%{json_api: _json_api} = resource, opts) do
     resource_routes(resource, opts)
   end
 
@@ -53,8 +53,7 @@ defmodule Hawk.JsonApi.Routes do
       json_api ->
         %{
           resource: resource,
-          json_api: Hawk.JsonApi.Schema.metadata(json_api),
-          capabilities: resource.__hawk_resource__(:capabilities)
+          json_api: Hawk.JsonApi.Schema.metadata(json_api)
         }
     end
   end
@@ -69,17 +68,12 @@ defmodule Hawk.JsonApi.Routes do
       route(resource, :get, member_path, :show, :read),
       route(resource, :patch, member_path, :update, :write),
       route(resource, :delete, member_path, :delete, :write),
-      action_route(resource, member_path),
+      route(resource, :post, member_path <> "/-actions/:action", :action, :action),
       relationship_route(resource, member_path),
       related_route(resource, member_path)
     ]
     |> Enum.reject(&is_nil/1)
   end
-
-  defp action_route(%{capabilities: %{actions: true}} = resource, member_path),
-    do: route(resource, :post, member_path <> "/-actions/:action", :action, :action)
-
-  defp action_route(_resource, _member_path), do: nil
 
   defp relationship_route(resource, member_path) do
     if map_size(resource.json_api.relationships) > 0 do

@@ -28,9 +28,8 @@ defmodule Hawk.LiveView do
     env = __CALLER__
     resource = Keyword.fetch!(opts, :resource) |> Macro.expand(env)
     validate_live_view_enabled!(resource)
-    as = Keyword.get(opts, :as) || infer_as!(resource)
-    plural_as = Keyword.get(opts, :plural_as) || infer_plural_as(resource, as)
-    live_view = live_view_metadata(resource)
+    as = Keyword.get(opts, :as)
+    plural_as = Keyword.get(opts, :plural_as)
     events? = Keyword.get(opts, :events, true)
     label_resolver = opts |> Keyword.get(:label_resolver) |> expand_optional_module(env)
 
@@ -42,8 +41,7 @@ defmodule Hawk.LiveView do
           unquote(as),
           unquote(plural_as),
           authority,
-          opts,
-          unquote(Macro.escape(live_view))
+          opts
         )
       end
 
@@ -54,8 +52,7 @@ defmodule Hawk.LiveView do
           unquote(as),
           authority,
           id,
-          opts,
-          unquote(Macro.escape(live_view))
+          opts
         )
       end
 
@@ -68,56 +65,49 @@ defmodule Hawk.LiveView do
       end
 
       def assign_read_form(socket, model, opts \\ []) do
-        LiveView.assign_read_form(socket, unquote(as), model, opts, unquote(Macro.escape(live_view)))
+        LiveView.assign_read_form(socket, unquote(resource), unquote(as), model, opts)
       end
 
-      unquote(quote_form_helpers(resource, as, events?, live_view))
-      unquote(quote_delete_handler(resource, as, plural_as, live_view, events?))
+      unquote(quote_form_helpers(resource, as, events?))
+      unquote(quote_delete_handler(resource, as, plural_as, events?))
     end
   end
 
   defp expand_optional_module(nil, _env), do: nil
   defp expand_optional_module(module, env), do: Macro.expand(module, env)
 
-  defp quote_form_helpers(resource, as, events?, live_view) do
-    if function_exported?(resource, :change_create, 2) and
-         function_exported?(resource, :change_update, 3) do
-      quote do
-        def assign_new_form(socket, authority, attrs \\ %{}) do
-          LiveView.assign_new_form(
-            socket,
-            unquote(resource),
-            unquote(as),
-            authority,
-            attrs,
-            unquote(Macro.escape(live_view))
-          )
-        end
-
-        def assign_edit_form(socket, model, authority, attrs \\ %{}) do
-          LiveView.assign_edit_form(
-            socket,
-            unquote(resource),
-            unquote(as),
-            model,
-            authority,
-            attrs,
-            unquote(Macro.escape(live_view))
-          )
-        end
-
-        def hawk_validate(params, socket) do
-          LiveView.handle_validate(socket, unquote(resource), unquote(as), params)
-        end
-
-        def hawk_save(params, socket, opts \\ []) do
-          LiveView.handle_save(socket, unquote(resource), unquote(as), params, opts)
-        end
-
-        unquote(quote_form_event_handlers(events?))
+  defp quote_form_helpers(resource, as, events?) do
+    quote do
+      def assign_new_form(socket, authority, attrs \\ %{}) do
+        LiveView.assign_new_form(
+          socket,
+          unquote(resource),
+          unquote(as),
+          authority,
+          attrs
+        )
       end
-    else
-      []
+
+      def assign_edit_form(socket, model, authority, attrs \\ %{}) do
+        LiveView.assign_edit_form(
+          socket,
+          unquote(resource),
+          unquote(as),
+          model,
+          authority,
+          attrs
+        )
+      end
+
+      def hawk_validate(params, socket) do
+        LiveView.handle_validate(socket, unquote(resource), unquote(as), params)
+      end
+
+      def hawk_save(params, socket, opts \\ []) do
+        LiveView.handle_save(socket, unquote(resource), unquote(as), params, opts)
+      end
+
+      unquote(quote_form_event_handlers(events?))
     end
   end
 
@@ -135,9 +125,9 @@ defmodule Hawk.LiveView do
     end
   end
 
-  defp quote_delete_handler(_resource, _as, _plural_as, _live_view, false), do: []
+  defp quote_delete_handler(_resource, _as, _plural_as, false), do: []
 
-  defp quote_delete_handler(resource, as, plural_as, live_view, true) do
+  defp quote_delete_handler(resource, as, plural_as, true) do
     quote do
       def handle_event("hawk:delete", params, socket) do
         LiveView.handle_delete(
@@ -145,8 +135,7 @@ defmodule Hawk.LiveView do
           unquote(resource),
           unquote(as),
           unquote(plural_as),
-          params,
-          unquote(Macro.escape(live_view))
+          params
         )
       end
     end
@@ -160,37 +149,30 @@ defmodule Hawk.LiveView do
     end
   end
 
-  defp infer_as!(resource) do
-    cond do
-      Code.ensure_compiled(resource) != {:module, resource} ->
-        raise ArgumentError, "Hawk LiveView resource #{inspect(resource)} is not available"
-
-      function_exported?(resource, :__hawk_resource__, 1) ->
-        resource
-        |> live_view_metadata()
-        |> Map.get(:as, model_as(resource.__hawk_resource__(:model)))
-
-      true ->
-        raise ArgumentError,
-              "Hawk LiveView resource #{inspect(resource)} must be a Hawk.Resource facade"
-    end
-  end
-
-  defp infer_plural_as(resource, as) do
-    resource
-    |> live_view_metadata()
-    |> Map.get(:plural_as, pluralize(as))
-  end
-
   defp live_view_metadata(resource) do
     if function_exported?(resource, :__hawk_resource__, 1) do
       case resource.__hawk_resource__(:live_view) do
         false -> %{}
-        live_view -> live_view.__hawk_live_view__()
+        live_view -> adapter_metadata(live_view)
       end
     else
       %{}
     end
+  end
+
+  defp adapter_metadata(live_view) when is_atom(live_view) do
+    if Code.ensure_loaded?(live_view) and function_exported?(live_view, :__hawk_live_view__, 0) do
+      live_view.__hawk_live_view__()
+    else
+      %{}
+    end
+  end
+
+  defp resource_assigns(resource, live_view, as, plural_as) do
+    as = as || Map.get(live_view, :as) || model_as(resource.__hawk_resource__(:model))
+    plural_as = plural_as || Map.get(live_view, :plural_as) || pluralize(as)
+
+    {as, plural_as}
   end
 
   defp model_as(model) do
@@ -203,11 +185,8 @@ defmodule Hawk.LiveView do
 
   @doc false
   def assign_index(socket, resource, as, plural_as, authority, opts \\ []) do
-    assign_index(socket, resource, as, plural_as, authority, opts, %{})
-  end
-
-  @doc false
-  def assign_index(socket, resource, as, plural_as, authority, opts, live_view) do
+    live_view = live_view_metadata(resource)
+    {as, plural_as} = resource_assigns(resource, live_view, as, plural_as)
     state = IndexState.normalize(Keyword.get(opts, :params, %{}), live_view)
     model = resource.__hawk_resource__(:model)
     preloads = derive_preloads(live_view_table(live_view), model)
@@ -236,11 +215,8 @@ defmodule Hawk.LiveView do
 
   @doc false
   def assign_show(socket, resource, as, authority, id, opts \\ []) do
-    assign_show(socket, resource, as, authority, id, opts, %{})
-  end
-
-  @doc false
-  def assign_show(socket, resource, as, authority, id, opts, live_view) do
+    live_view = live_view_metadata(resource)
+    {as, _plural_as} = resource_assigns(resource, live_view, as, nil)
     identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
     lookup = Keyword.get(opts, :lookup, identity)
     model = resource.__hawk_resource__(:model)
@@ -269,7 +245,9 @@ defmodule Hawk.LiveView do
   end
 
   @doc false
-  def assign_read_form(socket, as, model, opts \\ [], live_view \\ %{}) do
+  def assign_read_form(socket, resource, as, model, opts \\ []) do
+    live_view = live_view_metadata(resource)
+    {as, _plural_as} = resource_assigns(resource, live_view, as, nil)
     fields = live_view |> form_fields(:update_form, Keyword.get(opts, :hidden, [])) |> fallback_read_fields(live_view)
 
     socket
@@ -279,12 +257,9 @@ defmodule Hawk.LiveView do
   end
 
   @doc false
-  def assign_new_form(socket, resource, as, authority, attrs \\ %{}) do
-    assign_new_form(socket, resource, as, authority, attrs, %{})
-  end
-
-  @doc false
-  def assign_new_form(socket, resource, as, authority, opts, live_view) do
+  def assign_new_form(socket, resource, as, authority, opts \\ %{}) do
+    live_view = live_view_metadata(resource)
+    {as, _plural_as} = resource_assigns(resource, live_view, as, nil)
     opts = normalize_form_options(opts)
     attrs = merge_forced_attrs(opts.attrs, opts.forced_attrs)
     changeset = resource.change_create(attrs, authority)
@@ -296,12 +271,9 @@ defmodule Hawk.LiveView do
   end
 
   @doc false
-  def assign_edit_form(socket, resource, as, model, authority, attrs \\ %{}) do
-    assign_edit_form(socket, resource, as, model, authority, attrs, %{})
-  end
-
-  @doc false
-  def assign_edit_form(socket, resource, as, model, authority, opts, live_view) do
+  def assign_edit_form(socket, resource, as, model, authority, opts \\ %{}) do
+    live_view = live_view_metadata(resource)
+    {as, _plural_as} = resource_assigns(resource, live_view, as, nil)
     opts = normalize_form_options(opts)
     attrs = merge_forced_attrs(opts.attrs, opts.forced_attrs)
     changeset = resource.change_update(model, attrs, authority)
@@ -319,6 +291,7 @@ defmodule Hawk.LiveView do
 
   @doc false
   def handle_validate(socket, resource, as, params) do
+    {as, _plural_as} = resource_assigns(resource, live_view_metadata(resource), as, nil)
     form_params = Map.get(params, to_string(as), %{})
     state = socket.assigns.hawk_form_states[as]
     form_params = merge_forced_attrs(form_params, Map.get(state, :forced_attrs, %{}))
@@ -334,6 +307,7 @@ defmodule Hawk.LiveView do
 
   @doc false
   def handle_save(socket, resource, as, params, opts \\ []) do
+    {as, _plural_as} = resource_assigns(resource, live_view_metadata(resource), as, nil)
     form_params = Map.get(params, to_string(as), %{})
     state = socket.assigns.hawk_form_states[as]
     form_params = merge_forced_attrs(form_params, Map.get(state, :forced_attrs, %{}))
@@ -394,26 +368,16 @@ defmodule Hawk.LiveView do
   end
 
   @doc false
-  def handle_delete(socket, resource, as, plural_as, params) do
-    handle_delete(socket, resource, as, plural_as, params, %{})
-  end
-
-  @doc false
-  def handle_delete(
-        socket,
-        resource,
-        as,
-        plural_as,
-        %{"id" => id, "authority" => authority},
-        live_view
-      ) do
+  def handle_delete(socket, resource, as, plural_as, %{"id" => id, "authority" => authority}) do
+    live_view = live_view_metadata(resource)
+    {as, plural_as} = resource_assigns(resource, live_view, as, plural_as)
     identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
 
     case resource.one(authority: authority, filter: %{identity => normalize_id(id)}) do
       {:ok, model} ->
         case resource.delete(model, authority) do
           {:ok, _model} ->
-            {:noreply, assign_index(socket, resource, as, plural_as, authority, [], live_view)}
+            {:noreply, assign_index(socket, resource, as, plural_as, authority, [])}
 
           result ->
             {:noreply, assign(socket, :hawk_error, live_error(result))}
@@ -440,8 +404,9 @@ defmodule Hawk.LiveView do
   """
   def hawk_validate_action(socket, resource, action_name, model, params, opts \\ []) do
     authority = action_authority(socket, opts)
-    actions_module = Module.concat(resource, Actions)
-    metadata = action_metadata!(actions_module, action_name)
+    actions_module = Hawk.Actions.actions_module(resource)
+    metadata = action_metadata!(resource, action_name)
+
     change_fn =
       case metadata do
         %{change_handler: handler} -> String.to_atom("#{handler}_change")
@@ -498,8 +463,7 @@ defmodule Hawk.LiveView do
         {:noreply, assign(socket, :hawk_error, live_error(result))}
 
       {:error, name, reason, _prior} ->
-        {:noreply,
-         assign(socket, :hawk_error, %{base: ["action step #{inspect(name)} failed: #{inspect(reason)}"]})}
+        {:noreply, assign(socket, :hawk_error, %{base: ["action step #{inspect(name)} failed: #{inspect(reason)}"]})}
 
       other ->
         {:noreply, assign(socket, :hawk_error, %{base: ["action failed: #{inspect(other)}"]})}
@@ -510,15 +474,13 @@ defmodule Hawk.LiveView do
     Keyword.get(opts, :authority) || socket.assigns[:hawk_authority] || Hawk.Authority.public()
   end
 
-  defp action_metadata!(actions_module, action_name) do
-    actions = actions_module.__hawk_actions__()
-
-    case Map.fetch(actions, action_name) do
+  defp action_metadata!(resource, action_name) do
+    case Map.fetch(Hawk.Actions.actions(resource), action_name) do
       {:ok, metadata} ->
         metadata
 
       :error ->
-        raise ArgumentError, "unknown action #{inspect(action_name)} for #{inspect(actions_module)}"
+        raise ArgumentError, "unknown action #{inspect(action_name)} for #{inspect(resource)}"
     end
   end
 
