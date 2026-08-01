@@ -11,7 +11,7 @@ defmodule Hawk.JsonApiRoutesTest do
              route(:get, "/courses/:id", :show, :read, Videdal.Courses),
              route(:patch, "/courses/:id", :update, :write, Videdal.Courses),
              route(:delete, "/courses/:id", :delete, :write, Videdal.Courses),
-             route(:post, "/courses/:id/-actions/:action", :action, :action, Videdal.Courses),
+             route(:post, "/courses/:id/-actions/:action", :action, :action, Videdal.Courses, :hawk_action),
              route(
                :get,
                "/courses/:id/relationships/:relationship",
@@ -30,7 +30,14 @@ defmodule Hawk.JsonApiRoutesTest do
              route(:get, "/course-catalog/:id", :show, :read, Videdal.CourseCatalog),
              route(:patch, "/course-catalog/:id", :update, :write, Videdal.CourseCatalog),
              route(:delete, "/course-catalog/:id", :delete, :write, Videdal.CourseCatalog),
-             route(:post, "/course-catalog/:id/-actions/:action", :action, :action, Videdal.CourseCatalog),
+             route(
+               :post,
+               "/course-catalog/:id/-actions/:action",
+               :action,
+               :action,
+               Videdal.CourseCatalog,
+               :hawk_action
+             ),
              route(
                :get,
                "/course-catalog/:id/relationships/:relationship",
@@ -64,7 +71,8 @@ defmodule Hawk.JsonApiRoutesTest do
                "/api/v1/course-catalog/:id/-actions/:action",
                :action,
                :action,
-               Videdal.CourseCatalog
+               Videdal.CourseCatalog,
+               :hawk_action
              ),
              route(
                :get,
@@ -87,7 +95,7 @@ defmodule Hawk.JsonApiRoutesTest do
     assert_controller_exports!(CourseRoutesController, Routes.routes(Videdal.Courses))
     assert_controller_exports!(CourseCatalogController, Routes.routes(Videdal.CourseCatalog))
 
-    assert function_exported?(CourseCatalogController, :action, 2)
+    assert function_exported?(CourseCatalogController, :hawk_action, 2)
   end
 
   defp assert_controller_exports!(controller, routes) do
@@ -99,12 +107,12 @@ defmodule Hawk.JsonApiRoutesTest do
     end)
   end
 
-  defp route(method, path, action, capability, resource) do
+  defp route(method, path, action, capability, resource, controller_action \\ nil) do
     %{
       method: method,
       path: path,
       action: action,
-      controller_action: action,
+      controller_action: controller_action || action,
       capability: capability,
       resource: resource
     }

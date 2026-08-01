@@ -58,7 +58,7 @@ defmodule Hawk.JsonApiRouterTest do
              {:get, "/courses/:id", Videdal.Controllers.CourseRoutesController, :show},
              {:patch, "/courses/:id", Videdal.Controllers.CourseRoutesController, :update},
              {:delete, "/courses/:id", Videdal.Controllers.CourseRoutesController, :delete},
-             {:post, "/courses/:id/-actions/:action", Videdal.Controllers.CourseRoutesController, :action},
+             {:post, "/courses/:id/-actions/:action", Videdal.Controllers.CourseRoutesController, :hawk_action},
              {:get, "/courses/:id/relationships/:relationship", Videdal.Controllers.CourseRoutesController,
               :relationship},
              {:get, "/courses/:id/:relationship", Videdal.Controllers.CourseRoutesController, :related}
@@ -73,7 +73,7 @@ defmodule Hawk.JsonApiRouterTest do
              {:patch, "/api/v1/course-catalog/:id", Videdal.Controllers.CourseCatalogController, :update},
              {:delete, "/api/v1/course-catalog/:id", Videdal.Controllers.CourseCatalogController, :delete},
              {:post, "/api/v1/course-catalog/:id/-actions/:action", Videdal.Controllers.CourseCatalogController,
-              :action},
+              :hawk_action},
              {:get, "/api/v1/course-catalog/:id/relationships/:relationship",
               Videdal.Controllers.CourseCatalogController, :relationship},
              {:get, "/api/v1/course-catalog/:id/:relationship", Videdal.Controllers.CourseCatalogController, :related}

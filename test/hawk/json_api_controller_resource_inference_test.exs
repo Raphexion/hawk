@@ -80,7 +80,7 @@ defmodule Hawk.JsonApiControllerResourceInferenceTest do
   end
 
   test "controller exposes a stable custom action endpoint" do
-    assert function_exported?(Controller, :action, 2)
+    assert function_exported?(Controller, :hawk_action, 2)
   end
 
   test "controller refuses resources with json_api disabled" do

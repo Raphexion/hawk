@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `__hawk_live_view__/0` at runtime; `Hawk.Resource.action/4` resolves
   `Actions.__hawk_actions__/0` at runtime through `Hawk.Actions.dispatch/5`.
   Facades no longer generate one public function per action, and JSON:API
-  controllers expose a stable `action/2` entrypoint that returns not found when
+  controllers expose a stable `hawk_action/2` entrypoint that returns not found when
   no matching action exists. See the "Compile-time contracts and runtime
   lookup" section in the README.
 

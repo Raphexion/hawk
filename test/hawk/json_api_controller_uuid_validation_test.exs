@@ -40,7 +40,7 @@ defmodule Hawk.JsonApiControllerUuidValidationTest do
 
   test "custom actions reject invalid UUID path ids before querying" do
     conn =
-      Controller.action(conn(@system), %{
+      Controller.hawk_action(conn(@system), %{
         "id" => @invalid_id,
         "action" => "open-registration",
         "meta" => %{}

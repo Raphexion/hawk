@@ -22,7 +22,6 @@ defmodule Hawk.LiveViewPathSourceContractTest do
   end
   """)
 
-
   test "a path source reaching an association the reader does not preload fails the contract" do
     assert_raise ArgumentError,
                  ~r/reaches association :author, which must be declared as a reader preload/,

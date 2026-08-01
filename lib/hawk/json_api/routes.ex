@@ -68,7 +68,7 @@ defmodule Hawk.JsonApi.Routes do
       route(resource, :get, member_path, :show, :read),
       route(resource, :patch, member_path, :update, :write),
       route(resource, :delete, member_path, :delete, :write),
-      route(resource, :post, member_path <> "/-actions/:action", :action, :action),
+      route(resource, :post, member_path <> "/-actions/:action", :action, :action, :hawk_action),
       relationship_route(resource, member_path),
       related_route(resource, member_path)
     ]
@@ -87,12 +87,12 @@ defmodule Hawk.JsonApi.Routes do
     end
   end
 
-  defp route(resource, method, path, action, capability) do
+  defp route(resource, method, path, action, capability, controller_action \\ nil) do
     %{
       method: method,
       path: path,
       action: action,
-      controller_action: action,
+      controller_action: controller_action || action,
       capability: capability,
       resource: resource.resource
     }

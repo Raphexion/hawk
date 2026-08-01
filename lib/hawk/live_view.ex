@@ -150,7 +150,7 @@ defmodule Hawk.LiveView do
   end
 
   defp live_view_metadata(resource) do
-    if function_exported?(resource, :__hawk_resource__, 1) do
+    if Code.ensure_loaded?(resource) and function_exported?(resource, :__hawk_resource__, 1) do
       case resource.__hawk_resource__(:live_view) do
         false -> %{}
         live_view -> adapter_metadata(live_view)

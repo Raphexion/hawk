@@ -13,8 +13,8 @@ defmodule Hawk.JsonApi.Controller do
   Generates a Phoenix JSON:API controller for a Hawk resource.
 
   Emits `index/2`, `show/2`, `create/2`, `update/2`, `delete/2`,
-  `relationship/2`, `related/2`, plus a custom action handler for each declared
-  `Hawk.Actions` action. The writer is a required sibling for every Hawk
+  `relationship/2`, `related/2`, plus `hawk_action/2` for custom action
+  dispatch. The writer is a required sibling for every Hawk
   resource, so the create/update/delete actions are always generated; writes
   are gated by the policy, not by the controller shape.
 
@@ -132,7 +132,7 @@ defmodule Hawk.JsonApi.Controller do
 
   defp quote_custom_action(resource, model, public?) do
     quote do
-      def action(conn, params) do
+      def hawk_action(conn, params) do
         JsonApiController.action(
           conn,
           unquote(resource),

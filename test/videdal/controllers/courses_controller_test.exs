@@ -162,7 +162,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
       )
 
     conn =
-      CoursesController.action(conn(school_admin(school)), %{
+      CoursesController.hawk_action(conn(school_admin(school)), %{
         "id" => course.id,
         "action" => "open-registration",
         "meta" => "not-a-map"
@@ -198,7 +198,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
       )
 
     conn =
-      CoursesController.action(conn(school_admin(school)), %{
+      CoursesController.hawk_action(conn(school_admin(school)), %{
         "id" => course.id,
         "action" => "open-registration",
         "meta" => %{"seat_count" => 2, "waitlist_count" => 1}
@@ -234,7 +234,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
       )
 
     conn =
-      CoursesController.action(conn(school_admin(school)), %{
+      CoursesController.hawk_action(conn(school_admin(school)), %{
         "id" => course.id,
         "action" => "open-registration"
       })
@@ -260,7 +260,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
     course = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Math")
 
     conn =
-      CoursesController.action(conn(school_admin(school)), %{
+      CoursesController.hawk_action(conn(school_admin(school)), %{
         "id" => course.id,
         "action" => "launch-rocket",
         "meta" => %{}
@@ -295,7 +295,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
       )
 
     conn =
-      CoursesController.action(conn(school_admin(school)), %{
+      CoursesController.hawk_action(conn(school_admin(school)), %{
         "id" => course.id,
         "action" => "close-registration",
         "meta" => %{}
@@ -317,7 +317,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
 
   test "missing course on action routes returns the resource not_found error" do
     conn =
-      CoursesController.action(conn(Authority.system()), %{
+      CoursesController.hawk_action(conn(Authority.system()), %{
         "id" => Videdal.course_id(),
         "action" => "open-registration",
         "meta" => %{"seat_count" => 2, "waitlist_count" => 1}
@@ -385,7 +385,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
     )
 
     conn =
-      CoursesController.action(conn(school_admin(school)), %{
+      CoursesController.hawk_action(conn(school_admin(school)), %{
         "id" => course.id,
         "action" => "close-registration",
         "meta" => %{}
@@ -452,7 +452,7 @@ defmodule Videdal.Controllers.CoursesControllerDryRunTest do
     course = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Math")
 
     conn =
-      CoursesController.action(conn(@authority), %{
+      CoursesController.hawk_action(conn(@authority), %{
         "id" => course.id,
         "action" => "submit-grade",
         "dry-run" => true,
@@ -473,7 +473,7 @@ defmodule Videdal.Controllers.CoursesControllerDryRunTest do
     course = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Math")
 
     conn =
-      CoursesController.action(conn(@authority), %{
+      CoursesController.hawk_action(conn(@authority), %{
         "id" => course.id,
         "action" => "submit-grade",
         "dry-run" => true,
@@ -491,7 +491,7 @@ defmodule Videdal.Controllers.CoursesControllerDryRunTest do
     course = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Math")
 
     conn =
-      CoursesController.action(conn(@authority), %{
+      CoursesController.hawk_action(conn(@authority), %{
         "id" => course.id,
         "action" => "submit-grade",
         "meta" => %{"score" => 7, "student_id" => student.id}
@@ -514,7 +514,7 @@ defmodule Videdal.Controllers.CoursesControllerDryRunTest do
       )
 
     conn =
-      CoursesController.action(conn(@authority), %{
+      CoursesController.hawk_action(conn(@authority), %{
         "id" => course.id,
         "action" => "open-registration",
         "dry-run" => true,

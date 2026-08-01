@@ -230,27 +230,58 @@ defmodule Hawk.Resource do
     end
   end
 
+  @doc false
+  def capabilities(static_capabilities, actions_module) when is_map(static_capabilities) do
+    Map.put(static_capabilities, :actions, actions_module != false)
+  end
+
   defp quote_introspection(modules, runtime_modules) do
-    json_api? = modules.json_api != false
-    live_view? = modules.live_view != false
+    clauses =
+      static_introspection_clauses(modules) ++
+        [
+          quote_actions_introspection(runtime_modules.actions),
+          quote_capabilities_introspection(modules)
+        ]
 
     quote do
-      def __hawk_resource__(:model), do: unquote(modules.model)
-      def __hawk_resource__(:reader), do: unquote(modules.reader)
-      def __hawk_resource__(:policy), do: unquote(modules.policy)
-      def __hawk_resource__(:writer), do: unquote(modules.writer)
-      def __hawk_resource__(:json_api), do: unquote(modules.json_api)
-      def __hawk_resource__(:live_view), do: unquote(modules.live_view)
-      def __hawk_resource__(:actions), do: Hawk.Resource.available_actions_module(unquote(runtime_modules.actions))
-      def __hawk_resource__(:identity), do: unquote(modules.identity)
+      (unquote_splicing(clauses))
+    end
+  end
 
-      def __hawk_resource__(:capabilities) do
-        %{
-          json_api: unquote(json_api?),
-          live_view: unquote(live_view?),
-          actions: __hawk_resource__(:actions) != false
-        }
-      end
+  defp static_introspection_clauses(modules) do
+    [
+      model: modules.model,
+      reader: modules.reader,
+      policy: modules.policy,
+      writer: modules.writer,
+      json_api: modules.json_api,
+      live_view: modules.live_view,
+      identity: modules.identity
+    ]
+    |> Enum.map(&quote_introspection_clause/1)
+  end
+
+  defp quote_introspection_clause({key, value}) do
+    quote do
+      def __hawk_resource__(unquote(key)), do: unquote(value)
+    end
+  end
+
+  defp quote_actions_introspection(actions_module) do
+    quote do
+      def __hawk_resource__(:actions), do: Hawk.Resource.available_actions_module(unquote(actions_module))
+    end
+  end
+
+  defp quote_capabilities_introspection(modules) do
+    static_capabilities = %{
+      json_api: modules.json_api != false,
+      live_view: modules.live_view != false
+    }
+
+    quote do
+      def __hawk_resource__(:capabilities),
+        do: Hawk.Resource.capabilities(unquote(Macro.escape(static_capabilities)), __hawk_resource__(:actions))
     end
   end
 

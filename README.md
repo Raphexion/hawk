@@ -59,8 +59,8 @@ The facade generates public reader/writer functions plus `action/4`, and exposes
 resource introspection through `__hawk_resource__/1`. JSON:API rendering discovers
 sibling adapter metadata from related models' resource facades, so each resource
 has a single source of JSON:API truth. JSON:API controllers generate a stable
-`action/2` entrypoint; at runtime it returns not found when no matching action
-module or action exists. Read actions are always available, create/update/delete
+`hawk_action/2` entrypoint; at runtime it returns not found when no matching
+action module or action exists. Read actions are always available, create/update/delete
 are always generated (the writer is a required sibling), and writes are gated by
 the policy, not by the controller shape. It also validates adapter contracts
 at compile time; JSON:API adapter `source:` entries must point at real model
@@ -337,12 +337,12 @@ defmodule MyApp.Courses.Actions do
 end
 ```
 
-Route action requests to the generated controller `action/2` function, for
+Route action requests to the generated controller `hawk_action/2` function, for
 example. The resource facade dispatches through `<Resource>.action/4`; it does
 not generate one public function per action.
 
 ```elixir
-post "/courses/:id/-actions/:action", CourseController, :action
+post "/courses/:id/-actions/:action", CourseController, :hawk_action
 ```
 
 Request shape:
@@ -497,7 +497,7 @@ Generated actions follow resource capabilities:
 - `delete/2` (the writer is a required sibling; writes are gated by the policy)
 - `relationship/2` for `GET .../:id/relationships/:relationship`
 - `related/2` for `GET .../:id/:relationship`
-- `action/2` for `POST .../:id/-actions/:action` when `actions` is enabled
+- `hawk_action/2` for `POST .../:id/-actions/:action`
 
 `Hawk.JsonApi.Routes.routes/2` returns the same capability-aware route specs for
 framework/router integration:
@@ -1134,8 +1134,8 @@ That means:
 - `<Resource>.action/4` is the only facade action entrypoint. It resolves the
   current `Actions` module metadata and dispatches by name at runtime; facades
   do not generate one public function per action.
-- JSON:API controllers generate a stable `action/2` function and let runtime
-  dispatch decide whether an action exists.
+- JSON:API controllers generate a stable `hawk_action/2` function and let
+  runtime dispatch decide whether an action exists.
 
 ### Rule for Hawk contributors
 
