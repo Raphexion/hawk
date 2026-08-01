@@ -94,6 +94,18 @@ defmodule Hawk.LiveViewTest do
            ]
   end
 
+  test "assign_index raises a helpful error when policy-aware preloads filter a required source path" do
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Math")
+
+    authority = Authority.new(:parent, Videdal.parent_id(), scopes: %{school_id: school.id})
+
+    assert_raise ArgumentError,
+                 ~r/Hawk\.LiveView could not resolve index field :teacher_name .*filtered the association for role :parent/,
+                 fn -> CourseIndexLive.assign_index(socket(), authority) end
+  end
+
   test "assign_index applies declared LiveView filters as reader narrowing" do
     school = insert(:school)
     teacher1 = insert(:teacher, school_id: school.id)

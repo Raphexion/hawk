@@ -659,7 +659,14 @@ so there is no runtime `preloads:` option to keep in sync; the caller-supplied
 
 A single-element path (`field(:students, source: [:students])`) declares a
 whole association to preload and display (typically a collection the template
-iterates). A deeper path whose leaf is an association
+iterates). After loading, Hawk verifies declared source-path associations are
+actually available before rendering. If a policy-aware preload filters out a
+`belongs_to` association whose foreign key is set, Hawk raises a targeted
+LiveView error that names the field, source path, associated resource, and role
+instead of letting the template fail later with `Ecto.Association.NotLoaded` or
+`nil`.
+
+A deeper path whose leaf is an association
 (`field(:grades, source: [:grades, :student])`) produces a nested preload
 (`grades: [:student]`) for a collection whose elements reach their own
 associations.

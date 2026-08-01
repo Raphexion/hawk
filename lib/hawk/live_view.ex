@@ -202,6 +202,7 @@ defmodule Hawk.LiveView do
       |> put_reader_preloads(preloads)
 
     results = resource.all(reader_opts)
+    validate_source_paths!(results, live_view_table(live_view), model, resource, authority, :index)
     page = Keyword.get(reader_opts, :page, %{})
 
     socket
@@ -232,6 +233,8 @@ defmodule Hawk.LiveView do
 
     case resource.one(opts) do
       {:ok, model} ->
+        validate_source_paths!([model], live_view_fields(live_view), model.__struct__, resource, authority, :show)
+
         socket
         |> assign(:hawk_resource, as)
         |> assign(:hawk_fields, live_view_fields(live_view))
@@ -594,6 +597,94 @@ defmodule Hawk.LiveView do
     fields
     |> Enum.reduce(%{}, &merge_preload_spec(&1, &2, model))
     |> spec_to_list()
+  end
+
+  defp validate_source_paths!(records, fields, model, resource, authority, surface) when is_list(records) do
+    Enum.each(records, fn record ->
+      Enum.each(fields, &validate_source_path!(record, model, Map.get(&1, :source), &1, resource, authority, surface))
+    end)
+  end
+
+  defp validate_source_path!(_record, _model, nil, _field, _resource, _authority, _surface), do: :ok
+
+  defp validate_source_path!(_record, _model, source, _field, _resource, _authority, _surface) when is_atom(source),
+    do: :ok
+
+  defp validate_source_path!(_record, _model, [], _field, _resource, _authority, _surface), do: :ok
+
+  defp validate_source_path!(record, model, [head | rest] = path, field, resource, authority, surface)
+       when is_struct(record) and is_atom(head) do
+    case model.__schema__(:association, head) do
+      nil ->
+        :ok
+
+      association ->
+        validate_source_association!(record, model, association, path, field, resource, authority, surface)
+        |> validate_source_tail!(association.related, rest, field, resource, authority, surface)
+    end
+  end
+
+  defp validate_source_tail!(_value, _model, [], _field, _resource, _authority, _surface), do: :ok
+
+  defp validate_source_tail!(values, model, rest, field, resource, authority, surface) when is_list(values) do
+    Enum.each(values, &validate_source_path!(&1, model, rest, field, resource, authority, surface))
+  end
+
+  defp validate_source_tail!(value, model, rest, field, resource, authority, surface) when is_struct(value) do
+    validate_source_path!(value, model, rest, field, resource, authority, surface)
+  end
+
+  defp validate_source_tail!(nil, _model, _rest, _field, _resource, _authority, _surface), do: :ok
+  defp validate_source_tail!(_value, _model, _rest, _field, _resource, _authority, _surface), do: :ok
+
+  defp validate_source_association!(record, model, association, path, field, resource, authority, surface) do
+    value = Map.get(record, association.field)
+
+    cond do
+      match?(%Ecto.Association.NotLoaded{}, value) ->
+        raise_source_path_error!(
+          "association #{inspect(association.field)} on #{inspect(model)} was not loaded",
+          path,
+          field,
+          resource,
+          authority,
+          surface,
+          association
+        )
+
+      is_nil(value) and expected_association?(record, association) ->
+        raise_source_path_error!(
+          "association #{inspect(association.field)} on #{inspect(model)} was nil even though its foreign key is set",
+          path,
+          field,
+          resource,
+          authority,
+          surface,
+          association
+        )
+
+      true ->
+        value
+    end
+  end
+
+  defp expected_association?(record, %Ecto.Association.BelongsTo{owner_key: owner_key}) do
+    not is_nil(Map.get(record, owner_key))
+  end
+
+  defp expected_association?(_record, %{cardinality: :many}), do: true
+  defp expected_association?(_record, _association), do: false
+
+  defp raise_source_path_error!(reason, path, field, resource, authority, surface, association) do
+    related_resource = Hawk.Resource.Convention.resource_module(association.related)
+
+    raise ArgumentError,
+          "Hawk.LiveView could not resolve #{surface} field #{inspect(field.name)} " <>
+            "from source #{inspect(path)} for #{inspect(resource)}: #{reason}. " <>
+            "This usually means the derived preload was missing or #{inspect(related_resource)} " <>
+            "filtered the association for role #{inspect(authority.role)}. " <>
+            "Declare the reader preload and allow the associated resource policy for this role, " <>
+            "or remove/guard the LiveView field."
   end
 
   defp merge_preload_spec(field, acc) do

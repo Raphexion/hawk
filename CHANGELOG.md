@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Clearer LiveView source-path preload errors.**
+  Hawk now validates declared LiveView `source:` paths after loading records and
+  raises a targeted error when a required association is still unloaded or was
+  filtered out by the associated resource policy.
+
 - **No more stale-bake of sibling metadata in generated consumers.**
   `Hawk.LiveView` helpers now pass the resource facade and resolve
   `__hawk_live_view__/0` at runtime; `Hawk.Resource.action/4` resolves
