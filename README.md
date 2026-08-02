@@ -848,6 +848,160 @@ server value wins even if the browser submits a different `teacher_id`. `hidden`
 removes fields from the assigned form-field metadata; the writer remains the
 final acceptance boundary.
 
+## Real-time updates
+
+Hawk can push a write from one source (the JSON:API controller, another
+LiveView, a background job) into every LiveView screen that shows the same
+resource, without a reload. Real-time is **opt-in per writer** and built over
+the host application's own `Phoenix.PubSub` — Hawk does not start or supervise a
+PubSub, just as it does not own your `Ecto.Repo`.
+
+### Opting in
+
+Declare `:pubsub` on the writer. Every successful `create`/`update`/`delete`
+then broadcasts a `Hawk.PubSub.Event`:
+
+```elixir
+defmodule MyApp.Grades.Writer do
+  use Hawk.Writer.Resource,
+    model: MyApp.Grade,
+    repo: MyApp.Repo,
+    policy: MyApp.Grades.Policy,
+    pubsub: MyApp.PubSub          # add this line
+  ...
+end
+```
+
+The optional `:topics` opt selects a topic strategy (defaults to
+`Hawk.PubSub.DefaultTopics`). Omit `:pubsub` for no broadcast.
+
+### What is broadcast
+
+A `Hawk.PubSub.Event` — **not** the model. Each subscriber re-queries through
+its *own* authority, so the resource `read_filter/1` is never bypassed. The
+writer's view of the record is never pushed to readers; a viewer whose role
+hides the record re-queries and simply does not see it.
+
+Broadcasts fire **after** the write's transaction commits, so a cross-process
+subscriber re-querying immediately sees the committed row. A no-op update
+(empty changes) and an unauthorized/invalid write do not broadcast.
+
+### LiveView one-liner
+
+Subscribe is **routing**, not authorization: it picks which channel a screen
+joins from the socket's `assigns`. Authorization happens later, in `refresh/3`,
+which re-queries through the socket's authority. Set the routing context
+(e.g. the current school id) in `mount`, subscribe, then match the event in
+`handle_info` and call `Hawk.LiveView.refresh/3`:
+
+```elixir
+defmodule MyAppWeb.GradesLive do
+  use MyAppWeb, :live_view
+  use Hawk.LiveView, resource: MyApp.Grades
+
+  def mount(_params, _session, socket) do
+    socket =
+      socket
+      |> assign(:current_school_id, current_school(socket))
+      |> assign(:hawk_authority, current_authority(socket))
+
+    {:ok, Hawk.LiveView.subscribe(socket, MyApp.Grades)}
+  end
+
+  def handle_info(%Hawk.PubSub.Event{resource: MyApp.Grades}, socket) do
+    {:noreply, Hawk.LiveView.refresh(socket, MyApp.Grades)}
+  end
+end
+```
+
+`subscribe/2` reads `:pubsub` and the topic strategy from the resource, so the
+author passes only the resource. `refresh/3` detects the current screen (index
+vs show) from existing assigns and re-runs the read through the socket's
+authority (from `opts[:authority]`, the `:hawk_authority` assign, or
+`Hawk.Authority.public()` as a fallback). A delete degrades gracefully: the
+index no longer includes the record, and a show screen re-assigns `:hawk_error`
+because the record is gone.
+
+### Topics and tenant isolation
+
+The default topic strategy (`Hawk.PubSub.DefaultTopics`) broadcasts to a shared
+resource topic and a per-record instance topic:
+
+- Resource topic — `"hawk:grades"` — every create/update/delete.
+- Instance topic — `"hawk:grades:<identity-value>"` — changes to one record.
+
+That shared resource topic reaches every subscriber. For a multi-tenant SaaS,
+that means a write at tenant A makes a LiveView at tenant B re-query — no data
+leaks (B's `read_filter` scopes its own results), but the write crosses tenants
+unnecessarily.
+
+The `:topics` opt is the escape hatch. Implement `Hawk.PubSub.TopicStrategy`
+(two callbacks: `broadcast_topics/3` from the model, `subscribe_topics/2` from
+the socket assigns) and scope topics by tenant:
+
+```elixir
+defmodule MyApp.PubSub.Topics do
+  @behaviour Hawk.PubSub.TopicStrategy
+
+  @impl true
+  def broadcast_topics(_resource, _operation, model) do
+    ["hawk:grades:school:#{model.school_id}"]
+  end
+
+  @impl true
+  def subscribe_topics(_resource, assigns) do
+    ["hawk:grades:school:#{assigns[:current_school_id]}"]
+  end
+end
+```
+
+Then wire it on the writer:
+
+```elixir
+use Hawk.Writer.Resource,
+  model: MyApp.Grade,
+  repo: MyApp.Repo,
+  policy: MyApp.Grades.Policy,
+  pubsub: MyApp.PubSub,
+  topics: MyApp.PubSub.Topics
+```
+
+Both sides live in one app-owned module, so the broadcast and subscribe topics
+stay in lockstep — there is no two-sided Hawk split to drift. A teacher at
+school A subscribes to `hawk:grades:school:<A>` and only receives their own
+school's writes: no wasted re-query, no cross-tenant delivery. A cross-tenant
+role (e.g. a principal with `:all`) can subscribe to a different topic or the
+bare resource topic.
+
+The broadcast side reads the tenant off the **model**; the subscribe side
+reads it off the **socket assigns** (the screen's routing context, set in
+`mount`). Authorization stays in `refresh/3` through the socket's authority —
+subscribe never authorizes.
+
+### Authority and existence visibility
+
+The shared resource topic (the default strategy) lets every subscriber learn
+*that* a write occurred and the changed record's identity value, even when the
+subscriber's `read_filter/1` would hide that record. The visible **data** never
+leaks — a subscriber whose authority hides the record re-queries and does not
+see it — but the **event metadata** (a write happened, plus an opaque id) is
+observable to everyone on the topic. A tenant-scoped topic strategy removes
+this for the multi-tenant case: subscribers only join their own tenant's topic.
+
+### Custom delete helpers
+
+The generated `delete(:default)` and the generated `create`/`update` already
+broadcast. If you write a `delete/2` by hand, inherit broadcast by passing the
+writer's own options to the boundary:
+
+```elixir
+def delete(%MyApp.Grade{} = grade, authority) do
+  Hawk.MutationContext.delete(grade, authority)
+  |> Hawk.MutationContext.validate_policy(&MyApp.Grades.Policy.delete?/1)
+  |> Hawk.RepositoryBoundary.delete(MyApp.Repo, __hawk_writer_opts__())
+end
+```
+
 ## OpenAPI
 
 ```elixir

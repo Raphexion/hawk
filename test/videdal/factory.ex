@@ -106,4 +106,11 @@ defmodule Videdal.Factory do
       course_id: course.id
     }
   end
+
+  def announcement_factory do
+    %Videdal.Announcement{
+      id: Ecto.UUID.generate(),
+      body: sequence(:announcement_body, &"Announcement #{&1}")
+    }
+  end
 end

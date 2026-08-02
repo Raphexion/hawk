@@ -75,6 +75,12 @@ defmodule Hawk.MixProject do
           Hawk.Errors,
           Hawk.Filter
         ],
+        "Real-time": [
+          Hawk.PubSub,
+          Hawk.PubSub.Event,
+          Hawk.PubSub.TopicStrategy,
+          Hawk.PubSub.DefaultTopics
+        ],
         Plans: [Hawk.Plan, Hawk.Plans, Hawk.Plans.Registry, Hawk.Plans.Spec, Hawk.Multi],
         "Validation & contracts": [
           Hawk.Resource.Validation,
@@ -130,6 +136,7 @@ defmodule Hawk.MixProject do
       {:phoenix, "~> 1.7"},
       {:phoenix_live_view, "~> 1.0"},
       {:phoenix_ecto, "~> 4.0"},
+      {:phoenix_pubsub, "~> 2.1"},
       {:jason, "~> 1.4"},
       # Test factories
       {:ex_machina, "~> 2.8", only: :test},

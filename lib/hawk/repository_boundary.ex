@@ -77,7 +77,29 @@ defmodule Hawk.RepositoryBoundary do
       |> normalize_repo_result(context, operation, opts)
     end)
     |> unwrap_transaction()
+    |> broadcast_change(operation, opts)
   end
+
+  # Broadcasts after the transaction commits so cross-process subscribers that
+  # re-query immediately see the committed record. Only a successful write
+  # broadcasts; invalid / unauthorized / error results pass through. No-op
+  # updates (empty changes) return early from `update/3` and never reach here.
+  defp broadcast_change({:ok, model} = result, operation, opts) do
+    case Keyword.get(opts, :pubsub) do
+      nil ->
+        :ok
+
+      pubsub when is_atom(pubsub) ->
+        resource = Keyword.fetch!(opts, :resource)
+        strategy = Keyword.get(opts, :topic_strategy) || Hawk.PubSub.DefaultTopics
+        event_operation = if operation == :insert, do: :create, else: operation
+        Hawk.PubSub.broadcast(pubsub, strategy, resource, event_operation, model)
+    end
+
+    result
+  end
+
+  defp broadcast_change(result, _operation, _opts), do: result
 
   defp preflight(%MutationContext{error: :invalid} = context), do: {:invalid, context}
 

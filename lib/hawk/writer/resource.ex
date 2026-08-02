@@ -17,6 +17,14 @@ defmodule Hawk.Writer.Resource do
     * `:model` (required) — the `Hawk.Model` / `Ecto.Schema` to mutate.
     * `:repo` (required) — the `Ecto.Repo` to persist through.
     * `:policy` (required) — the `Hawk.Policy` module gating writes.
+    * `:pubsub` — the host application's `Phoenix.PubSub` module. When set,
+      every successful `create/update/delete` broadcasts a `Hawk.PubSub.Event`
+      so LiveViews (and other subscribers) can refresh without reloading. Omit
+      for no broadcast. See `Hawk.PubSub`.
+    * `:topics` — a `Hawk.PubSub.TopicStrategy` module deriving the PubSub
+      topics (optional; defaults to `Hawk.PubSub.DefaultTopics`). The default
+      broadcasts to the shared resource topic and the instance topic. Pass an
+      app module for tenant/owner isolation — see `Hawk.PubSub.TopicStrategy`.
 
   ## DSL
 
@@ -72,6 +80,8 @@ defmodule Hawk.Writer.Resource do
     model = Keyword.fetch!(opts, :model)
     repo = Keyword.fetch!(opts, :repo)
     policy = Keyword.fetch!(opts, :policy)
+    pubsub = Keyword.get(opts, :pubsub)
+    topics = Keyword.get(opts, :topics)
 
     quote do
       import Hawk.Writer.Resource, only: [constraint: 2, create: 1, delete: 1, update: 1]
@@ -79,6 +89,8 @@ defmodule Hawk.Writer.Resource do
       @hawk_writer_model unquote(model)
       @hawk_writer_repo unquote(repo)
       @hawk_writer_policy unquote(policy)
+      @hawk_writer_pubsub unquote(pubsub)
+      @hawk_writer_topic_strategy unquote(topics)
 
       @before_compile Hawk.Writer.Resource
     end
@@ -159,12 +171,19 @@ defmodule Hawk.Writer.Resource do
     repo = Module.get_attribute(env.module, :hawk_writer_repo)
     policy = Module.get_attribute(env.module, :hawk_writer_policy)
     delete_mode = Module.get_attribute(env.module, :hawk_writer_delete)
+    pubsub = Module.get_attribute(env.module, :hawk_writer_pubsub)
+    topic_strategy = Module.get_attribute(env.module, :hawk_writer_topic_strategy)
+    resource = env.module |> Module.split() |> Enum.drop(-1) |> Module.concat()
+    writer_opts = Macro.escape(pubsub: pubsub, resource: resource, topic_strategy: topic_strategy)
 
     create_context = quote_context_pipeline(:create, create_block, model, policy)
     update_functions = quote_update_functions(update_block, repo, policy)
     delete_functions = quote_delete_functions(delete_mode, repo, policy)
 
     quote do
+      @doc false
+      def __hawk_writer_opts__, do: unquote(writer_opts)
+
       def change_create(attrs, authority) do
         attrs
         |> create_context(authority)
@@ -174,7 +193,7 @@ defmodule Hawk.Writer.Resource do
       def create(attrs, authority) do
         attrs
         |> create_context(authority)
-        |> Hawk.RepositoryBoundary.insert(unquote(repo))
+        |> Hawk.RepositoryBoundary.insert(unquote(repo), __hawk_writer_opts__())
       end
 
       defp create_context(attrs, authority) do
@@ -201,7 +220,7 @@ defmodule Hawk.Writer.Resource do
       def update(model, attrs, authority) do
         model
         |> update_context(attrs, authority)
-        |> Hawk.RepositoryBoundary.update(unquote(repo))
+        |> Hawk.RepositoryBoundary.update(unquote(repo), __hawk_writer_opts__())
       end
 
       defp update_context(model, attrs, authority) do
@@ -218,7 +237,7 @@ defmodule Hawk.Writer.Resource do
         model
         |> Hawk.MutationContext.delete(authority)
         |> Hawk.MutationContext.validate_policy(&unquote(policy).delete?/1)
-        |> Hawk.RepositoryBoundary.delete(unquote(repo))
+        |> Hawk.RepositoryBoundary.delete(unquote(repo), __hawk_writer_opts__())
       end
     end
   end

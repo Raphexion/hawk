@@ -25,6 +25,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Real-time updates via `Hawk.PubSub`.** A writer declaring `:pubsub`
+  (the host application's `Phoenix.PubSub`) broadcasts a `Hawk.PubSub.Event`
+  on every successful `create`/`update`/`delete`, fired after the write's
+  transaction commits. The event carries the resource, operation, and identity
+  value — not the model — so each subscriber re-queries through its own
+  authority and the read policy is never bypassed. The optional `:topics` opt
+  accepts a `Hawk.PubSub.TopicStrategy` (defaulting to
+  `Hawk.PubSub.DefaultTopics`) so host applications can scope topics per-tenant
+  for isolation. `Hawk.LiveView.subscribe/2` reads `:pubsub` and the topic
+  strategy from the resource and subscribes the LiveView process (routing,
+  not authorization); `Hawk.LiveView.refresh/3` re-runs the current index or
+  show screen through the socket's authority. Resources without `:pubsub`
+  never broadcast. See the "Real-time updates" section in the README.
+
 - **Two-phase Actions.** An action declaring `build: true` (or `build: :fn`)
   opts into a validate-without-commit phase: write a single `build_<handler>/3`
   that returns a `Hawk.Multi` of facade-call steps, and Hawk generates

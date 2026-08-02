@@ -66,6 +66,12 @@ defmodule Videdal.Repo.Migrations.CreateTables do
       add :enrollment_count, :integer, default: 0
     end
 
+    create table(:announcements, primary_key: false) do
+      add :id, :uuid, primary_key: true
+      add :body, :text, null: false
+      add :school_id, :uuid
+    end
+
     execute """
     CREATE VIEW course_grade_summaries AS
     SELECT
@@ -82,6 +88,7 @@ defmodule Videdal.Repo.Migrations.CreateTables do
   def down do
     execute "DROP VIEW IF EXISTS course_grade_summaries"
     drop table(:course_rosters)
+    drop table(:announcements)
     drop table(:grades)
     drop table(:enrollments)
     drop table(:courses)

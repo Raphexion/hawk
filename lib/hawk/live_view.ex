@@ -188,6 +188,10 @@ defmodule Hawk.LiveView do
     live_view = live_view_metadata(resource)
     {as, plural_as} = resource_assigns(resource, live_view, as, plural_as)
     state = IndexState.normalize(Keyword.get(opts, :params, %{}), live_view)
+    run_index(socket, resource, as, plural_as, authority, state, live_view, opts)
+  end
+
+  defp run_index(socket, resource, as, plural_as, authority, state, live_view, opts) do
     model = resource.__hawk_resource__(:model)
     preloads = derive_preloads(live_view_table(live_view), model)
 
@@ -257,6 +261,114 @@ defmodule Hawk.LiveView do
     |> put_form_state(as, %{mode: :read, model: model})
     |> assign(form_assign(as), Phoenix.Component.to_form(read_form_data(model), as: as))
     |> assign(form_fields_assign(as), fields)
+  end
+
+  @doc """
+  Subscribes the LiveView process to real-time change notifications for a Hawk
+  resource, so writes from any source (JSON:API controller, another LiveView, a
+  background job) can refresh this screen without a full reload.
+
+  Subscribe is **routing**, not authorization. It reads the writer's declared
+  `:pubsub` and topic strategy from the resource, then asks the strategy for the
+  topics to join from the socket's `assigns` (the screen's context — e.g.
+  `assigns[:current_school_id]`, set in `mount`). Authorization happens later, in
+  `Hawk.LiveView.refresh/3`, which re-queries through the socket's authority.
+
+  The bare `pubsub: MyApp.PubSub` form (default strategy) subscribes to the
+  shared resource topic. A writer that declares `:topics` (an app
+  `Hawk.PubSub.TopicStrategy`) subscribes to whatever the app's strategy
+  returns from `assigns` — the escape hatch for tenant isolation. When the
+  writer did not declare `:pubsub`, this is a no-op and returns the socket
+  unchanged.
+
+  ## Example
+
+      def mount(_params, _session, socket) do
+        socket = assign(socket, :current_school_id, current_school(socket))
+        socket = assign(socket, :hawk_authority, current_authority(socket))
+        {:ok, Hawk.LiveView.subscribe(socket, MyApp.Courses)}
+      end
+
+      def handle_info(%Hawk.PubSub.Event{resource: MyApp.Courses}, socket) do
+        {:noreply, Hawk.LiveView.refresh(socket, MyApp.Courses)}
+      end
+
+  `refresh/3` re-runs the current screen's read through the socket's authority
+  (from `opts[:authority]`, the `:hawk_authority` assign, or
+  `Hawk.Authority.public()`), so the read policy gates the refresh.
+  """
+  def subscribe(socket, resource)
+      when is_struct(socket, Phoenix.LiveView.Socket) and is_atom(resource) do
+    case Hawk.PubSub.config_for_resource(resource) do
+      nil ->
+        socket
+
+      %{pubsub: pubsub, topic_strategy: strategy} ->
+        for topic <- strategy.subscribe_topics(resource, socket.assigns) do
+          :ok = Phoenix.PubSub.subscribe(pubsub, topic)
+        end
+
+        socket
+    end
+  end
+
+  @doc """
+  Re-runs the current screen's read through the socket's authority, so a
+  PubSub-driven refresh stays on the policy-gated read path.
+
+  Detects the screen from existing assigns: an index screen (`hawk_index_state`
+  present) re-runs the index query with the stored filter/page/sort; a show
+  screen (`hawk_resource` present, no index state) re-queries the assigned
+  record by its identity. The authority comes from `opts[:authority]`, the
+  socket's `:hawk_authority` assign, or `Hawk.Authority.public()` as a fallback
+  (matching action helpers).
+
+  Call this from a `handle_info/2` clause that matches `Hawk.PubSub.Event`.
+
+  ## Example
+
+      def handle_info(%Hawk.PubSub.Event{resource: MyApp.Courses}, socket) do
+        {:noreply, Hawk.LiveView.refresh(socket, MyApp.Courses)}
+      end
+
+  A delete re-queries and degrades gracefully: the index no longer includes
+  the record, and a show screen re-assigns `:hawk_error` because `assign_show`
+  returns `:not_found`.
+  """
+  def refresh(socket, resource, opts \\ [])
+      when is_struct(socket, Phoenix.LiveView.Socket) and is_atom(resource) and is_list(opts) do
+    authority = action_authority(socket, opts)
+
+    cond do
+      Map.has_key?(socket.assigns, :hawk_index_state) ->
+        refresh_index(socket, resource, authority)
+
+      Map.has_key?(socket.assigns, :hawk_resource) ->
+        refresh_show(socket, resource, authority)
+
+      true ->
+        socket
+    end
+  end
+
+  defp refresh_index(socket, resource, authority) do
+    live_view = live_view_metadata(resource)
+    {as, plural_as} = resource_assigns(resource, live_view, nil, nil)
+    state = Map.fetch!(socket.assigns, :hawk_index_state)
+    run_index(socket, resource, as, plural_as, authority, state, live_view, [])
+  end
+
+  defp refresh_show(socket, resource, authority) do
+    as = Map.fetch!(socket.assigns, :hawk_resource)
+    identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
+
+    case Map.get(socket.assigns, as) do
+      %_{} = model ->
+        assign_show(socket, resource, as, authority, Map.get(model, identity))
+
+      _other ->
+        socket
+    end
   end
 
   @doc false
