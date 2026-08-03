@@ -226,7 +226,9 @@ end
 
 Nested includes such as `include=grades.student` are turned into nested Ecto
 preloads where every layer uses that resource's own reader and policy. Opening
-`courses` does not accidentally open `grades` or `students`.
+`courses` does not accidentally open `grades` or `students`. Compound documents
+de-duplicate included resources and omit any resource already present in primary
+`data`, including when an include path cycles back to the root.
 
 Every reader `preload/1` must be a relationship exposed by the resource's
 JSON:API adapter — `mix hawk.validate` rejects a preload with no matching

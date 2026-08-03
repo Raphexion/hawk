@@ -6,7 +6,9 @@ defmodule Hawk.JsonApi.Document do
   options, it produces the JSON:API resource objects, relationships, included
   resources, links, and pagination meta. The external shape of each resource
   is resolved through `Hawk.JsonApi.Schema.metadata/1`, so included/related
-  resources discover their adapter metadata the same way the root does.
+  resources discover their adapter metadata the same way the root does. Compound
+  documents de-duplicate included resources and never repeat a primary resource
+  in `included`, including when a nested include path cycles back to the root.
 
   ## Options
 
@@ -232,13 +234,22 @@ defmodule Hawk.JsonApi.Document do
   end
 
   defp put_included(document, models, opts) do
-    included = included_resources(models, Keyword.get(opts, :preloads, []), opts)
+    primary_resources = MapSet.new(models, &resource_identity/1)
+
+    included =
+      models
+      |> included_resources(Keyword.get(opts, :preloads, []), opts)
+      |> Enum.reject(&MapSet.member?(primary_resources, {&1.type, &1.id}))
 
     if included == [] do
       document
     else
       Map.put(document, :included, included)
     end
+  end
+
+  defp resource_identity(model) do
+    {Schema.metadata(model).type, to_string(Map.get(model, Schema.identity(model)))}
   end
 
   defp included_resources(models, preloads, opts) do

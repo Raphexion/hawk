@@ -65,6 +65,35 @@ defmodule Hawk.JsonApiIncludeTest do
            ]
   end
 
+  test "cyclic includes do not repeat primary data in included" do
+    course = %Course{
+      id: @course_id,
+      title: "Math",
+      school_id: @school_id,
+      teacher_id: @teacher_id,
+      grades: [
+        %Grade{
+          id: @grade_id,
+          score: 12,
+          course_id: @course_id,
+          course: %Course{
+            id: @course_id,
+            title: "Math",
+            school_id: @school_id,
+            teacher_id: @teacher_id,
+            teacher: %Teacher{id: @teacher_id, name: "Ms. Curie", school_id: @school_id}
+          }
+        }
+      ]
+    }
+
+    document = Hawk.JsonApi.Document.document(course, preloads: [grades: [course: [:teacher]]])
+
+    assert Enum.any?(document.included, &(&1.type == "grades" and &1.id == @grade_id))
+    assert Enum.any?(document.included, &(&1.type == "teachers" and &1.id == @teacher_id))
+    refute Enum.any?(document.included, &(&1.type == "courses" and &1.id == @course_id))
+  end
+
   test "documents apply sparse fieldsets to included resource objects" do
     course = %Course{
       id: @course_id,

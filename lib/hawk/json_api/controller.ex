@@ -567,31 +567,32 @@ defmodule Hawk.JsonApi.Controller do
   end
 
   defp negotiate_media_type(conn) do
-    with :ok <- validate_content_type(conn),
-         :ok <- validate_accept(conn) do
-      :ok
+    case validate_content_type(conn) do
+      :ok -> validate_accept(conn)
+      error -> error
     end
   end
 
   defp validate_content_type(conn) do
     case Plug.Conn.get_req_header(conn, "content-type") do
-      [] ->
-        :ok
-
-      [content_type] ->
-        case Plug.Conn.Utils.media_type(content_type) do
-          {:ok, "application", "vnd.api+json", params} ->
-            if supported_params?(params, @json_api_parameters),
-              do: :ok,
-              else: media_type_error(415, :unsupported_media_type, "Unsupported media type")
-
-          _other ->
-            media_type_error(415, :unsupported_media_type, "Unsupported media type")
-        end
-
-      _multiple ->
-        media_type_error(415, :unsupported_media_type, "Unsupported media type")
+      [] -> :ok
+      [content_type] -> validate_content_type_header(content_type)
+      _multiple -> unsupported_media_type_error()
     end
+  end
+
+  defp validate_content_type_header(content_type) do
+    with {:ok, "application", "vnd.api+json", params} <-
+           Plug.Conn.Utils.media_type(content_type),
+         true <- supported_params?(params, @json_api_parameters) do
+      :ok
+    else
+      _unsupported -> unsupported_media_type_error()
+    end
+  end
+
+  defp unsupported_media_type_error do
+    media_type_error(415, :unsupported_media_type, "Unsupported media type")
   end
 
   defp validate_accept(conn) do
