@@ -313,12 +313,17 @@ end
 ### Actions
 
 Optional imperative actions live beside `Reader` and `Writer` in `Actions.ex`.
-`Actions` is an orchestration layer above them: it composes reads and writes
-through the resource reader and writer, passing the caller's authority
-straight through. There is no separate action-level policy — authorization
-comes from the layer below (the reader scopes reads via `read_filter/1`, the
-writer gates mutations via `create?/update?/delete?`), so the golden path keeps
-an action authorized by construction, with no separate check to wire up.
+`Actions` is an orchestration layer above them: it should compose reads and
+writes through resource readers and writers, passing the caller's authority
+straight through. There is no separate action-level policy.
+
+> [!WARNING]
+> Action handlers are trusted application code. Hawk dispatches the handler and
+> passes its authority, but cannot enforce how the handler uses them. Authors are
+> responsible for routing every protected read and write through the appropriate
+> policy-aware Reader or Writer with that authority. Direct Repo calls and other
+> side effects are outside Hawk's authorization guarantees.
+
 Actions are exposed under `/-actions/` and keep command-style endpoints
 separate from CRUD routes while staying JSON:API-compliant by accepting
 parameters in `meta`.

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Actions are explicitly trusted application code.** Hawk passes authority to
+  action handlers but does not enforce their implementation. Protected reads
+  and writes must go through policy-aware Readers and Writers; direct Repo calls
+  and other side effects are outside Hawk's authorization guarantees.
+
 ### Fixed
 
 - **Consistent controller authority lookup.** JSON:API controllers read the

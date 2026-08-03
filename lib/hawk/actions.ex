@@ -13,13 +13,15 @@ defmodule Hawk.Actions do
   reads and writes through the resource reader and writer using that authority.
   It returns a `Hawk.Result` (or value) the JSON:API controller renders.
 
-  There is no separate action-level policy. Authorization comes from the layer
-  below: the reader applies `read_filter/1` to scope what the action can read,
-  and the writer runs `create?/update?/delete?` before persisting. The golden
-  path is to compose those gated calls and pass the caller's authority straight
-  through — then the action stays authorized by construction, with no separate
-  check to wire up. Actions are how you expose domain verbs without forcing
-  them into the writer's create/update shape.
+  There is no separate action-level policy. Action handlers are trusted
+  application code: Hawk dispatches the handler and passes its authority, but
+  cannot enforce what the handler does with them. The author is responsible for
+  routing every protected read and write through the appropriate Reader or
+  Writer while passing that authority through unchanged. Those layers apply
+  `read_filter/1` and `create?/update?/delete?`; direct Repo calls and other side
+  effects are outside Hawk's authorization guarantees. Actions are how you
+  expose domain verbs without forcing them into the writer's create/update
+  shape.
 
   ## Example
 
@@ -35,11 +37,9 @@ defmodule Hawk.Actions do
         )
 
         def open_registration(course, params, authority) do
-          # The golden path: compose reads and writes through the resource
-          # reader and writer, passing the caller's authority straight
-          # through. The reader scopes reads via read_filter/1 and the writer
-          # gates mutations via create?/update?/delete?, so the action stays
-          # authorized by construction.
+          # Action handlers are trusted application code. Keep protected reads
+          # and writes behind their Reader/Writer boundaries, and pass the
+          # caller's authority through unchanged.
           {:ok, course} = MyApp.Courses.one(authority: authority, filter: %{id: course.id})
           MyApp.Courses.Writer.open_registration(course, params, authority)
         end
