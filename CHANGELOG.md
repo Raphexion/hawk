@@ -14,8 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Hawk.Authority.Session`, and `Hawk.PhoenixAuth`.
 
 - **Atomic multis and transaction-safe broadcasts.** Failed `Hawk.Multi` steps
-  now roll back prior writes. PubSub events are deferred until the transaction
-  owned by the Multi commits and discarded for failed multis and plan previews.
+  now roll back prior writes. A Multi supports one Repo and rejects resource
+  steps backed by a different Repo before execution. PubSub events are deferred
+  until the transaction owned by the Multi commits and discarded for failed
+  multis and plan previews.
   A broadcasting Multi invoked inside an unmanaged caller transaction is rejected
   rather than publishing prematurely or silently dropping events.
 

@@ -395,8 +395,12 @@ end
 
 `<handler>_change/3` returns a map of step name to non-persisting changeset
 (via `Hawk.Multi.to_changesets/1`); `<handler>_run/3` commits the whole batch
-in one transaction (via `Hawk.Multi.execute/2`). `Hawk.Actions.dispatch/5`
-routes a two-phase action's commit to `<handler>_run/3` automatically.
+in one transaction (via `Hawk.Multi.execute/2`). A Multi deliberately supports
+one Repo only: every resource step must use the Repo passed to `execute/3`, and
+Hawk raises before execution if they differ. Application-owned `run/3` callbacks
+must honor the same prerequisite because Hawk cannot inspect their side effects.
+`Hawk.Actions.dispatch/5` routes a two-phase action's commit to
+`<handler>_run/3` automatically.
 
 JSON:API and LiveView share the same action: `POST /-actions/submit-grade`
 commits, and `POST /-actions/submit-grade` with `dry-run: true` validates and

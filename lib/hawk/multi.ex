@@ -22,7 +22,12 @@ defmodule Hawk.Multi do
 
       Hawk.Multi.execute(multi, MyApp.Repo)
 
-  On failure, the whole transaction rolls back.
+  On failure, the whole transaction rolls back. A Multi deliberately supports
+  one Repo only: every resource step must use the Repo passed to `execute/3`.
+  Execution raises before opening the transaction when a resource reader points
+  at a different Repo. `run/3` callbacks are application-owned escape hatches;
+  Hawk cannot inspect their side effects, so they must honor the same Repo
+  prerequisite.
   """
 
   defstruct steps: []
@@ -248,6 +253,11 @@ defmodule Hawk.Multi do
   Returns `{:ok, results_map}` on success, or
   `{:error, failed_step_name, error_value, prior_results}` on failure.
 
+  Every resource step must be backed by `repo`; Hawk.Multi does not coordinate
+  transactions across multiple Repos and raises before execution when they
+  differ. Hawk cannot inspect `run/3` callback side effects, so application code
+  must keep those on the same Repo.
+
   Writer PubSub events are flushed after the transaction owned by this function
   commits. A Multi containing PubSub writers raises when called inside an
   unmanaged caller transaction because Hawk cannot observe that outer commit.
@@ -255,6 +265,7 @@ defmodule Hawk.Multi do
   @spec execute(t(), module(), keyword()) ::
           {:ok, map()} | {:error, atom(), term(), map()}
   def execute(%__MODULE__{} = multi, repo, _opts \\ []) when is_atom(repo) do
+    validate_single_repo!(multi, repo)
     outer_transaction? = function_exported?(repo, :in_transaction?, 0) and repo.in_transaction?()
     validate_broadcast_boundary!(multi, outer_transaction?)
 
@@ -266,6 +277,35 @@ defmodule Hawk.Multi do
     result = unwrap_transaction_result(transaction_result)
     finalize_broadcast_capture(result, broadcast_capture, outer_transaction?)
     result
+  end
+
+  defp validate_single_repo!(%__MODULE__{steps: steps}, repo) do
+    Enum.each(steps, fn
+      %{name: name, resource: resource} when is_atom(resource) and not is_nil(resource) ->
+        resource_repo = resource_repo!(resource)
+
+        unless resource_repo == repo do
+          raise ArgumentError,
+                "Hawk.Multi runs in a single transaction and requires every resource to use " <>
+                  "#{inspect(repo)}; step #{inspect(name)} uses #{inspect(resource)}, whose reader " <>
+                  "uses #{inspect(resource_repo)}"
+        end
+
+      _step ->
+        :ok
+    end)
+  end
+
+  defp resource_repo!(resource) do
+    reader = resource.__hawk_resource__(:reader)
+
+    if is_atom(reader) and not is_nil(reader) and Code.ensure_loaded?(reader) and
+         function_exported?(reader, :repo, 0) do
+      reader.repo()
+    else
+      raise ArgumentError,
+            "Hawk.Multi resource #{inspect(resource)} must resolve a reader that exposes repo/0"
+    end
   end
 
   defp validate_broadcast_boundary!(multi, true) do

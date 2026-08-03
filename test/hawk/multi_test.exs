@@ -5,6 +5,25 @@ defmodule Hawk.MultiTest do
 
   @authority Authority.system()
 
+  defmodule ForeignReader do
+    @moduledoc false
+    def repo, do: :foreign_repo
+  end
+
+  defp temporary_facade(reader) do
+    name = Module.concat(__MODULE__, "Facade#{:erlang.unique_integer([:positive])}")
+
+    contents =
+      quote do
+        @moduledoc false
+        def __hawk_resource__(:reader), do: unquote(reader)
+        def __hawk_resource__(_), do: nil
+      end
+
+    Module.create(name, contents, Macro.Env.location(__ENV__))
+    name
+  end
+
   describe "new/0" do
     test "returns an empty multi" do
       multi = Multi.new()
@@ -229,6 +248,16 @@ defmodule Hawk.MultiTest do
     test "an empty multi succeeds with an empty results map" do
       {:ok, results} = Multi.execute(Multi.new(), Videdal.Repo)
       assert results == %{}
+    end
+
+    test "rejects a resource backed by a different repo" do
+      multi =
+        Multi.new()
+        |> Multi.create(:foreign, temporary_facade(ForeignReader), %{}, @authority)
+
+      assert_raise ArgumentError, ~r/requires every resource to use.*Videdal.Repo.*foreign_repo/s, fn ->
+        Multi.execute(multi, Videdal.Repo)
+      end
     end
 
     test "executes an action step and returns its result" do
