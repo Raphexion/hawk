@@ -75,7 +75,7 @@ defmodule Hawk.JsonApi.Request do
     data = request_data!(params)
     json_api = Schema.metadata(model)
 
-    validate_type!(data, json_api.type, capability)
+    validate_type!(data, json_api.type)
     validate_update_identity!(data, capability, opts)
     validate_attribute_members!(data, json_api, capability)
     validate_relationship_members!(data, model, json_api, capability)
@@ -123,14 +123,7 @@ defmodule Hawk.JsonApi.Request do
     end
   end
 
-  defp validate_type!(data, expected_type, :creatable) do
-    case Map.get(data, "type") do
-      ^expected_type -> :ok
-      _other -> raise ArgumentError, "expected data.type to be #{inspect(expected_type)}"
-    end
-  end
-
-  defp validate_type!(data, expected_type, :updatable) do
+  defp validate_type!(data, expected_type) do
     case Map.get(data, "type") do
       ^expected_type -> :ok
       _other -> raise ArgumentError, "expected data.type to be #{inspect(expected_type)}"
