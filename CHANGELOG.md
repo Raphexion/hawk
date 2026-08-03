@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **OpenAPI content-negotiation responses.** Every generated operation documents
+  the `406` and `415` JSON:API error documents returned by controller media-type
+  negotiation.
+
 - **Required OpenAPI relationship linkage.** Write relationship objects require
   `data`; non-null to-one and every to-many resource identifier require `type`
   and `id`, while to-one linkage explicitly permits `null`.

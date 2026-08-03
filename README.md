@@ -1093,7 +1093,8 @@ generated clients do not type them as optional. Success documents also describe
 optional top-level `links`, compound-document `included`, pagination `meta.page`,
 resource links, and relationship links using reusable component schemas. The
 spec also includes JSON:API adapter schemas, request bodies, error documents,
-sort parameters, pagination parameters, valid include paths, declared
+`406`/`415` media-type negotiation responses, sort parameters, pagination
+parameters, valid include paths, declared
 `/-actions/` operations, relationship routes, the optional `path_prefix`, and
 optional resource organization metadata.
 

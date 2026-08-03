@@ -104,6 +104,20 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
     assert fields.schema == %{type: "object", additionalProperties: %{type: "string"}}
   end
 
+  test "operations document JSON:API content negotiation failures" do
+    spec = OpenApiController.spec()
+    index_responses = spec.paths["/api/v1/courses"].get.responses
+    create_responses = spec.paths["/api/v1/courses"].post.responses
+    action_responses = spec.paths["/api/v1/courses/{id}/-actions/open-registration"].post.responses
+
+    assert index_responses["406"].description == "Not acceptable for JSON:API"
+    assert index_responses["415"].description == "Unsupported JSON:API media type"
+
+    assert create_responses["406"].description == "Not acceptable for JSON:API"
+    assert create_responses["415"].description == "Unsupported JSON:API media type"
+    assert action_responses["415"].description == "Unsupported JSON:API media type"
+  end
+
   test "response schemas require mandatory JSON:API document and resource members" do
     spec = OpenApiController.spec()
 
@@ -269,7 +283,7 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
              }
            }
 
-    assert Map.keys(open_registration.responses) == ["200", "400", "403", "404", "422"]
+    assert Map.keys(open_registration.responses) == ["200", "400", "403", "404", "406", "415", "422"]
     assert open_registration.responses["403"].description == "Forbidden by Hawk policy"
     assert open_registration.responses["422"].description == "Validation failed"
   end

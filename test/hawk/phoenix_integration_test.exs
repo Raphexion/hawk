@@ -62,6 +62,17 @@ defmodule Hawk.PhoenixIntegrationTest do
     assert %{"errors" => [%{"status" => "415"}]} = Jason.decode!(conn.resp_body)
   end
 
+  test "JSON:API controller rejects unsupported Content-Type on bodyless requests" do
+    conn =
+      Plug.Test.conn(:get, "/courses")
+      |> Plug.Conn.put_req_header("content-type", "application/json")
+      |> Plug.Conn.assign(:hawk_authority, Authority.system())
+      |> CoursesController.index(%{})
+
+    assert conn.status == 415
+    assert %{"errors" => [%{"status" => "415"}]} = Jason.decode!(conn.resp_body)
+  end
+
   test "JSON:API controller rejects an unacceptable JSON:API media type" do
     conn =
       Plug.Test.conn(:get, "/courses")

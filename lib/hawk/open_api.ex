@@ -422,6 +422,7 @@ defmodule Hawk.OpenApi do
       "404" => json_api_content("Resource not found", error_document_ref()),
       "422" => json_api_content("Validation failed", error_document_ref())
     }
+    |> put_negotiation_responses()
   end
 
   defp responses(_resource, success_status, success_schema) do
@@ -432,6 +433,13 @@ defmodule Hawk.OpenApi do
       "404" => json_api_content("Resource not found", error_document_ref()),
       "422" => json_api_content("Validation failed", error_document_ref())
     }
+    |> put_negotiation_responses()
+  end
+
+  defp put_negotiation_responses(responses) do
+    responses
+    |> Map.put("406", json_api_content("Not acceptable for JSON:API", error_document_ref()))
+    |> Map.put("415", json_api_content("Unsupported JSON:API media type", error_document_ref()))
   end
 
   defp success_description(200), do: "JSON:API response"
