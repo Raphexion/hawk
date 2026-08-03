@@ -297,16 +297,19 @@ defmodule Hawk.Multi do
 
   defp execute_steps(steps, repo) do
     case run_steps(steps) do
-      {results, nil} -> results
-      {results, {failed_name, reason}} -> repo.rollback({failed_name, reason, results})
+      {:ok, results} ->
+        results
+
+      {:error, failed_name, reason, prior_results} ->
+        repo.rollback({failed_name, reason, prior_results})
     end
   end
 
   defp run_steps(steps) do
-    Enum.reduce_while(steps, {%{}, nil}, fn step, {results, _failed} ->
+    Enum.reduce_while(steps, {:ok, %{}}, fn step, {:ok, results} ->
       case run_step(step, results) do
-        {:ok, value} -> {:cont, {Map.put(results, step.name, value), nil}}
-        {:error, reason} -> {:halt, {results, {step.name, reason}}}
+        {:ok, value} -> {:cont, {:ok, Map.put(results, step.name, value)}}
+        {:error, reason} -> {:halt, {:error, step.name, reason, results}}
       end
     end)
   end
