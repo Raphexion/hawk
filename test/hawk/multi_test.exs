@@ -1,5 +1,5 @@
 defmodule Hawk.MultiTest do
-  use Videdal.DatabaseCase, async: true
+  use Videdal.DatabaseCase, async: false
 
   alias Hawk.{Authority, Multi}
 
