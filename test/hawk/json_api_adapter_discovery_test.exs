@@ -126,7 +126,7 @@ defmodule Hawk.JsonApiAdapterDiscoveryTest do
                  type: "authors",
                  id: Videdal.parent_id(),
                  attributes: %{name: "Ada"},
-                 relationships: %{books: %{data: []}}
+                 relationships: %{}
                }
              ]
            }

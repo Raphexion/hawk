@@ -223,6 +223,7 @@ defmodule Hawk.MultiTest do
       result = Multi.execute(multi, Videdal.Repo)
 
       assert {:error, :bad, _context, _prior} = result
+      assert Videdal.Repo.reload(course).title == course.title
     end
 
     test "an empty multi succeeds with an empty results map" do

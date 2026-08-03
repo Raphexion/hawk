@@ -3,11 +3,13 @@ defmodule Hawk.MixProject do
 
   @version "0.5.0"
   @source_url "https://github.com/Raphexion/hawk"
+  @description "Opinionated Phoenix foundation for policy-safe resources across LiveView and JSON:API"
 
   def project do
     [
       app: :hawk,
       version: @version,
+      description: @description,
       elixir: "~> 1.20",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,

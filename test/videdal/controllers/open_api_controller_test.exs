@@ -13,7 +13,10 @@ defmodule Videdal.Controllers.OpenApiWithExtrasController do
     path_prefix: "/api/v1",
     resources: [Videdal.Courses],
     servers: [%{url: "https://api.example.com"}],
-    security: [%{"bearerAuth" => []}]
+    security: [%{"bearerAuth" => []}],
+    security_schemes: %{
+      bearerAuth: %{type: "http", scheme: "bearer", bearerFormat: "JWT"}
+    }
 end
 
 defmodule Videdal.Controllers.OpenApiControllerTest do
@@ -137,6 +140,15 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
                example: "Math"
              }
            }
+
+    assert create_schema.required == [:data]
+    assert create_schema.properties.data.required == [:type]
+    assert update_schema.required == [:data]
+    assert update_schema.properties.data.required == [:type, :id]
+    assert update_schema.properties.data.properties.id == %{type: "string", format: "uuid"}
+    refute Map.has_key?(create_schema, :additionalProperties)
+    refute Map.has_key?(update_schema.properties.data, :additionalProperties)
+    assert create_schema.properties.data.properties.attributes.additionalProperties == false
   end
 
   test "action operations use JSON:API meta request schemas" do
@@ -201,6 +213,28 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
     assert open_registration.responses["422"].description == "Validation failed"
   end
 
+  test "relationship operations describe target types and cardinality" do
+    spec = OpenApiController.spec()
+
+    related =
+      spec.paths["/api/v1/courses/{id}/{relationship}"].get.responses["200"].content[
+        "application/vnd.api+json"
+      ].schema
+
+    linkage =
+      spec.paths["/api/v1/courses/{id}/relationships/{relationship}"].get.responses["200"].content[
+        "application/vnd.api+json"
+      ].schema
+
+    assert Enum.any?(related.properties.data.anyOf, &(&1[:type] == "array"))
+    assert Enum.any?(related.properties.data.anyOf, &(&1[:type] == "object"))
+    assert %{type: "null"} in related.properties.data.anyOf
+
+    assert Enum.any?(linkage.properties.data.anyOf, &(&1[:type] == "array"))
+    assert Enum.any?(linkage.properties.data.anyOf, &(&1[:type] == "object"))
+    assert %{type: "null"} in linkage.properties.data.anyOf
+  end
+
   test "show and related operations expose sparse fieldsets" do
     spec = OpenApiController.spec()
 
@@ -226,6 +260,10 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
 
     assert spec.servers == [%{url: "https://api.example.com"}]
     assert spec.security == [%{"bearerAuth" => []}]
+
+    assert spec.components.securitySchemes == %{
+             bearerAuth: %{type: "http", scheme: "bearer", bearerFormat: "JWT"}
+           }
   end
 
   test "show serves the spec as application/json" do

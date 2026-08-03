@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Atomic multis and transaction-safe broadcasts.** Failed `Hawk.Multi` steps
+  now roll back prior writes. PubSub events are deferred until the transaction
+  owned by the Multi commits and discarded for failed multis and plan previews.
+  A broadcasting Multi invoked inside an unmanaged caller transaction is rejected
+  rather than publishing prematurely or silently dropping events.
+
+- **Ownership checks preserve explicit `nil` changes.** Clearing an `owned_by`
+  field no longer falls back to the model's previous value during authorization.
+
+- **Server-owned LiveView delete authority.** Generated delete events now resolve
+  authority from socket assigns instead of accepting it in browser parameters,
+  and index refreshes retain caller-supplied reader options.
+
+- **Stricter JSON:API request handling.** Malformed query-parameter shapes return
+  `400` documents instead of escaping as function-clause errors. Update documents
+  require matching `type` and `id` members, and unloaded to-many relationships
+  omit linkage rather than claiming to be empty.
+
+- **Accurate OpenAPI contracts.** Write schemas declare required identity members,
+  relationship endpoints describe target cardinality, and host applications can
+  define `components.securitySchemes` through `:security_schemes`.
+
+- **Hex package metadata.** The package now includes the required description.
+
 - **Clearer LiveView source-path preload errors.**
   Hawk now validates declared LiveView `source:` paths after loading records and
   raises a targeted error when a required association is still unloaded or was

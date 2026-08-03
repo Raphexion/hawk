@@ -129,14 +129,20 @@ defmodule Hawk.JsonApi.Document do
 
     json_api.relationships
     |> filter_sparse_fields(json_api, opts)
-    |> Map.new(fn {name, metadata} ->
+    |> Enum.reduce(%{}, fn {name, metadata}, relationships ->
       source = Map.get(metadata, :source, name)
-      relationship = %{data: relationship_data(model, source, preloads)}
 
-      if Keyword.get(opts, :links, false) do
-        {name, Map.put(relationship, :links, relationship_links(model, json_api, name))}
-      else
-        {name, relationship}
+      relationship =
+        if Keyword.get(opts, :links, false) do
+          %{links: relationship_links(model, json_api, name)}
+        else
+          %{}
+        end
+
+      case relationship_data(model, source, preloads) do
+        :not_loaded when relationship == %{} -> relationships
+        :not_loaded -> Map.put(relationships, name, relationship)
+        data -> Map.put(relationships, name, Map.put(relationship, :data, data))
       end
     end)
   end
@@ -206,16 +212,16 @@ defmodule Hawk.JsonApi.Document do
     if is_nil(id), do: nil, else: %{type: type, id: to_string(id)}
   end
 
-  defp many_identifiers(_models, false), do: []
-  defp many_identifiers(%Ecto.Association.NotLoaded{}, true), do: []
-  defp many_identifiers(nil, true), do: []
+  defp many_identifiers(_models, false), do: :not_loaded
+  defp many_identifiers(%Ecto.Association.NotLoaded{}, true), do: :not_loaded
+  defp many_identifiers(nil, true), do: :not_loaded
 
-  defp many_identifiers(models, true),
-    do:
-      Enum.map(
-        models,
-        &%{type: Schema.metadata(&1).type, id: to_string(Map.get(&1, Schema.identity(&1)))}
-      )
+  defp many_identifiers(models, true) do
+    Enum.map(
+      models,
+      &%{type: Schema.metadata(&1).type, id: to_string(Map.get(&1, Schema.identity(&1)))}
+    )
+  end
 
   defp preload_requested?(preloads, name) do
     Enum.any?(preloads, fn

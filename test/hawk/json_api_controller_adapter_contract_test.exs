@@ -66,7 +66,9 @@ defmodule Hawk.JsonApiControllerAdapterContractTest do
     conn =
       Controller.update(
         conn(@system),
-        Map.put(create_params(%{"slug" => "science"}), "id", Videdal.course_id())
+        create_params(%{"slug" => "science"})
+        |> Map.put("id", Videdal.course_id())
+        |> put_in(["data", "id"], Videdal.course_id())
       )
 
     assert conn.status == 400

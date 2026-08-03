@@ -274,9 +274,11 @@ defmodule Hawk.JsonApi.Controller do
       context = request_context(conn)
       identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
 
-      case resource.one(authority: authority, context: context, filter: %{identity => normalize_id(id)}) do
+      path_id = normalize_id(id)
+
+      case resource.one(authority: authority, context: context, filter: %{identity => path_id}) do
         {:ok, existing} ->
-          Request.validate_document!(params, model, :updatable)
+          Request.validate_document!(params, model, :updatable, path_id: path_id)
 
           params
           |> Request.attributes(model, :updatable)

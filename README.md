@@ -499,6 +499,10 @@ Generated actions follow resource capabilities:
 - `related/2` for `GET .../:id/:relationship`
 - `hawk_action/2` for `POST .../:id/-actions/:action`
 
+JSON:API update documents must include both `data.type` and `data.id`; the body
+ID must match the full UUID in the request path. Hawk rejects missing or
+conflicting update identity with `400` rather than silently ignoring it.
+
 `Hawk.JsonApi.Routes.routes/2` returns the same capability-aware route specs for
 framework/router integration:
 
@@ -819,8 +823,11 @@ applies optional formatter functions, so templates can keep display projections
 near the LiveView adapter metadata.
 
 Hawk also generates `hawk_validate/2` and `hawk_save/2,3`.
-Default `handle_event("hawk:validate", ...)` and `handle_event("hawk:save", ...)`
-clauses call those helpers unless `events: false` is set. `hawk_validate/2`
+Default `handle_event("hawk:validate", ...)`, `handle_event("hawk:save", ...)`,
+and `handle_event("hawk:delete", ...)` clauses call those helpers unless
+`events: false` is set. Delete events accept only the resource `id`; authority
+is resolved from the server-owned `:hawk_authority` socket assign (falling back
+to public authority), never from browser event parameters. `hawk_validate/2`
 rebuilds a non-persisting validation changeset through `change_create/2` or
 `change_update/3`, then assigns a Phoenix `to_form(changeset, as: :course)` on a
 real `Phoenix.LiveView.Socket`. `hawk_save/2` uses the same state to call
@@ -883,8 +890,13 @@ writer's view of the record is never pushed to readers; a viewer whose role
 hides the record re-queries and simply does not see it.
 
 Broadcasts fire **after** the write's transaction commits, so a cross-process
-subscriber re-querying immediately sees the committed row. A no-op update
-(empty changes) and an unauthorized/invalid write do not broadcast.
+subscriber re-querying immediately sees the committed row. `Hawk.Multi` queues
+its writers' events and flushes them only after the transaction it owns commits;
+failed multis and plan previews discard the queue. A Multi containing PubSub
+writers must own the outer transaction; Hawk rejects calls from inside an
+unmanaged caller transaction because it cannot portably observe that outer
+transaction's commit. This prevents both premature and silently missing events.
+A no-op update (empty changes) and an unauthorized/invalid write do not broadcast.
 
 ### LiveView one-liner
 
@@ -1012,13 +1024,17 @@ defmodule MyAppWeb.OpenApiController do
     path_prefix: "/api/v1",
     resources: [MyApp.Courses, MyApp.Grades],
     servers: [%{url: "https://api.example.com"}],
-    security: [%{"bearerAuth" => []}]
+    security: [%{"bearerAuth" => []}],
+    security_schemes: %{
+      bearerAuth: %{type: "http", scheme: "bearer", bearerFormat: "JWT"}
+    }
 end
 ```
 
 The controller serves the spec as `application/json` (an OpenAPI document is
 JSON, not a JSON:API resource). It passes `:title`, `:version`, `:path_prefix`,
-`:license`, `:servers`, and `:security` straight through to `Hawk.OpenApi.spec/2`.
+`:license`, `:servers`, `:security`, and `:security_schemes` straight through to
+`Hawk.OpenApi.spec/2`.
 `Hawk.OpenApi.spec/2` takes `Hawk.Resource` facades. Facades with `json_api: false`
 are omitted because this OpenAPI generator documents the JSON:API surface only.
 The controller exposes `spec/0` and `show/2`. The specification is composed from

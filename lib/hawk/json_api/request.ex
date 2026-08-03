@@ -19,7 +19,7 @@ defmodule Hawk.JsonApi.Request do
   """
   def validate_uuid!(id, label \\ "id") do
     case Ecto.UUID.cast(id) do
-      {:ok, _uuid} -> id
+      {:ok, uuid} -> uuid
       :error -> raise ArgumentError, "#{label} must be a valid UUID"
     end
   end
@@ -70,12 +70,13 @@ defmodule Hawk.JsonApi.Request do
   @doc """
   Validates a create/update request document against the resource contract.
   """
-  def validate_document!(params, model, capability, _opts \\ [])
+  def validate_document!(params, model, capability, opts \\ [])
       when capability in [:creatable, :updatable] do
     data = request_data!(params)
     json_api = Schema.metadata(model)
 
     validate_type!(data, json_api.type, capability)
+    validate_update_identity!(data, capability, opts)
     validate_attribute_members!(data, json_api, capability)
     validate_relationship_members!(data, model, json_api, capability)
 
@@ -131,9 +132,25 @@ defmodule Hawk.JsonApi.Request do
 
   defp validate_type!(data, expected_type, :updatable) do
     case Map.get(data, "type") do
-      nil -> :ok
       ^expected_type -> :ok
       _other -> raise ArgumentError, "expected data.type to be #{inspect(expected_type)}"
+    end
+  end
+
+  defp validate_update_identity!(_data, :creatable, _opts), do: :ok
+
+  defp validate_update_identity!(data, :updatable, opts) do
+    case Map.get(data, "id") do
+      nil ->
+        raise ArgumentError, "update data.id is required"
+
+      id ->
+        body_id = validate_uuid!(id, "data.id")
+        path_id = opts |> Keyword.get(:path_id, id) |> validate_uuid!("request path id")
+
+        unless body_id == path_id do
+          raise ArgumentError, "data.id must match the request path id"
+        end
     end
   end
 
@@ -299,16 +316,22 @@ defmodule Hawk.JsonApi.Request do
     Keyword.put(opts, :sort, [{:desc, existing_param_atom!(column, "sort column")}])
   end
 
-  defp put_sort(opts, column) do
+  defp put_sort(opts, column) when is_binary(column) do
     Keyword.put(opts, :sort, [{:asc, existing_param_atom!(column, "sort column")}])
   end
 
-  defp parse_page(params) do
-    page = Map.get(params, "page", %{})
+  defp put_sort(_opts, _sort), do: raise(ArgumentError, "sort must be a string")
 
-    %{}
-    |> put_page_value(:size, Map.get(page, "size") || Map.get(params, "page_size"))
-    |> put_page_value(:number, Map.get(page, "number") || Map.get(params, "page_number"))
+  defp parse_page(params) do
+    case Map.get(params, "page", %{}) do
+      page when is_map(page) ->
+        %{}
+        |> put_page_value(:size, Map.get(page, "size") || Map.get(params, "page_size"))
+        |> put_page_value(:number, Map.get(page, "number") || Map.get(params, "page_number"))
+
+      _page ->
+        raise ArgumentError, "page must be an object"
+    end
   end
 
   defp put_page_value(page, _key, nil), do: page
@@ -317,22 +340,33 @@ defmodule Hawk.JsonApi.Request do
   defp put_page_value(page, key, value) when is_binary(value),
     do: Map.put(page, key, String.to_integer(value))
 
+  defp put_page_value(_page, key, _value),
+    do: raise(ArgumentError, "page[#{key}] must be an integer")
+
   defp parse_fields(nil), do: %{}
   defp parse_fields(fields) when fields == %{}, do: %{}
 
   defp parse_fields(fields) when is_map(fields) do
     Map.new(fields, fn {type, fieldset} ->
-      fields =
-        fieldset
-        |> to_string()
-        |> String.split(",", trim: true)
-        |> Enum.map(&String.trim/1)
-        |> Enum.reject(&(&1 == ""))
-        |> MapSet.new()
-
-      {to_string(type), fields}
+      {field_type!(type), parse_fieldset!(fieldset)}
     end)
   end
+
+  defp parse_fields(_fields), do: raise(ArgumentError, "fields must be an object")
+
+  defp field_type!(type) when is_binary(type), do: type
+  defp field_type!(type) when is_atom(type), do: Atom.to_string(type)
+  defp field_type!(_type), do: raise(ArgumentError, "field resource type must be a string")
+
+  defp parse_fieldset!(fieldset) when is_binary(fieldset) do
+    fieldset
+    |> String.split(",", trim: true)
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+    |> MapSet.new()
+  end
+
+  defp parse_fieldset!(_fieldset), do: raise(ArgumentError, "field set must be a string")
 
   defp parse_filter(nil), do: :all
   defp parse_filter(filter) when filter == %{}, do: :all
@@ -340,6 +374,8 @@ defmodule Hawk.JsonApi.Request do
   defp parse_filter(filter) when is_map(filter) do
     Map.new(filter, fn {key, value} -> {parse_filter_key!(key), parse_filter_value!(value)} end)
   end
+
+  defp parse_filter(_filter), do: raise(ArgumentError, "filter must be an object")
 
   defp parse_filter_key!(key) when is_atom(key), do: key
 
@@ -352,10 +388,30 @@ defmodule Hawk.JsonApi.Request do
 
   defp parse_filter_value!(%{} = value) when map_size(value) == 1 do
     [{operator, operand}] = Map.to_list(value)
-    {parse_filter_operator!(operator), parse_filter_scalar(operand)}
+    operator = parse_filter_operator!(operator)
+    {operator, parse_filter_operand!(operator, operand)}
   end
 
+  defp parse_filter_value!(value) when is_list(value) or is_map(value),
+    do: raise(ArgumentError, "filter value must be a scalar")
+
   defp parse_filter_value!(value), do: parse_filter_scalar(value)
+
+  defp parse_filter_operand!(operator, values) when operator in [:in, :not_in] and is_list(values),
+    do: Enum.map(values, &parse_filter_scalar!/1)
+
+  defp parse_filter_operand!(operator, _operand) when operator in [:in, :not_in],
+    do: raise(ArgumentError, "filter operator #{operator} requires a list")
+
+  defp parse_filter_operand!(_operator, operand) when is_list(operand) or is_map(operand),
+    do: raise(ArgumentError, "filter operator requires a scalar operand")
+
+  defp parse_filter_operand!(_operator, operand), do: parse_filter_scalar(operand)
+
+  defp parse_filter_scalar!(value) when is_list(value) or is_map(value),
+    do: raise(ArgumentError, "filter list values must be scalars")
+
+  defp parse_filter_scalar!(value), do: parse_filter_scalar(value)
 
   defp parse_filter_operator!(operator) when is_atom(operator), do: operator
 
@@ -382,6 +438,8 @@ defmodule Hawk.JsonApi.Request do
     |> Enum.reduce([], &merge_preload/2)
     |> Enum.reverse()
   end
+
+  defp parse_include(_include, _reader), do: raise(ArgumentError, "include must be a string")
 
   defp include_path_to_preload([segment], reader) do
     include_atom!(segment, reader)

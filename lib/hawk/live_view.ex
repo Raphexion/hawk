@@ -195,10 +195,13 @@ defmodule Hawk.LiveView do
     model = resource.__hawk_resource__(:model)
     preloads = derive_preloads(live_view_table(live_view), model)
 
-    reader_opts =
+    base_reader_opts =
       opts
       |> reject_preloads_opt!()
       |> Keyword.delete(:params)
+
+    reader_opts =
+      base_reader_opts
       |> put_reader_filter(state.filter)
       |> put_reader_page(state.page)
       |> put_reader_sort(state.sort)
@@ -211,7 +214,9 @@ defmodule Hawk.LiveView do
 
     socket
     |> assign(:hawk_resource, as)
+    |> assign(:hawk_authority, authority)
     |> assign(:hawk_index_state, state)
+    |> assign(:hawk_index_reader_opts, base_reader_opts)
     |> assign(:hawk_index_meta, index_meta(as, plural_as, results, page))
     |> assign(:hawk_page, page)
     |> assign(:hawk_table, live_view_table(live_view))
@@ -241,6 +246,7 @@ defmodule Hawk.LiveView do
 
         socket
         |> assign(:hawk_resource, as)
+        |> assign(:hawk_authority, authority)
         |> assign(:hawk_fields, live_view_fields(live_view))
         |> assign(as, model)
 
@@ -355,7 +361,8 @@ defmodule Hawk.LiveView do
     live_view = live_view_metadata(resource)
     {as, plural_as} = resource_assigns(resource, live_view, nil, nil)
     state = Map.fetch!(socket.assigns, :hawk_index_state)
-    run_index(socket, resource, as, plural_as, authority, state, live_view, [])
+    opts = Map.get(socket.assigns, :hawk_index_reader_opts, [])
+    run_index(socket, resource, as, plural_as, authority, state, live_view, opts)
   end
 
   defp refresh_show(socket, resource, authority) do
@@ -483,7 +490,8 @@ defmodule Hawk.LiveView do
   end
 
   @doc false
-  def handle_delete(socket, resource, as, plural_as, %{"id" => id, "authority" => authority}) do
+  def handle_delete(socket, resource, as, plural_as, %{"id" => id}) do
+    authority = action_authority(socket, [])
     live_view = live_view_metadata(resource)
     {as, plural_as} = resource_assigns(resource, live_view, as, plural_as)
     identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
@@ -492,7 +500,7 @@ defmodule Hawk.LiveView do
       {:ok, model} ->
         case resource.delete(model, authority) do
           {:ok, _model} ->
-            {:noreply, assign_index(socket, resource, as, plural_as, authority, [])}
+            {:noreply, refresh_after_delete(socket, resource, as, plural_as, authority)}
 
           result ->
             {:noreply, assign(socket, :hawk_error, live_error(result))}
@@ -503,6 +511,14 @@ defmodule Hawk.LiveView do
          assign(socket, :hawk_error, %{
            base: ["#{String.replace(to_string(as), "_", " ")} was not found"]
          })}
+    end
+  end
+
+  defp refresh_after_delete(socket, resource, as, plural_as, authority) do
+    if Map.has_key?(socket.assigns, :hawk_index_state) do
+      refresh_index(socket, resource, authority)
+    else
+      assign_index(socket, resource, as, plural_as, authority, [])
     end
   end
 

@@ -21,6 +21,47 @@ defmodule Hawk.RepositoryBoundary do
   @type repo :: module()
   @type opts :: keyword()
 
+  @deferred_broadcasts_key {__MODULE__, :deferred_broadcasts}
+
+  @doc false
+  def capturing_broadcasts? do
+    Process.get(@deferred_broadcasts_key, :not_capturing) != :not_capturing
+  end
+
+  @doc false
+  def capture_broadcasts(fun) when is_function(fun, 0) do
+    case Process.get(@deferred_broadcasts_key, :not_capturing) do
+      :not_capturing ->
+        Process.put(@deferred_broadcasts_key, [])
+
+        try do
+          {fun.(), @deferred_broadcasts_key |> Process.get([]) |> Enum.reverse()}
+        after
+          Process.delete(@deferred_broadcasts_key)
+        end
+
+      broadcasts ->
+        {fun.(), {:nested, broadcasts}}
+    end
+  end
+
+  @doc false
+  def flush_broadcasts({:nested, _broadcasts}), do: :ok
+
+  def flush_broadcasts(broadcasts) when is_list(broadcasts) do
+    Enum.each(broadcasts, fn {pubsub, strategy, resource, operation, model} ->
+      Hawk.PubSub.broadcast(pubsub, strategy, resource, operation, model)
+    end)
+  end
+
+  @doc false
+  def discard_broadcasts({:nested, broadcasts}) do
+    Process.put(@deferred_broadcasts_key, broadcasts)
+    :ok
+  end
+
+  def discard_broadcasts(_broadcasts), do: :ok
+
   @doc """
   Inserts the context changeset through the host repo.
   """
@@ -93,7 +134,15 @@ defmodule Hawk.RepositoryBoundary do
         resource = Keyword.fetch!(opts, :resource)
         strategy = Keyword.get(opts, :topic_strategy) || Hawk.PubSub.DefaultTopics
         event_operation = if operation == :insert, do: :create, else: operation
-        Hawk.PubSub.broadcast(pubsub, strategy, resource, event_operation, model)
+        broadcast = {pubsub, strategy, resource, event_operation, model}
+
+        case Process.get(@deferred_broadcasts_key, :not_capturing) do
+          :not_capturing ->
+            Hawk.PubSub.broadcast(pubsub, strategy, resource, event_operation, model)
+
+          broadcasts ->
+            Process.put(@deferred_broadcasts_key, [broadcast | broadcasts])
+        end
     end
 
     result

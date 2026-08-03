@@ -174,9 +174,11 @@ defmodule Hawk.Policy do
   end
 
   defp mutation_field(%Hawk.MutationContext{} = context, field) when is_atom(field) do
-    value = Ecto.Changeset.get_field(context.changeset, field)
-
-    if is_nil(value), do: Map.fetch(context.model, field), else: {:ok, value}
+    case Ecto.Changeset.fetch_field(context.changeset, field) do
+      {:changes, value} -> {:ok, value}
+      {:data, value} -> {:ok, value}
+      :error -> Map.fetch(context.model, field)
+    end
   end
 
   defp literal_option!(value, _caller) when is_map(value), do: value

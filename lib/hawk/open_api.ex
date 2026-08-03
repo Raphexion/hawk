@@ -22,6 +22,7 @@ defmodule Hawk.OpenApi do
       Hawk is a library and does not choose a license for the host app.
     * `:servers` — the servers list (default `[%{url: "/"}]`).
     * `:security` — the top-level security list (default `[]`).
+    * `:security_schemes` — named OpenAPI security scheme definitions (default `%{}`).
     * `:path_prefix` — a prefix applied to every path (default `""`).
   """
   def spec(resources, opts \\ []) when is_list(resources) do
@@ -38,6 +39,10 @@ defmodule Hawk.OpenApi do
       }
       |> maybe_put_license(Keyword.get(opts, :license))
 
+    components =
+      %{schemas: schemas(resources)}
+      |> maybe_put_security_schemes(Keyword.get(opts, :security_schemes, %{}))
+
     %{
       openapi: "3.1.0",
       info: info,
@@ -45,9 +50,7 @@ defmodule Hawk.OpenApi do
       security: Keyword.get(opts, :security, []),
       tags: tags(resources),
       paths: paths(resources, Keyword.get(opts, :path_prefix, "")),
-      components: %{
-        schemas: schemas(resources)
-      }
+      components: components
     }
   end
 
@@ -56,6 +59,9 @@ defmodule Hawk.OpenApi do
   defp maybe_put_license(info, nil), do: info
   defp maybe_put_license(info, license) when is_binary(license), do: Map.put(info, :license, %{name: license})
   defp maybe_put_license(info, %{name: _} = license), do: Map.put(info, :license, license)
+
+  defp maybe_put_security_schemes(components, schemes) when schemes == %{}, do: components
+  defp maybe_put_security_schemes(components, schemes), do: Map.put(components, :securitySchemes, schemes)
 
   defp normalize_resource(module) when is_atom(module) do
     Code.ensure_compiled(module)
@@ -215,7 +221,7 @@ defmodule Hawk.OpenApi do
       operationId: "show#{pascalize(resource.json_api.type)}Relationship",
       summary: "Show #{resource_name(resource)} relationship linkage",
       parameters: [uuid_id_parameter(), relationship_parameter(resource)],
-      responses: responses(resource, 200, relationship_document_schema())
+      responses: responses(resource, 200, relationship_document_schema(resource))
     })
   end
 
@@ -226,7 +232,7 @@ defmodule Hawk.OpenApi do
       operationId: "show#{pascalize(resource.json_api.type)}Related",
       summary: "Show #{resource_name(resource)} related resource",
       parameters: [uuid_id_parameter(), relationship_parameter(resource), fields_parameter(resource)],
-      responses: responses(resource, 200, data_schema(resource))
+      responses: responses(resource, 200, related_document_schema(resource))
     })
   end
 
@@ -430,8 +436,77 @@ defmodule Hawk.OpenApi do
 
   defp data_schema(resource), do: %{type: "object", properties: %{data: schema_ref(resource)}}
 
-  defp relationship_document_schema do
-    %{type: "object", properties: %{data: %{type: "object"}}}
+  defp relationship_document_schema(resource) do
+    %{
+      type: "object",
+      required: [:data],
+      properties: %{data: %{anyOf: relationship_data_schemas(resource, :linkage)}}
+    }
+  end
+
+  defp related_document_schema(resource) do
+    %{
+      type: "object",
+      required: [:data],
+      properties: %{data: %{anyOf: relationship_data_schemas(resource, :related)}}
+    }
+  end
+
+  defp relationship_data_schemas(resource, representation) do
+    resource.json_api.relationships
+    |> Enum.flat_map(fn {name, metadata} ->
+      source = Map.get(metadata, :source, name)
+
+      case resolve_relationship_target(resource, source) do
+        {related_type, :one} ->
+          [relationship_data_schema(related_type, :one, representation), %{type: "null"}]
+
+        {related_type, :many} ->
+          [relationship_data_schema(related_type, :many, representation)]
+
+        nil ->
+          []
+      end
+    end)
+    |> Enum.uniq()
+  end
+
+  defp relationship_data_schema(related_type, :one, :linkage),
+    do: resource_identifier_data_schema(related_type)
+
+  defp relationship_data_schema(related_type, :many, :linkage) do
+    %{type: "array", items: resource_identifier_data_schema(related_type)}
+  end
+
+  defp relationship_data_schema(related_type, :one, :related),
+    do: related_resource_data_schema(related_type)
+
+  defp relationship_data_schema(related_type, :many, :related) do
+    %{type: "array", items: related_resource_data_schema(related_type)}
+  end
+
+  defp resource_identifier_data_schema(related_type) do
+    %{
+      type: "object",
+      required: [:type, :id],
+      properties: %{
+        type: %{type: "string", enum: [related_type]},
+        id: %{type: "string"}
+      }
+    }
+  end
+
+  defp related_resource_data_schema(related_type) do
+    %{
+      type: "object",
+      required: [:type, :id],
+      properties: %{
+        type: %{type: "string", enum: [related_type]},
+        id: %{type: "string"},
+        attributes: %{type: "object", additionalProperties: true},
+        relationships: %{type: "object", additionalProperties: true}
+      }
+    }
   end
 
   defp array_schema(resource) do
@@ -439,19 +514,37 @@ defmodule Hawk.OpenApi do
   end
 
   defp write_document_schema(resource, capability) do
+    data_properties = %{
+      type: %{type: "string", enum: [resource.json_api.type]},
+      attributes: %{
+        type: "object",
+        additionalProperties: false,
+        properties: writable_attributes(resource, capability)
+      },
+      relationships: %{
+        type: "object",
+        additionalProperties: false,
+        properties: writable_relationships(resource, capability)
+      }
+    }
+
+    data_properties =
+      if capability == :updatable do
+        Map.put(data_properties, :id, %{type: "string", format: "uuid"})
+      else
+        data_properties
+      end
+
+    required = if capability == :updatable, do: [:type, :id], else: [:type]
+
     %{
       type: "object",
+      required: [:data],
       properties: %{
         data: %{
           type: "object",
-          properties: %{
-            type: %{type: "string", enum: [resource.json_api.type]},
-            attributes: %{type: "object", properties: writable_attributes(resource, capability)},
-            relationships: %{
-              type: "object",
-              properties: writable_relationships(resource, capability)
-            }
-          }
+          required: required,
+          properties: data_properties
         }
       }
     }

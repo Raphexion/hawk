@@ -168,18 +168,21 @@ defmodule Hawk.Plans do
   end
 
   defp preview_with_rollback(multi, repo) do
-    repo.transaction(fn ->
-      case Multi.execute(multi, repo) do
-        {:ok, results} ->
-          repo.rollback({:ok, results})
+    {transaction_result, _discarded_broadcasts} =
+      Hawk.RepositoryBoundary.capture_broadcasts(fn ->
+        repo.transaction(fn -> preview_multi(multi, repo) end)
+      end)
 
-        {:error, name, reason, prior} ->
-          repo.rollback({:error, name, reason, prior})
-      end
-    end)
-    |> case do
+    case transaction_result do
       {:error, {:ok, results}} -> {:ok, results}
       {:error, {:error, name, reason, prior}} -> {:error, name, reason, prior}
+    end
+  end
+
+  defp preview_multi(multi, repo) do
+    case Multi.execute(multi, repo) do
+      {:ok, results} -> repo.rollback({:ok, results})
+      {:error, name, reason, prior} -> repo.rollback({:error, name, reason, prior})
     end
   end
 

@@ -103,6 +103,18 @@ defmodule Hawk.PolicyTest do
     refute OwnedPolicy.update?(other)
   end
 
+  test "write ownership declarations reject explicitly clearing an owned field" do
+    teacher_id = Videdal.teacher_id()
+    authority = Authority.new(:teacher, teacher_id, scopes: %{teacher_id: teacher_id})
+
+    context =
+      %Course{teacher_id: teacher_id}
+      |> MutationContext.update(%{teacher_id: nil}, authority)
+      |> Hawk.Writer.cast([:teacher_id])
+
+    refute OwnedPolicy.update?(context)
+  end
+
   test "write declarations allow configured roles and deny readonly authorities" do
     teacher_context = context(Authority.new(:teacher, 12))
 

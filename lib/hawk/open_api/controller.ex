@@ -9,7 +9,7 @@ defmodule Hawk.OpenApi.Controller do
   `info.license` out of the spec.
 
   All `Hawk.OpenApi.spec/2` options are passed through: `:title`, `:version`,
-  `:path_prefix`, `:license`, `:servers`, and `:security`.
+  `:path_prefix`, `:license`, `:servers`, `:security`, and `:security_schemes`.
 
   Example:
 
@@ -29,7 +29,17 @@ defmodule Hawk.OpenApi.Controller do
 
   defmacro __using__(opts) do
     resources = Keyword.fetch!(opts, :resources)
-    spec_opts = Keyword.take(opts, [:title, :version, :path_prefix, :license, :servers, :security])
+
+    spec_opts =
+      Keyword.take(opts, [
+        :title,
+        :version,
+        :path_prefix,
+        :license,
+        :servers,
+        :security,
+        :security_schemes
+      ])
 
     quote do
       def spec do

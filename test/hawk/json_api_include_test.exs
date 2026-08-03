@@ -34,7 +34,7 @@ defmodule Hawk.JsonApiIncludeTest do
       grades: [%Grade{id: @grade_id, score: 12}]
     }
 
-    assert Hawk.JsonApi.Document.document(course).data.relationships.grades == %{data: []}
+    refute Map.has_key?(Hawk.JsonApi.Document.document(course).data.relationships, :grades)
 
     assert Hawk.JsonApi.Document.document(course, preloads: [:grades]).data.relationships.grades == %{
              data: [%{type: "grades", id: @grade_id}]

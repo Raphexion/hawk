@@ -247,12 +247,59 @@ defmodule Hawk.Multi do
 
   Returns `{:ok, results_map}` on success, or
   `{:error, failed_step_name, error_value, prior_results}` on failure.
+
+  Writer PubSub events are flushed after the transaction owned by this function
+  commits. A Multi containing PubSub writers raises when called inside an
+  unmanaged caller transaction because Hawk cannot observe that outer commit.
   """
   @spec execute(t(), module(), keyword()) ::
           {:ok, map()} | {:error, atom(), term(), map()}
   def execute(%__MODULE__{} = multi, repo, _opts \\ []) when is_atom(repo) do
-    repo.transaction(fn -> run_steps(multi.steps) end)
-    |> unwrap_transaction_result()
+    outer_transaction? = function_exported?(repo, :in_transaction?, 0) and repo.in_transaction?()
+    validate_broadcast_boundary!(multi, outer_transaction?)
+
+    {transaction_result, broadcasts} =
+      Hawk.RepositoryBoundary.capture_broadcasts(fn ->
+        repo.transaction(fn -> execute_steps(multi.steps, repo) end)
+      end)
+
+    result = unwrap_transaction_result(transaction_result)
+    apply_broadcasts(result, broadcasts, outer_transaction?)
+    result
+  end
+
+  defp validate_broadcast_boundary!(multi, true) do
+    broadcasting? =
+      Enum.any?(multi.steps, fn
+        %{resource: resource} when is_atom(resource) and not is_nil(resource) ->
+          Hawk.PubSub.config_for_resource(resource) != nil
+
+        _step ->
+          false
+      end)
+
+    if broadcasting? and not Hawk.RepositoryBoundary.capturing_broadcasts?() do
+      raise ArgumentError,
+            "Hawk.Multi with PubSub writers must own the outer transaction so events can be " <>
+              "published after commit"
+    end
+  end
+
+  defp validate_broadcast_boundary!(_multi, false), do: :ok
+
+  defp apply_broadcasts({:ok, _results}, {:nested, _broadcasts}, _outer_transaction?), do: :ok
+
+  defp apply_broadcasts({:ok, _results}, broadcasts, false),
+    do: Hawk.RepositoryBoundary.flush_broadcasts(broadcasts)
+
+  defp apply_broadcasts(_result, broadcasts, _outer_transaction?),
+    do: Hawk.RepositoryBoundary.discard_broadcasts(broadcasts)
+
+  defp execute_steps(steps, repo) do
+    case run_steps(steps) do
+      {results, nil} -> results
+      {results, {failed_name, reason}} -> repo.rollback({failed_name, reason, results})
+    end
   end
 
   defp run_steps(steps) do
@@ -264,9 +311,9 @@ defmodule Hawk.Multi do
     end)
   end
 
-  defp unwrap_transaction_result({:ok, {results, nil}}), do: {:ok, results}
+  defp unwrap_transaction_result({:ok, results}), do: {:ok, results}
 
-  defp unwrap_transaction_result({:ok, {results, {failed_name, reason}}}),
+  defp unwrap_transaction_result({:error, {failed_name, reason, results}}),
     do: {:error, failed_name, reason, results}
 
   defp unwrap_transaction_result({:error, message}) when is_binary(message),

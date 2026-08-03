@@ -71,6 +71,7 @@ defmodule Hawk.LiveViewTest do
     socket =
       CourseIndexLive.assign_index(socket(), authority, sort: [{:asc, :title}], page: %{size: 10})
 
+    assert socket.assigns.hawk_authority == authority
     assert [first, second] = socket.assigns.courses
     assert first.id == math.id
     assert first.title == "Math"
@@ -228,6 +229,22 @@ defmodule Hawk.LiveViewTest do
       CourseShowLive.assign_show(socket(), authority, course.id, filter: %{school_id: school.id})
 
     assert socket.assigns.course.id == course.id
+  end
+
+  test "index refresh preserves caller-supplied reader filters" do
+    school_a = insert(:school)
+    school_b = insert(:school)
+    teacher_a = insert(:teacher, school_id: school_a.id)
+    teacher_b = insert(:teacher, school_id: school_b.id)
+    course_a = insert(:course, school_id: school_a.id, teacher_id: teacher_a.id)
+
+    socket =
+      CourseIndexLive.assign_index(socket(), Authority.system(), filter: %{school_id: school_a.id})
+
+    insert(:course, school_id: school_b.id, teacher_id: teacher_b.id)
+    socket = Hawk.LiveView.refresh(socket, Videdal.Courses, authority: Authority.system())
+
+    assert Enum.map(socket.assigns.courses, & &1.id) == [course_a.id]
   end
 
   test "assign_index exposes lightweight page metadata for admin tables" do
@@ -554,8 +571,8 @@ defmodule Hawk.LiveViewTest do
     {:noreply, socket} =
       CourseIndexLive.handle_event(
         "hawk:delete",
-        %{"id" => course_id, "authority" => authority},
-        socket()
+        %{"id" => course_id},
+        Phoenix.Component.assign(socket(), :hawk_authority, authority)
       )
 
     refute Enum.any?(socket.assigns.courses, &(&1.id == course_id))
@@ -568,8 +585,8 @@ defmodule Hawk.LiveViewTest do
     {:noreply, socket} =
       CourseIndexLive.handle_event(
         "hawk:delete",
-        %{"id" => @other_course_id, "authority" => Authority.system()},
-        socket()
+        %{"id" => @other_course_id},
+        Phoenix.Component.assign(socket(), :hawk_authority, Authority.system())
       )
 
     assert socket.assigns.hawk_error == %{base: ["course was not found"]}
@@ -588,8 +605,8 @@ defmodule Hawk.LiveViewTest do
     {:noreply, socket} =
       CourseIndexLive.handle_event(
         "hawk:delete",
-        %{"id" => course_id, "authority" => authority},
-        socket()
+        %{"id" => course_id},
+        Phoenix.Component.assign(socket(), :hawk_authority, authority)
       )
 
     assert socket.assigns.hawk_error == %{base: ["You are not allowed to delete this course."]}

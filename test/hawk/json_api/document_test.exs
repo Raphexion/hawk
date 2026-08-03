@@ -51,6 +51,23 @@ defmodule Hawk.JsonApi.DocumentTest do
     assert document.links.self == "/courses/00000000-0000-0000-0000-000000000007"
   end
 
+  test "unloaded to-many relationships are omitted instead of rendered as empty" do
+    course = %Videdal.Course{
+      id: Videdal.course_id(),
+      title: "Math",
+      school_id: Videdal.school_id(),
+      teacher_id: Videdal.teacher_id()
+    }
+
+    without_links = Document.document(course)
+    refute Map.has_key?(without_links.data.relationships, :grades)
+
+    with_links = Document.document(course, links: true)
+    assert %{links: links} = with_links.data.relationships.grades
+    refute Map.has_key?(with_links.data.relationships.grades, :data)
+    assert links.related == "/courses/#{course.id}/grades"
+  end
+
   test "documents can expose many-to-many relationships without exposing the join schema" do
     student = %Videdal.Student{
       id: Videdal.student_id(),

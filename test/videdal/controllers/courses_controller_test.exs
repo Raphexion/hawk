@@ -39,9 +39,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
                  },
                  relationships: %{
                    school: %{data: %{type: "schools", id: school.id}},
-                   teacher: %{data: %{type: "teachers", id: teacher.id}},
-                   grades: %{data: []},
-                   enrollments: %{data: []}
+                   teacher: %{data: %{type: "teachers", id: teacher.id}}
                  }
                }
              ],
@@ -423,7 +421,10 @@ defmodule Videdal.Controllers.CoursesControllerTest do
     conn =
       CoursesController.update(
         conn(%{role: :student, scopes: %{school_id: school.id, student_id: student.id}}),
-        %{"id" => course.id, "data" => %{}}
+        %{
+          "id" => course.id,
+          "data" => %{"type" => "courses", "id" => course.id, "attributes" => %{}}
+        }
       )
 
     assert conn.status == 403

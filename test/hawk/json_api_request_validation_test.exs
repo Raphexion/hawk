@@ -92,6 +92,57 @@ defmodule Hawk.JsonApiRequestValidationTest do
     assert_error(conn, "relationship school id must be a valid UUID")
   end
 
+  test "update requires type and id and rejects a body id that differs from the URL" do
+    course = insert(:course)
+
+    missing_type =
+      Controller.update(conn(Hawk.Authority.system()), %{
+        "id" => course.id,
+        "data" => %{"id" => course.id, "attributes" => %{}}
+      })
+
+    assert missing_type.status == 400
+    assert_error(missing_type, "expected data.type to be \"courses\"")
+
+    missing_id =
+      Controller.update(conn(Hawk.Authority.system()), %{
+        "id" => course.id,
+        "data" => %{"type" => "courses", "attributes" => %{}}
+      })
+
+    assert missing_id.status == 400
+    assert_error(missing_id, "update data.id is required")
+
+    mismatched_id =
+      Controller.update(conn(Hawk.Authority.system()), %{
+        "id" => course.id,
+        "data" => %{"type" => "courses", "id" => Videdal.other_course_id(), "attributes" => %{}}
+      })
+
+    assert mismatched_id.status == 400
+    assert_error(mismatched_id, "data.id must match the request path id")
+  end
+
+  test "direct update validation accepts its body id as the target and normalizes UUID case" do
+    id = Videdal.course_id()
+    uppercase_id = String.upcase(id)
+
+    assert :ok =
+             Hawk.JsonApi.Request.validate_document!(
+               %{"data" => %{"type" => "courses", "id" => uppercase_id}},
+               Videdal.Course,
+               :updatable
+             )
+
+    assert :ok =
+             Hawk.JsonApi.Request.validate_document!(
+               %{"data" => %{"type" => "courses", "id" => uppercase_id}},
+               Videdal.Course,
+               :updatable,
+               path_id: id
+             )
+  end
+
   test "create accepts valid documents" do
     school = insert(:school)
     teacher = insert(:teacher, school_id: school.id)

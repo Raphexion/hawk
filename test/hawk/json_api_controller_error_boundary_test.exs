@@ -42,6 +42,28 @@ defmodule Hawk.JsonApiControllerErrorBoundaryTest do
     assert error.code == "bad_request"
   end
 
+  test "malformed query parameter shapes return JSON:API 400 errors" do
+    malformed_params = [
+      %{"fields" => "courses"},
+      %{"filter" => "school_id"},
+      %{"include" => ["teacher"]},
+      %{"page" => "1"},
+      %{"sort" => ["title"]},
+      %{"page" => %{"size" => ["1"]}},
+      %{"fields" => %{"courses" => %{"title" => "1"}}},
+      %{"filter" => %{"id" => %{"in" => "not-a-list"}}},
+      %{"filter" => %{"id" => ["one", "two"]}}
+    ]
+
+    for params <- malformed_params do
+      conn = ErrorBoundaryCoursesController.index(conn(@school_admin), params)
+
+      assert conn.status == 400
+      assert [error] = resp(conn).errors
+      assert error.code == "bad_request"
+    end
+  end
+
   test "validation, authorization, and missing records keep their explicit statuses" do
     Process.put({Videdal.Repo, :all_results}, [])
 

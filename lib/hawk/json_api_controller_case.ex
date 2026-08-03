@@ -460,15 +460,15 @@ defmodule Hawk.JsonApiControllerCase do
       config.update_params || config.create_params ||
         mutation_params(config.model, :updatable)
 
-    conn =
-      config.controller.update(
-        conn_for(role_case.authority),
-        Map.put(
-          resolve_params(params),
-          "id",
-          model_id(config.sample)
-        )
-      )
+    id = model_id(config.sample)
+
+    update_params =
+      params
+      |> resolve_params()
+      |> Map.put("id", id)
+      |> update_in(["data"], &Map.put(&1, "id", id))
+
+    conn = config.controller.update(conn_for(role_case.authority), update_params)
 
     expected_status =
       cond do
@@ -724,13 +724,21 @@ defmodule Hawk.JsonApiControllerCase do
     json_api = Hawk.JsonApi.Schema.metadata(model)
     allowed = Map.fetch!(json_api, capability)
 
-    %{
-      "data" => %{
-        "type" => json_api.type,
-        "attributes" => attribute_examples(json_api, allowed),
-        "relationships" => relationship_examples(json_api, allowed)
-      }
+    data = %{
+      "type" => json_api.type,
+      "attributes" => attribute_examples(json_api, allowed),
+      "relationships" => relationship_examples(json_api, allowed)
     }
+
+    data =
+      if capability == :updatable do
+        identity = Hawk.JsonApi.Schema.identity(model)
+        Map.put(data, "id", model |> Map.fetch!(identity) |> to_string())
+      else
+        data
+      end
+
+    %{"data" => data}
   end
 
   defp attribute_examples(json_api, allowed) do
