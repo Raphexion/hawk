@@ -16,9 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **JSON:API response media type.** Controllers emit the exact
+- **JSON:API media negotiation.** Controllers emit the exact
   `application/vnd.api+json` media type without the forbidden `charset`
-  parameter.
+  parameter, reject unsupported request media types/parameters with `415`, and
+  return `406` when `Accept` does not allow a JSON:API response.
 
 - **Consistent controller authority lookup.** JSON:API controllers read the
   `:hawk_authority` assign produced by `Hawk.Authority.Plug`,

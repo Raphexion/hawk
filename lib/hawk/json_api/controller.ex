@@ -4,11 +4,17 @@ defmodule Hawk.JsonApi.Controller do
 
   Hawk runs behind Phoenix controllers and renders responses through `Plug.Conn`
   directly with the exact `application/vnd.api+json` content type. JSON:API does
-  not permit a `charset` media-type parameter.
+  not permit a `charset` media-type parameter. Explicit request `Content-Type`
+  values must be JSON:API with only `ext`/`profile` parameters; incompatible
+  values return `415`. `Accept` must allow JSON:API (directly or by wildcard),
+  otherwise Hawk returns `406`.
   """
 
   alias Hawk.JsonApi.Controller, as: JsonApiController
   alias Hawk.JsonApi.{Document, Request, Schema}
+
+  @json_api_parameters ["ext", "profile"]
+  @accept_parameters ["ext", "profile", "q"]
 
   @doc """
   Generates a Phoenix JSON:API controller for a Hawk resource.
@@ -552,9 +558,111 @@ defmodule Hawk.JsonApi.Controller do
     do: json(conn, 500, Hawk.Errors.to_json_api(result))
 
   defp with_error_boundary(conn, fun) when is_function(fun, 0) do
-    fun.()
+    case negotiate_media_type(conn) do
+      :ok -> fun.()
+      {:error, status, body} -> json(conn, status, body)
+    end
   rescue
     error in ArgumentError -> json(conn, 400, bad_request(error.message))
+  end
+
+  defp negotiate_media_type(conn) do
+    with :ok <- validate_content_type(conn),
+         :ok <- validate_accept(conn) do
+      :ok
+    end
+  end
+
+  defp validate_content_type(conn) do
+    case Plug.Conn.get_req_header(conn, "content-type") do
+      [] ->
+        :ok
+
+      [content_type] ->
+        case Plug.Conn.Utils.media_type(content_type) do
+          {:ok, "application", "vnd.api+json", params} ->
+            if supported_params?(params, @json_api_parameters),
+              do: :ok,
+              else: media_type_error(415, :unsupported_media_type, "Unsupported media type")
+
+          _other ->
+            media_type_error(415, :unsupported_media_type, "Unsupported media type")
+        end
+
+      _multiple ->
+        media_type_error(415, :unsupported_media_type, "Unsupported media type")
+    end
+  end
+
+  defp validate_accept(conn) do
+    case Plug.Conn.get_req_header(conn, "accept") do
+      [] ->
+        :ok
+
+      headers ->
+        acceptable? =
+          headers
+          |> Enum.flat_map(&String.split(&1, ",", trim: true))
+          |> Enum.flat_map(&json_api_media_range/1)
+          |> accepts_json_api?()
+
+        if acceptable?, do: :ok, else: media_type_error(406, :not_acceptable, "Not acceptable")
+    end
+  end
+
+  defp json_api_media_range(media_range) do
+    case Plug.Conn.Utils.media_type(media_range) do
+      {:ok, "*", "*", params} ->
+        media_range_quality(params, ["q"], 0)
+
+      {:ok, "application", "*", params} ->
+        media_range_quality(params, ["q"], 1)
+
+      {:ok, "application", "vnd.api+json", params} ->
+        media_range_quality(params, @accept_parameters, 2)
+
+      _other ->
+        []
+    end
+  end
+
+  defp media_range_quality(params, supported, specificity) do
+    with true <- supported_params?(params, supported),
+         {:ok, quality} <- quality(params) do
+      [{specificity, quality}]
+    else
+      _unsupported_or_invalid -> []
+    end
+  end
+
+  defp accepts_json_api?([]), do: false
+
+  defp accepts_json_api?(ranges) do
+    highest_specificity = ranges |> Enum.map(&elem(&1, 0)) |> Enum.max()
+
+    ranges
+    |> Enum.filter(&(elem(&1, 0) == highest_specificity))
+    |> Enum.any?(&(elem(&1, 1) > 0.0))
+  end
+
+  defp supported_params?(params, supported) do
+    params
+    |> Map.keys()
+    |> Enum.all?(&Enum.member?(supported, &1))
+  end
+
+  defp quality(%{"q" => quality}) do
+    case Float.parse(quality) do
+      {value, ""} when value >= 0.0 and value <= 1.0 -> {:ok, value}
+      _invalid -> :error
+    end
+  end
+
+  defp quality(_params), do: {:ok, 1.0}
+
+  defp media_type_error(status, code, title) do
+    error = %Hawk.Error{status: status, code: code, title: title, detail: title}
+    {:error, status, Hawk.Errors.to_json_api(error)}
   end
 
   defp bad_request(message) do

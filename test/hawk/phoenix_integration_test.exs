@@ -51,6 +51,51 @@ defmodule Hawk.PhoenixIntegrationTest do
     assert id == course.id
   end
 
+  test "JSON:API controller rejects unsupported Content-Type parameters" do
+    conn =
+      Plug.Test.conn(:post, "/courses", "")
+      |> Plug.Conn.put_req_header("content-type", "application/vnd.api+json; charset=utf-8")
+      |> Plug.Conn.assign(:hawk_authority, Authority.system())
+      |> CoursesController.create(%{})
+
+    assert conn.status == 415
+    assert %{"errors" => [%{"status" => "415"}]} = Jason.decode!(conn.resp_body)
+  end
+
+  test "JSON:API controller rejects an unacceptable JSON:API media type" do
+    conn =
+      Plug.Test.conn(:get, "/courses")
+      |> Plug.Conn.put_req_header("accept", "application/vnd.api+json; charset=utf-8")
+      |> Plug.Conn.assign(:hawk_authority, Authority.system())
+      |> CoursesController.index(%{})
+
+    assert conn.status == 406
+    assert %{"errors" => [%{"status" => "406"}]} = Jason.decode!(conn.resp_body)
+  end
+
+  test "JSON:API controller accepts a valid media range beside an invalid one" do
+    conn =
+      Plug.Test.conn(:get, "/courses")
+      |> Plug.Conn.put_req_header(
+        "accept",
+        "application/vnd.api+json; charset=utf-8, application/vnd.api+json; q=0.9"
+      )
+      |> Plug.Conn.assign(:hawk_authority, Authority.system())
+      |> CoursesController.index(%{})
+
+    assert conn.status == 200
+  end
+
+  test "JSON:API controller respects a more specific q=0 over a wildcard" do
+    conn =
+      Plug.Test.conn(:get, "/courses")
+      |> Plug.Conn.put_req_header("accept", "application/vnd.api+json; q=0, */*; q=1")
+      |> Plug.Conn.assign(:hawk_authority, Authority.system())
+      |> CoursesController.index(%{})
+
+    assert conn.status == 406
+  end
+
   test "OpenAPI controller renders through a real Plug.Conn" do
     conn =
       Plug.Test.conn(:get, "/openapi.json")

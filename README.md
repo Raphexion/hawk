@@ -504,7 +504,11 @@ The backing model is resolved from the facade; the controller does not accept
 a `:model` opt.
 
 Responses use the exact JSON:API media type `application/vnd.api+json` without a
-`charset` parameter.
+`charset` parameter. When a request sends `Content-Type`, it must use that media
+type with only the JSON:API `ext`/`profile` parameters; Hawk returns `415` for an
+unsupported media type or parameter. When a request sends `Accept`, it must allow
+JSON:API directly or through a wildcard; Hawk returns `406` when no acceptable
+media range remains.
 
 Generated actions follow resource capabilities:
 
