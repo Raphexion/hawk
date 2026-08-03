@@ -168,7 +168,7 @@ defmodule Hawk.Plans do
   end
 
   defp preview_with_rollback(multi, repo) do
-    {transaction_result, _discarded_broadcasts} =
+    {transaction_result, _discarded_capture} =
       Hawk.RepositoryBoundary.capture_broadcasts(fn ->
         repo.transaction(fn -> preview_multi(multi, repo) end)
       end)

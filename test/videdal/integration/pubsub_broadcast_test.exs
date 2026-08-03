@@ -96,7 +96,7 @@ defmodule Videdal.Integration.PubSubBroadcastTest do
   end
 
   test "a recovered nested multi failure discards only its own queued broadcasts" do
-    {committed_id, broadcasts} =
+    {committed_id, {:owner, _events} = broadcast_capture} =
       Hawk.RepositoryBoundary.capture_broadcasts(fn ->
         failed =
           Hawk.Multi.new()
@@ -113,7 +113,7 @@ defmodule Videdal.Integration.PubSubBroadcastTest do
         committed.id
       end)
 
-    Hawk.RepositoryBoundary.flush_broadcasts(broadcasts)
+    Hawk.RepositoryBoundary.flush_broadcasts(broadcast_capture)
 
     assert_receive %PubSub.Event{identity_value: ^committed_id}
     refute_received %PubSub.Event{}

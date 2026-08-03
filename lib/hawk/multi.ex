@@ -258,13 +258,13 @@ defmodule Hawk.Multi do
     outer_transaction? = function_exported?(repo, :in_transaction?, 0) and repo.in_transaction?()
     validate_broadcast_boundary!(multi, outer_transaction?)
 
-    {transaction_result, broadcasts} =
+    {transaction_result, broadcast_capture} =
       Hawk.RepositoryBoundary.capture_broadcasts(fn ->
         repo.transaction(fn -> execute_steps(multi.steps, repo) end)
       end)
 
     result = unwrap_transaction_result(transaction_result)
-    apply_broadcasts(result, broadcasts, outer_transaction?)
+    finalize_broadcast_capture(result, broadcast_capture, outer_transaction?)
     result
   end
 
@@ -287,13 +287,18 @@ defmodule Hawk.Multi do
 
   defp validate_broadcast_boundary!(_multi, false), do: :ok
 
-  defp apply_broadcasts({:ok, _results}, {:nested, _broadcasts}, _outer_transaction?), do: :ok
+  defp finalize_broadcast_capture(
+         {:ok, _results},
+         {:nested, _checkpoint},
+         _outer_transaction?
+       ),
+       do: :ok
 
-  defp apply_broadcasts({:ok, _results}, broadcasts, false),
-    do: Hawk.RepositoryBoundary.flush_broadcasts(broadcasts)
+  defp finalize_broadcast_capture({:ok, _results}, capture, false),
+    do: Hawk.RepositoryBoundary.flush_broadcasts(capture)
 
-  defp apply_broadcasts(_result, broadcasts, _outer_transaction?),
-    do: Hawk.RepositoryBoundary.discard_broadcasts(broadcasts)
+  defp finalize_broadcast_capture(_result, capture, _outer_transaction?),
+    do: Hawk.RepositoryBoundary.discard_broadcasts(capture)
 
   defp execute_steps(steps, repo) do
     case run_steps(steps) do

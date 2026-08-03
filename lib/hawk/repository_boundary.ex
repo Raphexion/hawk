@@ -21,6 +21,10 @@ defmodule Hawk.RepositoryBoundary do
   @type repo :: module()
   @type opts :: keyword()
 
+  @type deferred_broadcast :: {module(), module(), module(), atom(), struct()}
+  @type broadcast_capture ::
+          {:owner, [deferred_broadcast()]} | {:nested, [deferred_broadcast()]}
+
   @deferred_broadcasts_key {__MODULE__, :deferred_broadcasts}
 
   @doc false
@@ -29,38 +33,43 @@ defmodule Hawk.RepositoryBoundary do
   end
 
   @doc false
+  @spec capture_broadcasts((-> term())) :: {term(), broadcast_capture()}
   def capture_broadcasts(fun) when is_function(fun, 0) do
     case Process.get(@deferred_broadcasts_key, :not_capturing) do
       :not_capturing ->
         Process.put(@deferred_broadcasts_key, [])
 
         try do
-          {fun.(), @deferred_broadcasts_key |> Process.get([]) |> Enum.reverse()}
+          result = fun.()
+          queued_broadcasts = @deferred_broadcasts_key |> Process.get([]) |> Enum.reverse()
+          {result, {:owner, queued_broadcasts}}
         after
           Process.delete(@deferred_broadcasts_key)
         end
 
-      broadcasts ->
-        {fun.(), {:nested, broadcasts}}
+      queued_broadcasts ->
+        {fun.(), {:nested, queued_broadcasts}}
     end
   end
 
   @doc false
-  def flush_broadcasts({:nested, _broadcasts}), do: :ok
+  @spec flush_broadcasts(broadcast_capture()) :: :ok
+  def flush_broadcasts({:nested, _checkpoint}), do: :ok
 
-  def flush_broadcasts(broadcasts) when is_list(broadcasts) do
+  def flush_broadcasts({:owner, broadcasts}) do
     Enum.each(broadcasts, fn {pubsub, strategy, resource, operation, model} ->
       Hawk.PubSub.broadcast(pubsub, strategy, resource, operation, model)
     end)
   end
 
   @doc false
-  def discard_broadcasts({:nested, broadcasts}) do
-    Process.put(@deferred_broadcasts_key, broadcasts)
+  @spec discard_broadcasts(broadcast_capture()) :: :ok
+  def discard_broadcasts({:nested, checkpoint}) do
+    Process.put(@deferred_broadcasts_key, checkpoint)
     :ok
   end
 
-  def discard_broadcasts(_broadcasts), do: :ok
+  def discard_broadcasts({:owner, _broadcasts}), do: :ok
 
   @doc """
   Inserts the context changeset through the host repo.
