@@ -5,6 +5,11 @@ defmodule Hawk.RepositoryBoundary do
   Host applications provide the repo module. Hawk verifies mutation-context
   state before delegating to that repo and normalizes persistence results back
   into framework result tuples.
+
+  A write configured for PubSub must own its outer transaction or run inside
+  Hawk's managed broadcast capture (as `Hawk.Multi` and plan execution do).
+  Hawk rejects a direct broadcasting write inside an unmanaged caller
+  transaction because it cannot observe whether that transaction commits.
   """
 
   alias Ecto.Changeset
@@ -122,12 +127,26 @@ defmodule Hawk.RepositoryBoundary do
   end
 
   defp persist_preflighted(context, repo, operation, opts, repo_fun) do
+    validate_broadcast_boundary!(repo, opts)
+
     repo.transaction(fn ->
       repo_fun.()
       |> normalize_repo_result(context, operation, opts)
     end)
     |> unwrap_transaction()
     |> broadcast_change(operation, opts)
+  end
+
+  defp validate_broadcast_boundary!(repo, opts) do
+    pubsub = Keyword.get(opts, :pubsub)
+    broadcasting? = is_atom(pubsub) and not is_nil(pubsub)
+    outer_transaction? = function_exported?(repo, :in_transaction?, 0) and repo.in_transaction?()
+
+    if broadcasting? and outer_transaction? and not capturing_broadcasts?() do
+      raise ArgumentError,
+            "Hawk broadcasting writes must own the outer transaction so events can be " <>
+              "published after commit"
+    end
   end
 
   # Broadcasts after the transaction commits so cross-process subscribers that

@@ -905,13 +905,14 @@ writer's view of the record is never pushed to readers; a viewer whose role
 hides the record re-queries and simply does not see it.
 
 Broadcasts fire **after** the write's transaction commits, so a cross-process
-subscriber re-querying immediately sees the committed row. `Hawk.Multi` queues
-its writers' events and flushes them only after the transaction it owns commits;
-failed multis and plan previews discard the queue. A Multi containing PubSub
-writers must own the outer transaction; Hawk rejects calls from inside an
-unmanaged caller transaction because it cannot portably observe that outer
-transaction's commit. This prevents both premature and silently missing events.
-A no-op update (empty changes) and an unauthorized/invalid write do not broadcast.
+subscriber re-querying immediately sees the committed row. A direct broadcasting
+Writer must own the outer transaction; Hawk rejects calling it inside an
+application-owned `Repo.transaction/1` because it cannot observe that outer
+transaction's commit. Compose transactional Hawk writes with `Hawk.Multi`
+instead: it queues its writers' events and flushes them only after the transaction
+it owns commits, while failed multis and plan previews discard the queue. This
+prevents both premature and silently missing events. A no-op update (empty
+changes) and an unauthorized/invalid write do not broadcast.
 
 ### LiveView one-liner
 

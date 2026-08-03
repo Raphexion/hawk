@@ -11,7 +11,7 @@ defmodule Videdal.Integration.PubSubBroadcastTest do
 
   alias Hawk.Authority
   alias Hawk.PubSub
-  alias Videdal.{Announcement, Announcements}
+  alias Videdal.{Announcement, Announcements, School, Schools}
 
   setup do
     :ok = PubSub.subscribe(Videdal.PubSub, Videdal.Announcements)
@@ -93,6 +93,24 @@ defmodule Videdal.Integration.PubSubBroadcastTest do
 
     refute_received %PubSub.Event{}
     refute Videdal.Repo.exists?(from(announcement in Announcement, where: announcement.body == "Outer rollback"))
+  end
+
+  test "a direct broadcasting write rejects an unmanaged caller transaction" do
+    assert_raise ArgumentError, ~r/broadcasting writes must own the outer transaction/, fn ->
+      Videdal.Repo.transaction(fn ->
+        Announcements.create(%{body: "Outer rollback"}, Authority.system())
+      end)
+    end
+
+    refute_received %PubSub.Event{}
+    refute Videdal.Repo.exists?(from(announcement in Announcement, where: announcement.body == "Outer rollback"))
+  end
+
+  test "a writer without PubSub may participate in a caller transaction" do
+    assert {:ok, {:ok, %School{name: "Nested"}}} =
+             Videdal.Repo.transaction(fn ->
+               Schools.create(%{name: "Nested"}, Authority.system())
+             end)
   end
 
   test "a recovered nested multi failure discards only its own queued broadcasts" do

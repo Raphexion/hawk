@@ -24,9 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now roll back prior writes. A Multi supports one Repo and rejects resource
   steps backed by a different Repo before execution. PubSub events are deferred
   until the transaction owned by the Multi commits and discarded for failed
-  multis and plan previews.
-  A broadcasting Multi invoked inside an unmanaged caller transaction is rejected
-  rather than publishing prematurely or silently dropping events.
+  multis and plan previews. Direct broadcasting Writers and broadcasting Multis
+  invoked inside an unmanaged caller transaction are rejected rather than
+  publishing prematurely or silently dropping events.
 
 - **Ownership checks preserve explicit `nil` changes.** Clearing an `owned_by`
   field no longer falls back to the model's previous value during authorization.
