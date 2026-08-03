@@ -26,7 +26,7 @@ defmodule Hawk.PhoenixIntegrationTest do
 
     conn =
       Plug.Test.conn(:get, "/courses")
-      |> Plug.Conn.assign(:authority, Authority.system())
+      |> Plug.Conn.assign(:hawk_authority, Authority.system())
       |> CoursesController.index(%{})
 
     assert conn.status == 200
@@ -36,6 +36,19 @@ defmodule Hawk.PhoenixIntegrationTest do
     assert String.starts_with?(content_type, "application/vnd.api+json")
 
     assert %{"data" => [%{"type" => "courses", "id" => id}]} = Jason.decode!(conn.resp_body)
+    assert id == course.id
+  end
+
+  test "JSON:API controller reads the authority assigned by Hawk.Authority.Plug" do
+    course = insert(:course, title: "Math")
+
+    conn =
+      Plug.Test.conn(:get, "/courses")
+      |> Hawk.Authority.Plug.call(resolver: fn _conn -> Authority.system() end)
+      |> CoursesController.index(%{})
+
+    assert conn.status == 200
+    assert %{"data" => [%{"id" => id}]} = Jason.decode!(conn.resp_body)
     assert id == course.id
   end
 

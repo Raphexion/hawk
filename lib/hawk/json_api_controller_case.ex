@@ -391,7 +391,6 @@ defmodule Hawk.JsonApiControllerCase do
 
   def conn_for(%Authority{} = authority) do
     Plug.Test.conn("get", "/")
-    |> Plug.Conn.assign(:authority, authority)
     |> Plug.Conn.assign(:hawk_authority, authority)
   end
 

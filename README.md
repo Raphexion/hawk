@@ -15,6 +15,11 @@ and backend APIs.
 
 # Hawk
 
+> [!WARNING]
+> Hawk is under heavy development. Until a stable release, expect breaking
+> changes to APIs, generated code, conventions, and recommended patterns. Hawk
+> prioritizes improving the design over backward compatibility.
+
 Hawk is designed for the shape that appears in many backends: Ecto resources with
 role-aware reads and writes, a JSON:API surface for clients and integrations, and
 LiveView screens for internal administration. Hawk tries to make that repeated
@@ -423,13 +428,14 @@ authority = Hawk.Authority.Session.authority_or_public(session)
 
 `Hawk.PhoenixAuth` is the phx.gen.auth-specific bridge. In Plug pipelines it can
 read an existing `current_scope` or a URL-safe Base64 Bearer session token,
-convert that scope to a Hawk authority, and assign both `:hawk_authority` and
-`:authority` for JSON:API controllers. In LiveView `on_mount`, use it after the
-generated `UserAuth` hook has assigned `current_scope`.
+convert that scope to a Hawk authority, and assign `:hawk_authority` for JSON:API
+controllers. In LiveView `on_mount`, use it after the generated `UserAuth` hook
+has assigned `current_scope`.
 
 `Hawk.Authority.Plug` / `Hawk.Authority.Session` are lower-level generic helpers
-for apps that are not using the phx.gen.auth scope shape. Missing authority falls
-back to readonly public access, not system access.
+for apps that are not using the phx.gen.auth scope shape. JSON:API controllers
+read their `:hawk_authority` assign directly. Missing authority falls back to
+readonly public access, not system access.
 
 ## Adapters
 

@@ -562,7 +562,7 @@ defmodule Hawk.JsonApi.Controller do
     |> Hawk.Errors.to_json_api()
   end
 
-  defp authority!(%{assigns: %{authority: authority}}, _public?), do: authority
+  defp authority!(%{assigns: %{hawk_authority: authority}}, _public?), do: authority
   defp authority!(_conn, true), do: Hawk.Authority.public()
 
   defp request_context(conn), do: %{locale: request_locale(conn)}

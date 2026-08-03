@@ -9,7 +9,6 @@ defmodule Hawk.PhoenixAuth do
 
   alias Hawk.Authority
 
-  @authority_assign :authority
   @hawk_authority_assign :hawk_authority
   @scope_assign :current_scope
 
@@ -34,7 +33,6 @@ defmodule Hawk.PhoenixAuth do
     conn
     |> assign_if_present(scope_assign, scope)
     |> assign_value(@hawk_authority_assign, authority)
-    |> assign_value(@authority_assign, authority)
   end
 
   @doc """
@@ -48,10 +46,7 @@ defmodule Hawk.PhoenixAuth do
     scope = current_scope(socket, scope_assign)
     authority = resolve_authority(scope, opts)
 
-    {:cont,
-     socket
-     |> assign_value(@hawk_authority_assign, authority)
-     |> assign_value(@authority_assign, authority)}
+    {:cont, assign_value(socket, @hawk_authority_assign, authority)}
   end
 
   @doc """
@@ -130,7 +125,7 @@ defmodule Hawk.PhoenixAuth do
   defp call_resolver({module, function, extra_args}, scope), do: apply(module, function, [scope | extra_args])
 
   defp current_authority(source) do
-    case fetch_assign(source, @authority_assign) do
+    case fetch_assign(source, @hawk_authority_assign) do
       {:ok, %Authority{} = authority} -> authority
       _other -> nil
     end

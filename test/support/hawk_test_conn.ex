@@ -4,7 +4,7 @@ defmodule Hawk.TestConn do
 
   `conn/0` builds a real `Plug.Conn` with the JSON:API request headers already
   set. `conn/1` accepts a `Hawk.Authority` (or `:public`) and assigns it under
-  both `:authority` and `:hawk_authority` so every Hawk entry point can read it.
+  `:hawk_authority` so every Hawk entry point can read it.
 
   `resp/1` decodes a JSON:API response body into atom-keyed Elixir terms so
   assertions stay readable (`resp(conn).data.type`).
@@ -18,7 +18,6 @@ defmodule Hawk.TestConn do
 
   def conn(%Authority{} = authority) do
     Plug.Test.conn("get", "/")
-    |> Plug.Conn.assign(:authority, authority)
     |> Plug.Conn.assign(:hawk_authority, authority)
   end
 

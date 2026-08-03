@@ -50,8 +50,11 @@ defmodule Hawk.PhoenixAuthTest do
       )
 
     assert %Scope{} = conn.assigns.current_scope
-    assert %Authority{role: :teacher, scopes: %{school_id: 7, teacher_id: 12}} = conn.assigns.authority
-    assert conn.assigns.hawk_authority == conn.assigns.authority
+
+    assert %Authority{role: :teacher, scopes: %{school_id: 7, teacher_id: 12}} =
+             conn.assigns.hawk_authority
+
+    refute Map.has_key?(conn.assigns, :authority)
   end
 
   test "on_mount assigns authority from current_scope" do

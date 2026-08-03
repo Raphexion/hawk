@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Consistent controller authority lookup.** JSON:API controllers read the
+  `:hawk_authority` assign produced by `Hawk.Authority.Plug`,
+  `Hawk.Authority.Session`, and `Hawk.PhoenixAuth`.
+
 - **Atomic multis and transaction-safe broadcasts.** Failed `Hawk.Multi` steps
   now roll back prior writes. PubSub events are deferred until the transaction
   owned by the Multi commits and discarded for failed multis and plan previews.

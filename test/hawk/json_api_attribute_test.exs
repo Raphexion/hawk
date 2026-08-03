@@ -122,7 +122,7 @@ defmodule Hawk.JsonApiAttributeTest do
   test "controllers pass request locale into JSON:API attribute resolvers" do
     conn =
       Plug.Test.conn("get", "/")
-      |> Plug.Conn.assign(:authority, Authority.system())
+      |> Plug.Conn.assign(:hawk_authority, Authority.system())
       |> Plug.Conn.put_req_header("x-locale", "da")
 
     response = LocalizedPostsController.index(conn, %{})
@@ -141,7 +141,7 @@ defmodule Hawk.JsonApiAttributeTest do
   test "controllers fall back to accept-language when x-locale is missing" do
     conn =
       Plug.Test.conn("get", "/")
-      |> Plug.Conn.assign(:authority, Authority.system())
+      |> Plug.Conn.assign(:hawk_authority, Authority.system())
       |> Plug.Conn.put_req_header("accept-language", "da-DK,da;q=0.9,en;q=0.8")
 
     response = LocalizedPostsController.index(conn, %{})
@@ -152,7 +152,7 @@ defmodule Hawk.JsonApiAttributeTest do
   test "x-locale wins over accept-language and header names are matched case-insensitively" do
     conn =
       Plug.Test.conn("get", "/")
-      |> Plug.Conn.assign(:authority, Authority.system())
+      |> Plug.Conn.assign(:hawk_authority, Authority.system())
       |> Plug.Conn.put_req_header("x-locale", "en")
       |> Plug.Conn.put_req_header("accept-language", "da-DK,da;q=0.9")
 
