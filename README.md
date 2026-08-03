@@ -1087,8 +1087,11 @@ JSON, not a JSON:API resource). It passes `:title`, `:version`, `:path_prefix`,
 are omitted because this OpenAPI generator documents the JSON:API surface only.
 The controller exposes `spec/0` and `show/2`. The specification is composed from
 Hawk resource declarations and the same `Hawk.JsonApi.Routes` route specs used for
-capability-aware routing: JSON:API adapter schemas, request bodies, error
-documents, sort parameters, pagination parameters, valid include paths, declared
+capability-aware routing. Response schemas require the JSON:API members Hawk
+always emits (`data`, resource `type`/`id`, and error-document `errors`) so
+generated clients do not type them as optional. The spec also includes JSON:API
+adapter schemas, request bodies, error documents, sort parameters, pagination
+parameters, valid include paths, declared
 `/-actions/` operations, relationship routes, the optional `path_prefix`, and
 optional resource organization metadata.
 

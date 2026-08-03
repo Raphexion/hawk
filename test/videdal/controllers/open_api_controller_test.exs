@@ -104,6 +104,22 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
     assert fields.schema == %{type: "object", additionalProperties: %{type: "string"}}
   end
 
+  test "response schemas require mandatory JSON:API document and resource members" do
+    spec = OpenApiController.spec()
+
+    collection =
+      spec.paths["/api/v1/courses"].get.responses["200"].content["application/vnd.api+json"].schema
+
+    member =
+      spec.paths["/api/v1/courses/{id}"].get.responses["200"].content["application/vnd.api+json"].schema
+
+    assert collection.required == [:data]
+    assert member.required == [:data]
+    assert spec.components.schemas[:CourseResource].required == [:type, :id]
+    assert spec.components.schemas[:JsonApiErrorDocument].required == [:errors]
+    assert spec.components.schemas[:JsonApiError].required == [:status, :code, :title, :detail]
+  end
+
   test "resource schemas include docs, examples, attributes, and relationships" do
     spec = OpenApiController.spec()
     course = Map.fetch!(spec.components.schemas, :CourseResource)
@@ -176,6 +192,7 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
 
     assert open_registration.responses["200"].content["application/vnd.api+json"].schema == %{
              type: "object",
+             required: [:data],
              properties: %{
                data: %{"$ref": "#/components/schemas/CourseResource"}
              }

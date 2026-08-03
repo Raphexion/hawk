@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Required OpenAPI response members.** Generated response schemas require
+  top-level `data`, resource `type`/`id`, and error-document `errors`, matching
+  the JSON:API documents Hawk emits and producing non-optional client types.
+
 - **JSON:API include aliases.** Runtime include parsing resolves external
   relationship names declared with `source:` at every path segment, matching
   the values generated in OpenAPI.

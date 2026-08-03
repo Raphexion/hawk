@@ -441,7 +441,8 @@ defmodule Hawk.OpenApi do
     %{description: description, content: %{"application/vnd.api+json" => %{schema: schema}}}
   end
 
-  defp data_schema(resource), do: %{type: "object", properties: %{data: schema_ref(resource)}}
+  defp data_schema(resource),
+    do: %{type: "object", required: [:data], properties: %{data: schema_ref(resource)}}
 
   defp relationship_document_schema(resource) do
     %{
@@ -522,7 +523,11 @@ defmodule Hawk.OpenApi do
   end
 
   defp array_schema(resource) do
-    %{type: "object", properties: %{data: %{type: "array", items: schema_ref(resource)}}}
+    %{
+      type: "object",
+      required: [:data],
+      properties: %{data: %{type: "array", items: schema_ref(resource)}}
+    }
   end
 
   defp write_document_schema(resource, capability) do
@@ -595,6 +600,7 @@ defmodule Hawk.OpenApi do
   defp resource_schema(resource) do
     %{
       type: "object",
+      required: [:type, :id],
       description: Map.get(resource.json_api, :doc),
       "x-resource-group": Map.get(resource.json_api, :group),
       "x-resource-type": resource.json_api.type,
@@ -705,6 +711,7 @@ defmodule Hawk.OpenApi do
   defp error_document_schema do
     %{
       type: "object",
+      required: [:errors],
       properties: %{
         errors: %{type: "array", items: %{"$ref": "#/components/schemas/JsonApiError"}}
       }
@@ -716,6 +723,7 @@ defmodule Hawk.OpenApi do
   defp error_schema do
     %{
       type: "object",
+      required: [:status, :code, :title, :detail],
       properties: %{
         status: %{type: "string"},
         code: %{type: "string"},
