@@ -88,6 +88,19 @@ defmodule Hawk.JsonApi.Request do
   end
 
   @doc """
+  Validates a custom-action request document.
+
+  Hawk actions use a JSON:API top-level `meta` object, including actions with no
+  declared parameters. Missing or non-object `meta` is rejected.
+  """
+  def validate_action_document!(params) when is_map(params) do
+    case Map.get(params, "meta") do
+      meta when is_map(meta) -> :ok
+      _missing_or_invalid -> raise ArgumentError, "action request document must include a meta object"
+    end
+  end
+
+  @doc """
   Extracts writer attrs from a create/update request document.
   """
   def attributes(params, model, capability, _opts \\ [])

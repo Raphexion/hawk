@@ -145,7 +145,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
     assert Repo.get!(Course, created_id).title == "Math"
   end
 
-  test "open-registration action ignores malformed non-map meta payloads and preserves existing counts" do
+  test "open-registration action rejects a non-map meta payload" do
     school = insert(:school)
     teacher = insert(:teacher, school_id: school.id)
 
@@ -166,17 +166,11 @@ defmodule Videdal.Controllers.CoursesControllerTest do
         "meta" => "not-a-map"
       })
 
-    assert conn.status == 200
-
-    assert resp(conn).data.attributes == %{
-             title: "Math",
-             registration_state: "open",
-             seat_count: 3,
-             waitlist_count: 2
-           }
+    assert conn.status == 400
+    assert [%{detail: "action request document must include a meta object"}] = resp(conn).errors
 
     reloaded = Repo.get!(Course, course.id)
-    assert reloaded.registration_state == "open"
+    assert reloaded.registration_state == "draft"
     assert reloaded.seat_count == 3
     assert reloaded.waitlist_count == 2
   end
@@ -217,7 +211,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
     assert reloaded.waitlist_count == 1
   end
 
-  test "open-registration action without meta preserves existing counts" do
+  test "open-registration action requires a meta object" do
     school = insert(:school)
     teacher = insert(:teacher, school_id: school.id)
 
@@ -237,17 +231,11 @@ defmodule Videdal.Controllers.CoursesControllerTest do
         "action" => "open-registration"
       })
 
-    assert conn.status == 200
-
-    assert resp(conn).data.attributes == %{
-             title: "Math",
-             registration_state: "open",
-             seat_count: 4,
-             waitlist_count: 2
-           }
+    assert conn.status == 400
+    assert [%{detail: "action request document must include a meta object"}] = resp(conn).errors
 
     reloaded = Repo.get!(Course, course.id)
-    assert reloaded.registration_state == "open"
+    assert reloaded.registration_state == "draft"
     assert reloaded.seat_count == 4
     assert reloaded.waitlist_count == 2
   end

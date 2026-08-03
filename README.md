@@ -368,6 +368,10 @@ Request shape:
 }
 ```
 
+The top-level `meta` object is required, including for actions with no declared
+parameters (`{"meta": {}}`). Missing or non-object `meta` returns `400`; the
+OpenAPI request schema carries the same requirement.
+
 #### Two-phase actions: `build` for validate-without-commit
 
 An action that composes multiple writers can opt into a validate phase by

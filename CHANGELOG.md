@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **JSON:API action request documents.** Custom actions require a top-level
+  `meta` object at runtime and in OpenAPI, including actions with no declared
+  parameters; missing or non-object `meta` returns `400`.
+
 - **JSON:API query-parameter names.** Unknown bare lowercase parameter names
   reserved by JSON:API now return `400`; implementation-specific names with a
   non-letter separator remain available to host applications.

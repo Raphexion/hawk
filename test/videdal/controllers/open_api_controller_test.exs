@@ -183,6 +183,7 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
 
     assert open_registration.requestBody.content["application/vnd.api+json"].schema == %{
              type: "object",
+             required: [:meta],
              properties: %{
                meta: %{
                  type: "object",
@@ -206,6 +207,7 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
 
     assert close_registration.requestBody.content["application/vnd.api+json"].schema == %{
              type: "object",
+             required: [:meta],
              properties: %{
                meta: %{
                  type: "object",

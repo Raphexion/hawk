@@ -565,6 +565,7 @@ defmodule Hawk.OpenApi do
   defp action_document_schema(metadata) do
     %{
       type: "object",
+      required: [:meta],
       properties: %{
         meta: %{
           type: "object",

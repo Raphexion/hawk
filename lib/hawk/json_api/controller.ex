@@ -337,6 +337,7 @@ defmodule Hawk.JsonApi.Controller do
 
   defp do_action(conn, resource, id, action_name, params, public?) do
     with_error_boundary(conn, fn ->
+      Request.validate_action_document!(params)
       authority = authority!(conn, public?)
       context = request_context(conn)
       identity = Hawk.JsonApi.Schema.identity_for_facade(resource)

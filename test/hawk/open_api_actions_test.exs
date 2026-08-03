@@ -46,7 +46,10 @@ defmodule Hawk.OpenApiActionsTest do
     spec = Hawk.OpenApi.spec([Videdal.Courses], title: "Test API")
 
     action = spec.paths["/courses/{id}/-actions/open-registration"].post
-    meta = action.requestBody.content["application/vnd.api+json"].schema.properties.meta
+    schema = action.requestBody.content["application/vnd.api+json"].schema
+    meta = schema.properties.meta
+
+    assert schema.required == [:meta]
 
     assert meta.properties == %{
              seat_count: %{
