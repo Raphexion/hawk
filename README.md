@@ -1093,8 +1093,7 @@ generated clients do not type them as optional. Success documents also describe
 optional top-level `links`, compound-document `included`, pagination `meta.page`,
 resource links, and relationship links using reusable component schemas. The
 spec also includes JSON:API adapter schemas, request bodies, error documents,
-sort parameters, pagination
-parameters, valid include paths, declared
+sort parameters, pagination parameters, valid include paths, declared
 `/-actions/` operations, relationship routes, the optional `path_prefix`, and
 optional resource organization metadata.
 
@@ -1132,11 +1131,12 @@ Multiple resources sharing a tag name collapse to one top-level tag entry;
 when any of them declares a description, that description wins.
 
 Relationship schemas are typed from the model association: a `belongs_to`/
-`has_one` relationship renders as a to-one `data` object whose `type` enum is
-the related resource's JSON:API type, and a `has_many`/`many_to_many`
-relationship renders as a `data` array of the same identifier shape. The target
-type is resolved from the association (or the related model's adapter by
-convention), so no per-relationship `:resource` opt is needed.
+`has_one` relationship renders as a to-one `data` identifier or `null`, and a
+`has_many`/`many_to_many` relationship renders as a `data` array of identifiers.
+Request relationship objects require `data`, and each non-null identifier
+requires the related JSON:API `type` and an `id`, matching request validation.
+The target type is resolved from the association (or the related model's adapter
+by convention), so no per-relationship `:resource` opt is needed.
 
 Frontend teams can generate TypeScript from that OpenAPI contract with their
 preferred tooling, for example:

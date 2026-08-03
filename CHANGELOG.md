@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Required OpenAPI relationship linkage.** Write relationship objects require
+  `data`; non-null to-one and every to-many resource identifier require `type`
+  and `id`, while to-one linkage explicitly permits `null`.
+
 - **Complete OpenAPI success-document shapes.** Generated schemas describe
   top-level and resource/relationship links, compound-document `included`, and
   pagination `meta.page` using reusable JSON:API components.

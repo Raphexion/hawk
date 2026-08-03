@@ -688,23 +688,33 @@ defmodule Hawk.OpenApi do
   end
 
   defp relationship_object_schema(related_type, :one, include_links?) do
-    properties = %{data: resource_identifier_object_schema(related_type)}
-    %{type: "object", properties: maybe_put_links(properties, include_links?)}
+    properties = %{
+      data: %{
+        anyOf: [required_resource_identifier_object_schema(related_type), %{type: "null"}]
+      }
+    }
+
+    relationship_object(properties, include_links?)
   end
 
   defp relationship_object_schema(related_type, :many, include_links?) do
     properties = %{
       data: %{
         type: "array",
-        items: resource_identifier_object_schema(related_type)
+        items: required_resource_identifier_object_schema(related_type)
       }
     }
 
-    %{type: "object", properties: maybe_put_links(properties, include_links?)}
+    relationship_object(properties, include_links?)
   end
 
-  defp maybe_put_links(properties, true), do: Map.put(properties, :links, links_ref())
-  defp maybe_put_links(properties, false), do: properties
+  defp relationship_object(properties, true) do
+    %{type: "object", properties: Map.put(properties, :links, links_ref())}
+  end
+
+  defp relationship_object(properties, false) do
+    %{type: "object", required: [:data], properties: properties}
+  end
 
   defp field_schema(type, metadata) do
     type

@@ -22,11 +22,17 @@ defmodule Hawk.OpenApiResourceAdapterTest do
              description: "Public instructor relationship.",
              properties: %{
                data: %{
-                 type: "object",
-                 properties: %{
-                   id: %{type: "string"},
-                   type: %{type: "string", enum: ["teachers"]}
-                 }
+                 anyOf: [
+                   %{
+                     type: "object",
+                     required: [:type, :id],
+                     properties: %{
+                       id: %{type: "string"},
+                       type: %{type: "string", enum: ["teachers"]}
+                     }
+                   },
+                   %{type: "null"}
+                 ]
                },
                links: %{"$ref": "#/components/schemas/JsonApiLinks"}
              }
@@ -54,14 +60,21 @@ defmodule Hawk.OpenApiResourceAdapterTest do
     assert create_schema.properties.data.properties.relationships.properties == %{
              instructor: %{
                type: "object",
+               required: [:data],
                description: "Public instructor relationship.",
                properties: %{
                  data: %{
-                   type: "object",
-                   properties: %{
-                     id: %{type: "string"},
-                     type: %{type: "string", enum: ["teachers"]}
-                   }
+                   anyOf: [
+                     %{
+                       type: "object",
+                       required: [:type, :id],
+                       properties: %{
+                         id: %{type: "string"},
+                         type: %{type: "string", enum: ["teachers"]}
+                       }
+                     },
+                     %{type: "null"}
+                   ]
                  }
                }
              }

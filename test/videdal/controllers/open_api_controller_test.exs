@@ -147,6 +147,10 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
              "$ref": "#/components/schemas/JsonApiLinks"
            }
 
+    grades = course.properties.relationships.properties.grades.properties.data
+    assert grades.type == "array"
+    assert grades.items.required == [:type, :id]
+
     assert spec.components.schemas[:JsonApiIncludedResource].required == [:type, :id]
 
     assert spec.components.schemas[:JsonApiMeta].properties.page.required == [

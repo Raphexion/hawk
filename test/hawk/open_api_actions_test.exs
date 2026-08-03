@@ -15,11 +15,17 @@ defmodule Hawk.OpenApiActionsTest do
     assert teacher.description == "The teacher responsible for the course."
 
     assert teacher.properties.data == %{
-             type: "object",
-             properties: %{
-               id: %{type: "string"},
-               type: %{type: "string", enum: ["teachers"]}
-             }
+             anyOf: [
+               %{
+                 type: "object",
+                 required: [:type, :id],
+                 properties: %{
+                   id: %{type: "string"},
+                   type: %{type: "string", enum: ["teachers"]}
+                 }
+               },
+               %{type: "null"}
+             ]
            }
   end
 
@@ -34,6 +40,7 @@ defmodule Hawk.OpenApiActionsTest do
              type: "array",
              items: %{
                type: "object",
+               required: [:type, :id],
                properties: %{
                  id: %{type: "string"},
                  type: %{type: "string", enum: ["grades"]}
