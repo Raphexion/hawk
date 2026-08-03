@@ -595,6 +595,12 @@ a separate functional index.
 
 #### Query parameters
 
+Hawk rejects unknown query parameter names made only from lowercase ASCII letters
+with `400`; JSON:API reserves that namespace for specification parameters. Host
+applications can use implementation-specific parameter names containing a
+non-letter separator (for example `analytics_mode`) and process them before Hawk;
+Hawk ignores those custom parameters.
+
 Collection requests accept JSON:API's ordered, comma-separated sort syntax.
 Every field must be declared by the Reader; prefix a field with `-` for descending
 order:

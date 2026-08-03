@@ -558,6 +558,8 @@ defmodule Hawk.JsonApi.Controller do
     do: json(conn, 500, Hawk.Errors.to_json_api(result))
 
   defp with_error_boundary(conn, fun) when is_function(fun, 0) do
+    Request.validate_query_parameter_names!(conn.query_string)
+
     case negotiate_media_type(conn) do
       :ok -> fun.()
       {:error, status, body} -> json(conn, status, body)

@@ -4,8 +4,9 @@ defmodule Hawk.JsonApi.Request do
 
   This is the request-side companion to `Hawk.JsonApi.Document`: it turns
   query params (`include`, `filter`, `sort`, `page`) into reader options,
-  including ordered comma-separated JSON:API sort fields, validates
-  create/update documents against the resource's JSON:API contract,
+  including ordered comma-separated JSON:API sort fields, rejects unknown bare
+  lowercase parameter names reserved by JSON:API, validates create/update
+  documents against the resource's JSON:API contract,
   and extracts writer attrs from request bodies. ID handling (full UUIDs and
   read-only short-id prefixes) also lives here.
 
@@ -14,6 +15,8 @@ defmodule Hawk.JsonApi.Request do
   """
 
   alias Hawk.JsonApi.Schema
+
+  @query_parameters ["fields", "filter", "include", "page", "page_number", "page_size", "sort"]
 
   @doc """
   Validates that an `id` is a UUID, raising otherwise.
@@ -116,6 +119,27 @@ defmodule Hawk.JsonApi.Request do
   Parses JSON:API sparse fieldsets from `fields[type]=field,other_field` params.
   """
   def sparse_fieldsets(params) when is_map(params), do: parse_fields(Map.get(params, "fields"))
+
+  @doc """
+  Validates raw query parameter names before bracket notation is decoded.
+
+  JSON:API reserves names made only from lowercase ASCII letters. Unknown names
+  in that namespace raise; implementation-specific names containing a non-letter
+  separator, including families such as `foo[bar]`, remain available to the host.
+  """
+  def validate_query_parameter_names!(query_string) when is_binary(query_string) do
+    query_string
+    |> String.split("&", trim: true)
+    |> Enum.each(fn pair ->
+      name = pair |> String.split("=", parts: 2) |> hd() |> URI.decode_www_form()
+
+      if reserved_query_parameter?(name) and name not in @query_parameters do
+        raise ArgumentError, "unknown JSON:API query parameter #{inspect(name)}"
+      end
+    end)
+  end
+
+  defp reserved_query_parameter?(name), do: Regex.match?(~r/^[a-z]+$/, name)
 
   defp request_data!(params) do
     case Map.get(params, "data") do

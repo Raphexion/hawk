@@ -42,6 +42,35 @@ defmodule Hawk.JsonApiControllerErrorBoundaryTest do
     assert error.code == "bad_request"
   end
 
+  test "unknown reserved query parameters return 400 while custom parameters remain allowed" do
+    reserved_conn =
+      Plug.Test.conn(:get, "/?foo=bar")
+      |> Plug.Conn.fetch_query_params()
+      |> Plug.Conn.assign(:hawk_authority, @school_admin)
+
+    reserved = ErrorBoundaryCoursesController.index(reserved_conn, reserved_conn.query_params)
+
+    assert reserved.status == 400
+    assert [error] = resp(reserved).errors
+    assert error.detail == "unknown JSON:API query parameter \"foo\""
+
+    encoded_conn =
+      Plug.Test.conn(:get, "/?f%6Fo=bar")
+      |> Plug.Conn.fetch_query_params()
+      |> Plug.Conn.assign(:hawk_authority, @school_admin)
+
+    encoded = ErrorBoundaryCoursesController.index(encoded_conn, encoded_conn.query_params)
+    assert encoded.status == 400
+
+    custom_conn =
+      Plug.Test.conn(:get, "/?foo%5Bbar%5D=ignored")
+      |> Plug.Conn.fetch_query_params()
+      |> Plug.Conn.assign(:hawk_authority, @school_admin)
+
+    custom = ErrorBoundaryCoursesController.index(custom_conn, custom_conn.query_params)
+    assert custom.status == 200
+  end
+
   test "malformed query parameter shapes return JSON:API 400 errors" do
     malformed_params = [
       %{"fields" => "courses"},

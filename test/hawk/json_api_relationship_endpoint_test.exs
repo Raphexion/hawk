@@ -4,7 +4,9 @@ defmodule Hawk.JsonApiRelationshipEndpointTest.Controller do
 end
 
 defmodule Hawk.JsonApiRelationshipEndpointTest do
-  use Videdal.DatabaseCase, async: true
+  # Query-count assertions attach a global Repo telemetry handler, so concurrent
+  # database tests would make the count nondeterministic.
+  use Videdal.DatabaseCase, async: false
 
   import Hawk.TestConn, only: [conn: 1, resp: 1]
 

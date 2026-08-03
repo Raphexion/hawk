@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **JSON:API query-parameter names.** Unknown bare lowercase parameter names
+  reserved by JSON:API now return `400`; implementation-specific names with a
+  non-letter separator remain available to host applications.
+
 - **JSON:API relationship endpoint semantics.** Unknown relationship names on
   linkage and related-resource URLs return `404` instead of being treated as
   malformed query input with `400`.
