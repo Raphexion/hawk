@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **JSON:API response media type.** Controllers emit the exact
+  `application/vnd.api+json` media type without the forbidden `charset`
+  parameter.
+
 - **Consistent controller authority lookup.** JSON:API controllers read the
   `:hawk_authority` assign produced by `Hawk.Authority.Plug`,
   `Hawk.Authority.Session`, and `Hawk.PhoenixAuth`.

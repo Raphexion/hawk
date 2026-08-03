@@ -32,8 +32,7 @@ defmodule Hawk.PhoenixIntegrationTest do
     assert conn.status == 200
     assert conn.state == :sent
 
-    [content_type] = Plug.Conn.get_resp_header(conn, "content-type")
-    assert String.starts_with?(content_type, "application/vnd.api+json")
+    assert Plug.Conn.get_resp_header(conn, "content-type") == ["application/vnd.api+json"]
 
     assert %{"data" => [%{"type" => "courses", "id" => id}]} = Jason.decode!(conn.resp_body)
     assert id == course.id

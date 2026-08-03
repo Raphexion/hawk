@@ -503,6 +503,9 @@ end
 The backing model is resolved from the facade; the controller does not accept
 a `:model` opt.
 
+Responses use the exact JSON:API media type `application/vnd.api+json` without a
+`charset` parameter.
+
 Generated actions follow resource capabilities:
 
 - `index/2`

@@ -3,7 +3,8 @@ defmodule Hawk.JsonApi.Controller do
   Phoenix controller helpers for Hawk JSON:API resources.
 
   Hawk runs behind Phoenix controllers and renders responses through `Plug.Conn`
-  directly with the `application/vnd.api+json` content type.
+  directly with the exact `application/vnd.api+json` content type. JSON:API does
+  not permit a `charset` media-type parameter.
   """
 
   alias Hawk.JsonApi.Controller, as: JsonApiController
@@ -591,7 +592,7 @@ defmodule Hawk.JsonApi.Controller do
 
   defp json(%Plug.Conn{} = conn, status, body) do
     conn
-    |> Plug.Conn.put_resp_content_type("application/vnd.api+json")
+    |> Plug.Conn.put_resp_content_type("application/vnd.api+json", nil)
     |> Plug.Conn.send_resp(status, Jason.encode!(body))
   end
 
