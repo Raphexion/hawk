@@ -27,7 +27,8 @@ defmodule Hawk.OpenApiResourceAdapterTest do
                    id: %{type: "string"},
                    type: %{type: "string", enum: ["teachers"]}
                  }
-               }
+               },
+               links: %{"$ref": "#/components/schemas/JsonApiLinks"}
              }
            }
   end

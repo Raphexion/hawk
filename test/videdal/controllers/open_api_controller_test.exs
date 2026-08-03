@@ -120,6 +120,42 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
     assert spec.components.schemas[:JsonApiError].required == [:status, :code, :title, :detail]
   end
 
+  test "success schemas describe links, included resources, and pagination metadata" do
+    spec = OpenApiController.spec()
+
+    collection =
+      spec.paths["/api/v1/courses"].get.responses["200"].content["application/vnd.api+json"].schema
+
+    member =
+      spec.paths["/api/v1/courses/{id}"].get.responses["200"].content["application/vnd.api+json"].schema
+
+    assert collection.properties.links == %{"$ref": "#/components/schemas/JsonApiLinks"}
+
+    assert collection.properties.included == %{
+             type: "array",
+             items: %{"$ref": "#/components/schemas/JsonApiIncludedResource"}
+           }
+
+    assert collection.properties.meta == %{"$ref": "#/components/schemas/JsonApiMeta"}
+    assert member.properties.links == %{"$ref": "#/components/schemas/JsonApiLinks"}
+    assert member.properties.included == collection.properties.included
+
+    course = spec.components.schemas[:CourseResource]
+    assert course.properties.links == %{"$ref": "#/components/schemas/JsonApiLinks"}
+
+    assert course.properties.relationships.properties.teacher.properties.links == %{
+             "$ref": "#/components/schemas/JsonApiLinks"
+           }
+
+    assert spec.components.schemas[:JsonApiIncludedResource].required == [:type, :id]
+
+    assert spec.components.schemas[:JsonApiMeta].properties.page.required == [
+             :size,
+             :number,
+             :count
+           ]
+  end
+
   test "resource schemas include docs, examples, attributes, and relationships" do
     spec = OpenApiController.spec()
     course = Map.fetch!(spec.components.schemas, :CourseResource)
@@ -190,13 +226,9 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
              %{name: "id", in: "path", required: true, schema: %{type: "string", format: "uuid"}}
            ]
 
-    assert open_registration.responses["200"].content["application/vnd.api+json"].schema == %{
-             type: "object",
-             required: [:data],
-             properties: %{
-               data: %{"$ref": "#/components/schemas/CourseResource"}
-             }
-           }
+    action_response = open_registration.responses["200"].content["application/vnd.api+json"].schema
+    assert action_response.required == [:data]
+    assert action_response.properties.data == %{"$ref": "#/components/schemas/CourseResource"}
 
     assert open_registration.requestBody.content["application/vnd.api+json"].schema == %{
              type: "object",

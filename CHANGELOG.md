@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Complete OpenAPI success-document shapes.** Generated schemas describe
+  top-level and resource/relationship links, compound-document `included`, and
+  pagination `meta.page` using reusable JSON:API components.
+
 - **Required OpenAPI response members.** Generated response schemas require
   top-level `data`, resource `type`/`id`, and error-document `errors`, matching
   the JSON:API documents Hawk emits and producing non-optional client types.

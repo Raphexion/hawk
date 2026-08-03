@@ -441,23 +441,34 @@ defmodule Hawk.OpenApi do
     %{description: description, content: %{"application/vnd.api+json" => %{schema: schema}}}
   end
 
-  defp data_schema(resource),
-    do: %{type: "object", required: [:data], properties: %{data: schema_ref(resource)}}
+  defp data_schema(resource), do: document_schema(schema_ref(resource))
+
+  defp document_schema(data) do
+    %{
+      type: "object",
+      required: [:data],
+      properties: Map.put(document_properties(), :data, data)
+    }
+  end
+
+  defp document_properties do
+    %{
+      links: links_ref(),
+      included: %{type: "array", items: included_resource_ref()},
+      meta: meta_ref()
+    }
+  end
 
   defp relationship_document_schema(resource) do
     %{
       type: "object",
-      required: [:data],
-      properties: %{data: %{anyOf: relationship_data_schemas(resource, :linkage)}}
+      required: [:data, :links],
+      properties: Map.put(document_properties(), :data, %{anyOf: relationship_data_schemas(resource, :linkage)})
     }
   end
 
   defp related_document_schema(resource) do
-    %{
-      type: "object",
-      required: [:data],
-      properties: %{data: %{anyOf: relationship_data_schemas(resource, :related)}}
-    }
+    document_schema(%{anyOf: relationship_data_schemas(resource, :related)})
   end
 
   defp relationship_data_schemas(resource, representation) do
@@ -523,11 +534,7 @@ defmodule Hawk.OpenApi do
   end
 
   defp array_schema(resource) do
-    %{
-      type: "object",
-      required: [:data],
-      properties: %{data: %{type: "array", items: schema_ref(resource)}}
-    }
+    document_schema(%{type: "array", items: schema_ref(resource)})
   end
 
   defp write_document_schema(resource, capability) do
@@ -593,7 +600,10 @@ defmodule Hawk.OpenApi do
 
     Map.merge(resource_schemas, %{
       JsonApiError: error_schema(),
-      JsonApiErrorDocument: error_document_schema()
+      JsonApiErrorDocument: error_document_schema(),
+      JsonApiIncludedResource: included_resource_schema(),
+      JsonApiLinks: links_schema(),
+      JsonApiMeta: meta_schema()
     })
   end
 
@@ -608,7 +618,8 @@ defmodule Hawk.OpenApi do
         type: %{type: "string", enum: [resource.json_api.type]},
         id: %{type: "string"},
         attributes: %{type: "object", properties: attribute_properties(resource)},
-        relationships: %{type: "object", properties: relationship_properties(resource)}
+        relationships: %{type: "object", properties: relationship_properties(resource)},
+        links: links_ref()
       }
     }
   end
@@ -621,7 +632,7 @@ defmodule Hawk.OpenApi do
 
   defp relationship_properties(resource) do
     Map.new(resource.json_api.relationships, fn {name, metadata} ->
-      {name, relationship_schema(resource, name, metadata)}
+      {name, relationship_schema(resource, name, metadata, true)}
     end)
   end
 
@@ -641,7 +652,7 @@ defmodule Hawk.OpenApi do
     resource.json_api.relationships
     |> Map.take(allowed)
     |> Map.new(fn {name, metadata} ->
-      {name, relationship_schema(resource, name, metadata)}
+      {name, relationship_schema(resource, name, metadata, false)}
     end)
   end
 
@@ -650,7 +661,7 @@ defmodule Hawk.OpenApi do
     resource.model.__schema__(:type, source)
   end
 
-  defp relationship_schema(resource, name, metadata) do
+  defp relationship_schema(resource, name, metadata, include_links?) do
     source = Map.get(metadata, :source, name)
 
     case resolve_relationship_target(resource, source) do
@@ -660,7 +671,7 @@ defmodule Hawk.OpenApi do
         field_schema(:map, metadata)
 
       {related_type, cardinality} ->
-        relationship_object_schema(related_type, cardinality)
+        relationship_object_schema(related_type, cardinality, include_links?)
         |> put_optional(:description, metadata, :doc)
         |> put_relationship_example(metadata)
     end
@@ -676,24 +687,24 @@ defmodule Hawk.OpenApi do
     end
   end
 
-  defp relationship_object_schema(related_type, :one) do
-    %{
-      type: "object",
-      properties: %{data: resource_identifier_object_schema(related_type)}
-    }
+  defp relationship_object_schema(related_type, :one, include_links?) do
+    properties = %{data: resource_identifier_object_schema(related_type)}
+    %{type: "object", properties: maybe_put_links(properties, include_links?)}
   end
 
-  defp relationship_object_schema(related_type, :many) do
-    %{
-      type: "object",
-      properties: %{
-        data: %{
-          type: "array",
-          items: resource_identifier_object_schema(related_type)
-        }
+  defp relationship_object_schema(related_type, :many, include_links?) do
+    properties = %{
+      data: %{
+        type: "array",
+        items: resource_identifier_object_schema(related_type)
       }
     }
+
+    %{type: "object", properties: maybe_put_links(properties, include_links?)}
   end
+
+  defp maybe_put_links(properties, true), do: Map.put(properties, :links, links_ref())
+  defp maybe_put_links(properties, false), do: properties
 
   defp field_schema(type, metadata) do
     type
@@ -707,6 +718,55 @@ defmodule Hawk.OpenApi do
   defp openapi_type(:boolean), do: %{type: "boolean"}
   defp openapi_type(:float), do: %{type: "number"}
   defp openapi_type(_type), do: %{type: "string"}
+
+  defp links_schema do
+    %{
+      type: "object",
+      properties: %{
+        self: %{type: "string"},
+        related: %{type: "string"}
+      }
+    }
+  end
+
+  defp links_ref, do: %{"$ref": "#/components/schemas/JsonApiLinks"}
+
+  defp included_resource_schema do
+    %{
+      type: "object",
+      required: [:type, :id],
+      properties: %{
+        type: %{type: "string"},
+        id: %{type: "string"},
+        attributes: %{type: "object", additionalProperties: true},
+        relationships: %{type: "object", additionalProperties: true},
+        links: links_ref()
+      }
+    }
+  end
+
+  defp included_resource_ref,
+    do: %{"$ref": "#/components/schemas/JsonApiIncludedResource"}
+
+  defp meta_schema do
+    %{
+      type: "object",
+      additionalProperties: true,
+      properties: %{
+        page: %{
+          type: "object",
+          required: [:size, :number, :count],
+          properties: %{
+            size: %{anyOf: [%{type: "integer"}, %{type: "null"}]},
+            number: %{type: "integer"},
+            count: %{type: "integer"}
+          }
+        }
+      }
+    }
+  end
+
+  defp meta_ref, do: %{"$ref": "#/components/schemas/JsonApiMeta"}
 
   defp error_document_schema do
     %{
