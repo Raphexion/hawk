@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **JSON:API relationship endpoint semantics.** Unknown relationship names on
+  linkage and related-resource URLs return `404` instead of being treated as
+  malformed query input with `400`.
+
 - **JSON:API multi-field sorting.** Collection requests accept ordered,
   comma-separated sort fields such as `sort=title,-id`; OpenAPI documents the
   syntax and allowed Reader fields without restricting the value to one field.

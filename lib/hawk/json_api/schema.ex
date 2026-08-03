@@ -119,17 +119,23 @@ defmodule Hawk.JsonApi.Schema do
   @doc """
   Resolves an external relationship name to its `{name, source}` mapping.
 
+  Returns `{:ok, mapping}` or `:error` when the external name is not declared.
   `name` is the atom key declared in the resource's JSON:API relationships;
   `source` is the schema association the relationship is backed by.
   """
-  def relationship_mapping!(json_api, relationship) when is_map(json_api) and is_binary(relationship) do
-    allowed_by_name =
-      json_api.relationships
-      |> Map.new(fn {name, metadata} ->
-        {to_string(name), {name, field_source(name, metadata)}}
-      end)
+  def relationship_mapping(json_api, relationship) when is_map(json_api) and is_binary(relationship) do
+    json_api.relationships
+    |> Map.new(fn {name, metadata} ->
+      {to_string(name), {name, field_source(name, metadata)}}
+    end)
+    |> Map.fetch(relationship)
+  end
 
-    case Map.fetch(allowed_by_name, relationship) do
+  @doc """
+  Resolves an external relationship name, raising when it is not declared.
+  """
+  def relationship_mapping!(json_api, relationship) when is_map(json_api) and is_binary(relationship) do
+    case relationship_mapping(json_api, relationship) do
       {:ok, mapping} -> mapping
       :error -> raise ArgumentError, "unknown relationship #{inspect(relationship)}"
     end

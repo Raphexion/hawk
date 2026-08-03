@@ -365,29 +365,10 @@ defmodule Hawk.JsonApi.Controller do
   defp do_relationship(conn, resource, model, id, relationship_name, public?) do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
-      context = request_context(conn)
-      identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
 
-      relationship = Schema.relationship_key!(model, relationship_name)
-      association = model.__schema__(:association, relationship)
-      preloads = if match?(%{cardinality: :many}, association), do: [relationship], else: []
-
-      case resource.one(
-             authority: authority,
-             context: context,
-             filter: %{identity => normalize_id(id)},
-             preloads: preloads
-           ) do
-        {:ok, loaded} ->
-          json(
-            conn,
-            200,
-            Document.relationship_document(loaded, relationship_name)
-          )
-
-        :not_found ->
-          json(conn, 404, not_found(resource))
-      end
+      with_relationship(conn, model, relationship_name, fn relationship ->
+        render_relationship(conn, resource, model, id, relationship_name, relationship, authority)
+      end)
     end)
   end
 
@@ -405,30 +386,49 @@ defmodule Hawk.JsonApi.Controller do
   defp do_related(conn, resource, model, id, relationship_name, params, public?) do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
-      context = request_context(conn)
       fields = Request.sparse_fieldsets(params)
-      identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
 
-      relationship =
-        Schema.relationship_key!(model, relationship_name)
-
-      case resource.one(
-             authority: authority,
-             context: context,
-             filter: %{identity => normalize_id(id)},
-             preloads: [relationship]
-           ) do
-        {:ok, model} ->
-          json(
-            conn,
-            200,
-            Document.related_document(model, relationship_name, fields: fields)
-          )
-
-        :not_found ->
-          json(conn, 404, not_found(resource))
-      end
+      with_relationship(conn, model, relationship_name, fn relationship ->
+        render_related(conn, resource, id, relationship_name, relationship, authority, fields)
+      end)
     end)
+  end
+
+  defp render_relationship(conn, resource, model, id, relationship_name, relationship, authority) do
+    association = model.__schema__(:association, relationship)
+    preloads = if match?(%{cardinality: :many}, association), do: [relationship], else: []
+    identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
+
+    case resource.one(
+           authority: authority,
+           context: request_context(conn),
+           filter: %{identity => normalize_id(id)},
+           preloads: preloads
+         ) do
+      {:ok, loaded} -> json(conn, 200, Document.relationship_document(loaded, relationship_name))
+      :not_found -> json(conn, 404, not_found(resource))
+    end
+  end
+
+  defp render_related(conn, resource, id, relationship_name, relationship, authority, fields) do
+    identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
+
+    case resource.one(
+           authority: authority,
+           context: request_context(conn),
+           filter: %{identity => normalize_id(id)},
+           preloads: [relationship]
+         ) do
+      {:ok, model} -> json(conn, 200, Document.related_document(model, relationship_name, fields: fields))
+      :not_found -> json(conn, 404, not_found(resource))
+    end
+  end
+
+  defp with_relationship(conn, model, relationship_name, fun) do
+    case Schema.relationship_mapping(Schema.metadata(model), relationship_name) do
+      {:ok, {_name, source}} -> fun.(source)
+      :error -> json(conn, 404, relationship_not_found(relationship_name))
+    end
   end
 
   defp respond_action(conn, resource, action_name, existing, params, authority) do
@@ -714,6 +714,19 @@ defmodule Hawk.JsonApi.Controller do
     %{
       errors: [
         %{status: "404", code: "not_found", title: "Not found", detail: "#{name} was not found"}
+      ]
+    }
+  end
+
+  defp relationship_not_found(relationship_name) do
+    %{
+      errors: [
+        %{
+          status: "404",
+          code: "not_found",
+          title: "Not found",
+          detail: "relationship #{inspect(relationship_name)} was not found"
+        }
       ]
     }
   end

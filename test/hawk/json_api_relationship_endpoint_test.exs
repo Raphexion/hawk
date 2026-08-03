@@ -98,29 +98,40 @@ defmodule Hawk.JsonApiRelationshipEndpointTest do
     assert grade_doc.id == grade.id
   end
 
-  test "relationship endpoints reject unknown relationships" do
+  test "relationship endpoints return not found for unknown relationships" do
     hostile = "hawk_hostile_relationship_#{System.unique_integer([:positive])}"
     course_id = Videdal.course_id()
 
-    relationship_conn =
-      Controller.relationship(conn(Authority.system()), %{
-        "id" => course_id,
-        "relationship" => hostile
-      })
+    {relationship_conn, relationship_queries} =
+      count_queries(fn ->
+        Controller.relationship(conn(Authority.system()), %{
+          "id" => course_id,
+          "relationship" => hostile
+        })
+      end)
 
-    related_conn =
-      Controller.related(conn(Authority.system()), %{
-        "id" => course_id,
-        "relationship" => hostile
-      })
+    {related_conn, related_queries} =
+      count_queries(fn ->
+        Controller.related(conn(Authority.system()), %{
+          "id" => course_id,
+          "relationship" => hostile
+        })
+      end)
 
-    expected_detail = "unknown relationship #{inspect(hostile)}"
+    expected_error = %{
+      status: "404",
+      code: "not_found",
+      title: "Not found",
+      detail: "relationship #{inspect(hostile)} was not found"
+    }
 
-    assert relationship_conn.status == 400
-    assert related_conn.status == 400
+    assert relationship_conn.status == 404
+    assert related_conn.status == 404
 
-    assert %{errors: [%{detail: ^expected_detail}]} = resp(relationship_conn)
-    assert %{errors: [%{detail: ^expected_detail}]} = resp(related_conn)
+    assert %{errors: [^expected_error]} = resp(relationship_conn)
+    assert %{errors: [^expected_error]} = resp(related_conn)
+    assert relationship_queries == 0
+    assert related_queries == 0
     assert_raise ArgumentError, fn -> String.to_existing_atom(hostile) end
   end
 end

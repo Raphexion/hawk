@@ -555,7 +555,7 @@ JSON:API documents at the adapter boundary:
 - invalid include/filter/sort/page: `400`
 - invalid request document shape, resource type, attributes, or relationships: `400`
 - authorization failure: `403`
-- missing record: `404`
+- missing record, custom action, or relationship endpoint: `404`
 - validation failure: `422`
 - successful deletion: `204 No Content` with an empty body
 
