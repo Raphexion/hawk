@@ -930,7 +930,9 @@ end
 author passes only the resource. `refresh/3` detects the current screen (index
 vs show) from existing assigns and re-runs the read through the socket's
 authority (from `opts[:authority]`, the `:hawk_authority` assign, or
-`Hawk.Authority.public()` as a fallback). A delete degrades gracefully: the
+`Hawk.Authority.public()` as a fallback). Index refreshes preserve both the
+interactive filter/page/sort state and caller-supplied base reader options such
+as fixed filters or context. A delete degrades gracefully: the
 index no longer includes the record, and a show screen re-assigns `:hawk_error`
 because the record is gone.
 

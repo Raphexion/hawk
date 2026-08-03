@@ -216,7 +216,7 @@ defmodule Hawk.LiveView do
     |> assign(:hawk_resource, as)
     |> assign(:hawk_authority, authority)
     |> assign(:hawk_index_state, state)
-    |> assign(:hawk_index_reader_opts, base_reader_opts)
+    |> assign(:hawk_index_base_reader_opts, base_reader_opts)
     |> assign(:hawk_index_meta, index_meta(as, plural_as, results, page))
     |> assign(:hawk_page, page)
     |> assign(:hawk_table, live_view_table(live_view))
@@ -323,9 +323,11 @@ defmodule Hawk.LiveView do
   PubSub-driven refresh stays on the policy-gated read path.
 
   Detects the screen from existing assigns: an index screen (`hawk_index_state`
-  present) re-runs the index query with the stored filter/page/sort; a show
-  screen (`hawk_resource` present, no index state) re-queries the assigned
-  record by its identity. The authority comes from `opts[:authority]`, the
+  present) re-runs the index query with its interactive filter/page/sort state
+  plus the caller-supplied base reader options captured by `assign_index/3`
+  (for example a fixed filter or context); a show screen (`hawk_resource`
+  present, no index state) re-queries the assigned record by its identity. The
+  authority comes from `opts[:authority]`, the
   socket's `:hawk_authority` assign, or `Hawk.Authority.public()` as a fallback
   (matching action helpers).
 
@@ -361,8 +363,8 @@ defmodule Hawk.LiveView do
     live_view = live_view_metadata(resource)
     {as, plural_as} = resource_assigns(resource, live_view, nil, nil)
     state = Map.fetch!(socket.assigns, :hawk_index_state)
-    opts = Map.get(socket.assigns, :hawk_index_reader_opts, [])
-    run_index(socket, resource, as, plural_as, authority, state, live_view, opts)
+    base_reader_opts = Map.fetch!(socket.assigns, :hawk_index_base_reader_opts)
+    run_index(socket, resource, as, plural_as, authority, state, live_view, base_reader_opts)
   end
 
   defp refresh_show(socket, resource, authority) do

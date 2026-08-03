@@ -241,6 +241,9 @@ defmodule Hawk.LiveViewTest do
     socket =
       CourseIndexLive.assign_index(socket(), Authority.system(), filter: %{school_id: school_a.id})
 
+    assert socket.assigns.hawk_index_base_reader_opts == [filter: %{school_id: school_a.id}]
+    refute Map.has_key?(socket.assigns, :hawk_index_reader_opts)
+
     insert(:course, school_id: school_b.id, teacher_id: teacher_b.id)
     socket = Hawk.LiveView.refresh(socket, Videdal.Courses, authority: Authority.system())
 
