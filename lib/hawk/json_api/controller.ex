@@ -159,14 +159,14 @@ defmodule Hawk.JsonApi.Controller do
   end
 
   @doc false
-  def index(conn, resource, _model, reader, params, public? \\ false) do
+  def index(conn, resource, model, reader, params, public? \\ false) do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
       fields = Request.sparse_fieldsets(params)
 
       opts =
         params
-        |> Request.request_options(reader: reader)
+        |> Request.request_options(reader: reader, model: model)
         |> Keyword.put(:authority, authority)
         |> Keyword.put(:context, request_context(conn))
 

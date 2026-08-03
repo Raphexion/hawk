@@ -736,18 +736,13 @@ defmodule Hawk.OpenApi do
   defp include_values(resource) do
     resource.model
     |> include_values(resource.reader, 2, [])
-    |> Enum.map(&external_include_value(resource, &1))
     |> Enum.sort()
   end
 
-  defp external_include_value(resource, include) do
-    [first | rest] = String.split(include, ".")
-    external = external_relationship_name(resource, String.to_existing_atom(first))
-    Enum.join([external | rest], ".")
-  end
-
-  defp external_relationship_name(resource, source) do
-    resource.json_api.relationships
+  defp external_relationship_name(schema, source) do
+    schema
+    |> Hawk.JsonApi.Schema.metadata()
+    |> Map.fetch!(:relationships)
     |> Enum.find_value(source, fn {name, metadata} ->
       if Map.get(metadata, :source, name) == source, do: name
     end)
@@ -763,8 +758,9 @@ defmodule Hawk.OpenApi do
       reader
       |> preload_keys()
       |> Enum.flat_map(fn key ->
+        external = external_relationship_name(schema, key)
         nested = nested_include_values(schema, reader, key, depth, seen)
-        [to_string(key) | Enum.map(nested, &"#{key}.#{&1}")]
+        [external | Enum.map(nested, &"#{external}.#{&1}")]
       end)
     end
   end

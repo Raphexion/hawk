@@ -8,7 +8,9 @@ defmodule Hawk.JsonApi.Request do
   lowercase parameter names reserved by JSON:API, validates create/update
   documents against the resource's JSON:API contract,
   and extracts writer attrs from request bodies. ID handling (full UUIDs and
-  read-only short-id prefixes) also lives here.
+  read-only short-id prefixes) also lives here. Include paths resolve external
+  JSON:API relationship names to internal Reader preload keys at every path
+  segment.
 
   The external shape used for validation is resolved through
   `Hawk.JsonApi.Schema.metadata/1`.
@@ -120,10 +122,11 @@ defmodule Hawk.JsonApi.Request do
   """
   def request_options(params, opts \\ []) when is_map(params) and is_list(opts) do
     reader = Keyword.get(opts, :reader)
+    model = Keyword.get(opts, :model)
 
     []
     |> put_request_option(:page, parse_page(params), %{})
-    |> put_request_option(:preloads, parse_include(Map.get(params, "include"), reader), [])
+    |> put_request_option(:preloads, parse_include(Map.get(params, "include"), reader, model), [])
     |> put_request_option(:filter, parse_filter(Map.get(params, "filter")), :all)
     |> put_sort(Map.get(params, "sort"))
   end
@@ -466,34 +469,46 @@ defmodule Hawk.JsonApi.Request do
   defp parse_filter_scalar("false"), do: false
   defp parse_filter_scalar(value), do: value
 
-  defp parse_include(nil, _reader), do: []
-  defp parse_include("", _reader), do: []
+  defp parse_include(nil, _reader, _model), do: []
+  defp parse_include("", _reader, _model), do: []
 
-  defp parse_include(include, reader) when is_binary(include) do
+  defp parse_include(include, reader, model) when is_binary(include) do
     include
     |> String.split(",", trim: true)
     |> Enum.map(&String.split(&1, ".", trim: true))
-    |> Enum.map(&include_path_to_preload(&1, reader))
+    |> Enum.map(&include_path_to_preload(&1, reader, model))
     |> Enum.reduce([], &merge_preload/2)
     |> Enum.reverse()
   end
 
-  defp parse_include(_include, _reader), do: raise(ArgumentError, "include must be a string")
+  defp parse_include(_include, _reader, _model), do: raise(ArgumentError, "include must be a string")
 
-  defp include_path_to_preload([segment], reader) do
-    include_atom!(segment, reader)
+  defp include_path_to_preload([segment], reader, model) do
+    include_atom!(segment, reader, model)
   end
 
-  defp include_path_to_preload([segment | rest], reader) do
-    key = include_atom!(segment, reader)
-    nested_reader = preload_reader(reader, key)
+  defp include_path_to_preload([segment | rest], reader, model) do
+    key = include_atom!(segment, reader, model)
+    nested_reader = preload_reader(reader, model, key)
+    nested_model = preload_model(model, key)
 
-    {key, [include_path_to_preload(rest, nested_reader)]}
+    {key, [include_path_to_preload(rest, nested_reader, nested_model)]}
   end
 
-  defp include_atom!(segment, nil), do: existing_param_atom!(segment, "include")
+  defp include_atom!(segment, reader, nil), do: internal_include_atom!(segment, reader)
 
-  defp include_atom!(segment, reader) do
+  defp include_atom!(segment, reader, model) do
+    with {:ok, {_name, source}} <- Schema.relationship_mapping(Schema.metadata(model), segment),
+         true <- source in preload_keys(reader) do
+      source
+    else
+      _unknown_or_unavailable -> raise ArgumentError, "unknown include #{inspect(segment)}"
+    end
+  end
+
+  defp internal_include_atom!(segment, nil), do: existing_param_atom!(segment, "include")
+
+  defp internal_include_atom!(segment, reader) do
     reader
     |> preload_keys()
     |> Enum.find(&(to_string(&1) == segment))
@@ -511,12 +526,32 @@ defmodule Hawk.JsonApi.Request do
     end
   end
 
-  defp preload_reader(nil, _key), do: nil
+  defp preload_reader(reader, model, key) do
+    declared_reader =
+      if Code.ensure_loaded?(reader) and function_exported?(reader, :preload_readers, 0) do
+        Map.get(reader.preload_readers(), key)
+      end
 
-  defp preload_reader(reader, key) do
-    if Code.ensure_loaded?(reader) and
-         function_exported?(reader, :preload_readers, 0) do
-      Map.get(reader.preload_readers(), key)
+    declared_reader || association_reader(model, key)
+  end
+
+  defp association_reader(nil, _key), do: nil
+
+  defp association_reader(model, key) do
+    if function_exported?(model, :__hawk_association_reader__, 1) do
+      case model.__hawk_association_reader__(key) do
+        {:ok, reader} -> reader
+        _missing -> nil
+      end
+    end
+  end
+
+  defp preload_model(nil, _key), do: nil
+
+  defp preload_model(model, key) do
+    case model.__schema__(:association, key) do
+      nil -> nil
+      association -> association.related
     end
   end
 

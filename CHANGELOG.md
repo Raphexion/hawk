@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **JSON:API include aliases.** Runtime include parsing resolves external
+  relationship names declared with `source:` at every path segment, matching
+  the values generated in OpenAPI.
+
 - **JSON:API action request documents.** Custom actions require a top-level
   `meta` object at runtime and in OpenAPI, including actions with no declared
   parameters; missing or non-object `meta` returns `400`.

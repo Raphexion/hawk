@@ -67,6 +67,22 @@ defmodule Hawk.OpenApiResourceAdapterTest do
            }
   end
 
+  test "include parsing resolves external relationship names at every path segment" do
+    assert Hawk.JsonApi.Request.request_options(
+             %{"include" => "instructor.campus"},
+             reader: Videdal.ExternalCourses.Reader,
+             model: Videdal.ExternalCourse
+           ) == [preloads: [teacher: [:school]]]
+
+    assert_raise ArgumentError, ~r/unknown include "teacher"/, fn ->
+      Hawk.JsonApi.Request.request_options(
+        %{"include" => "teacher"},
+        reader: Videdal.ExternalCourses.Reader,
+        model: Videdal.ExternalCourse
+      )
+    end
+  end
+
   test "include and sort parameters expose adapter names where applicable" do
     spec = Hawk.OpenApi.spec([Videdal.ExternalCourses], title: "Test API")
     parameters = spec.paths["/courses"].get.parameters
@@ -74,7 +90,7 @@ defmodule Hawk.OpenApiResourceAdapterTest do
     assert %{
              name: "include",
              in: "query",
-             schema: %{type: "string", enum: ["instructor", "instructor.school"]}
+             schema: %{type: "string", enum: ["instructor", "instructor.campus"]}
            } in parameters
 
     assert %{

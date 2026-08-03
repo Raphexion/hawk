@@ -225,8 +225,11 @@ end
 ```
 
 Nested includes such as `include=grades.student` are turned into nested Ecto
-preloads where every layer uses that resource's own reader and policy. Opening
-`courses` does not accidentally open `grades` or `students`. Compound documents
+preloads where every layer uses that resource's own reader and policy. Include
+paths use external JSON:API relationship names; `source:` aliases are translated
+to internal preload keys at every path segment, matching the generated OpenAPI
+values. Opening `courses` does not accidentally open `grades` or `students`.
+Compound documents
 de-duplicate included resources and omit any resource already present in primary
 `data`, including when an include path cycles back to the root.
 

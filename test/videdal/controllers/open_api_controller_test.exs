@@ -60,7 +60,7 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
                  "grades.student",
                  "school",
                  "teacher",
-                 "teacher.school"
+                 "teacher.campus"
                ]
              }
            } in parameters

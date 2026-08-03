@@ -14,7 +14,8 @@ defmodule Videdal.Teachers.JsonApi do
     example: "Grace Hopper"
   )
 
-  relationship(:school,
+  relationship(:campus,
+    source: :school,
     writable: true,
     doc: "The school this teacher belongs to.",
     example: %{type: "schools", id: "7"}
