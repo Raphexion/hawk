@@ -68,7 +68,13 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
     assert %{
              name: "sort",
              in: "query",
-             schema: %{type: "string", enum: ["id", "-id", "title", "-title"]}
+             schema: %{
+               type: "string",
+               pattern: "^-?(?:id|title)(?:,-?(?:id|title))*$"
+             },
+             description:
+               "Comma-separated sort fields. Prefix a field with `-` for descending order. " <>
+                 "Allowed fields: id, title."
            } in parameters
 
     assert %{name: "page[size]", in: "query", schema: %{type: "integer", minimum: 0}} in parameters

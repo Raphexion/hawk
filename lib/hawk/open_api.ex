@@ -352,10 +352,17 @@ defmodule Hawk.OpenApi do
   end
 
   defp sort_parameter(resource) do
+    sort_keys = sort_keys(resource.reader)
+    fields = Enum.map_join(sort_keys, ", ", &to_string/1)
+    alternatives = Enum.map_join(sort_keys, "|", &(to_string(&1) |> Regex.escape()))
+
     %{
       name: "sort",
       in: "query",
-      schema: %{type: "string", enum: sort_values(resource)}
+      schema: %{type: "string", pattern: "^-?(?:#{alternatives})(?:,-?(?:#{alternatives}))*$"},
+      description:
+        "Comma-separated sort fields. Prefix a field with `-` for descending order. " <>
+          "Allowed fields: #{fields}."
     }
   end
 
@@ -799,12 +806,6 @@ defmodule Hawk.OpenApi do
       {:ok, nested_reader} -> {:ok, nested_reader}
       :error -> schema.__hawk_association_reader__(key)
     end
-  end
-
-  defp sort_values(resource) do
-    resource.reader
-    |> sort_keys()
-    |> Enum.flat_map(fn key -> [to_string(key), "-#{key}"] end)
   end
 
   defp sort_keys(reader) do

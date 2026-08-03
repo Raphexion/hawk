@@ -595,6 +595,14 @@ a separate functional index.
 
 #### Query parameters
 
+Collection requests accept JSON:API's ordered, comma-separated sort syntax.
+Every field must be declared by the Reader; prefix a field with `-` for descending
+order:
+
+```text
+/api/v1/courses?sort=title,-id
+```
+
 Some requests support declared reader filters through JSON:API-style query params.
 Bare values become equality filters, and supported operators use one nested key:
 

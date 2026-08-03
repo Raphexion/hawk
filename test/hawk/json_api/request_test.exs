@@ -128,6 +128,10 @@ defmodule Hawk.JsonApi.RequestTest do
     refute_existing_atom(hostile_sort)
   end
 
+  test "request options preserve ordered comma-separated sort fields" do
+    assert Request.request_options(%{"sort" => "title,-id"}) == [sort: [asc: :title, desc: :id]]
+  end
+
   test "request options parse includes through reader preload declarations" do
     assert Request.request_options(
              %{"include" => "grades.student,teacher"},

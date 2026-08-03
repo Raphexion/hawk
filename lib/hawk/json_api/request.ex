@@ -4,7 +4,8 @@ defmodule Hawk.JsonApi.Request do
 
   This is the request-side companion to `Hawk.JsonApi.Document`: it turns
   query params (`include`, `filter`, `sort`, `page`) into reader options,
-  validates create/update documents against the resource's JSON:API contract,
+  including ordered comma-separated JSON:API sort fields, validates
+  create/update documents against the resource's JSON:API contract,
   and extracts writer attrs from request bodies. ID handling (full UUIDs and
   read-only short-id prefixes) also lives here.
 
@@ -305,15 +306,23 @@ defmodule Hawk.JsonApi.Request do
   defp put_sort(opts, nil), do: opts
   defp put_sort(opts, ""), do: opts
 
-  defp put_sort(opts, "-" <> column) do
-    Keyword.put(opts, :sort, [{:desc, existing_param_atom!(column, "sort column")}])
-  end
+  defp put_sort(opts, sort) when is_binary(sort) do
+    order =
+      sort
+      |> String.split(",")
+      |> Enum.map(&parse_sort_field!/1)
 
-  defp put_sort(opts, column) when is_binary(column) do
-    Keyword.put(opts, :sort, [{:asc, existing_param_atom!(column, "sort column")}])
+    Keyword.put(opts, :sort, order)
   end
 
   defp put_sort(_opts, _sort), do: raise(ArgumentError, "sort must be a string")
+
+  defp parse_sort_field!(""), do: raise(ArgumentError, "sort fields must not be empty")
+
+  defp parse_sort_field!("-" <> column),
+    do: {:desc, existing_param_atom!(column, "sort column")}
+
+  defp parse_sort_field!(column), do: {:asc, existing_param_atom!(column, "sort column")}
 
   defp parse_page(params) do
     case Map.get(params, "page", %{}) do

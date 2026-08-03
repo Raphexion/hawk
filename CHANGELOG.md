@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **JSON:API multi-field sorting.** Collection requests accept ordered,
+  comma-separated sort fields such as `sort=title,-id`; OpenAPI documents the
+  syntax and allowed Reader fields without restricting the value to one field.
+
 - **JSON:API compound-document uniqueness.** Cyclic include paths no longer
   repeat a primary resource in `included`.
 

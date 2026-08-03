@@ -80,7 +80,13 @@ defmodule Hawk.OpenApiResourceAdapterTest do
     assert %{
              name: "sort",
              in: "query",
-             schema: %{type: "string", enum: ["public_slug", "-public_slug"]}
+             schema: %{
+               type: "string",
+               pattern: "^-?(?:public_slug)(?:,-?(?:public_slug))*$"
+             },
+             description:
+               "Comma-separated sort fields. Prefix a field with `-` for descending order. " <>
+                 "Allowed fields: public_slug."
            } in parameters
   end
 
