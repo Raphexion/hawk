@@ -472,10 +472,10 @@ defmodule Hawk.OpenApi do
   end
 
   defp relationship_data_schema(related_type, :one, :linkage),
-    do: resource_identifier_data_schema(related_type)
+    do: required_resource_identifier_object_schema(related_type)
 
   defp relationship_data_schema(related_type, :many, :linkage) do
-    %{type: "array", items: resource_identifier_data_schema(related_type)}
+    %{type: "array", items: required_resource_identifier_object_schema(related_type)}
   end
 
   defp relationship_data_schema(related_type, :one, :related),
@@ -485,15 +485,20 @@ defmodule Hawk.OpenApi do
     %{type: "array", items: related_resource_data_schema(related_type)}
   end
 
-  defp resource_identifier_data_schema(related_type) do
+  defp resource_identifier_object_schema(related_type) do
     %{
       type: "object",
-      required: [:type, :id],
       properties: %{
         type: %{type: "string", enum: [related_type]},
         id: %{type: "string"}
       }
     }
+  end
+
+  defp required_resource_identifier_object_schema(related_type) do
+    related_type
+    |> resource_identifier_object_schema()
+    |> Map.put(:required, [:type, :id])
   end
 
   defp related_resource_data_schema(related_type) do
@@ -641,7 +646,7 @@ defmodule Hawk.OpenApi do
         field_schema(:map, metadata)
 
       {related_type, cardinality} ->
-        resource_identifier_schema(related_type, cardinality)
+        relationship_object_schema(related_type, cardinality)
         |> put_optional(:description, metadata, :doc)
         |> put_relationship_example(metadata)
     end
@@ -657,34 +662,20 @@ defmodule Hawk.OpenApi do
     end
   end
 
-  defp resource_identifier_schema(related_type, :one) do
+  defp relationship_object_schema(related_type, :one) do
     %{
       type: "object",
-      properties: %{
-        data: %{
-          type: "object",
-          properties: %{
-            type: %{type: "string", enum: [related_type]},
-            id: %{type: "string"}
-          }
-        }
-      }
+      properties: %{data: resource_identifier_object_schema(related_type)}
     }
   end
 
-  defp resource_identifier_schema(related_type, :many) do
+  defp relationship_object_schema(related_type, :many) do
     %{
       type: "object",
       properties: %{
         data: %{
           type: "array",
-          items: %{
-            type: "object",
-            properties: %{
-              type: %{type: "string", enum: [related_type]},
-              id: %{type: "string"}
-            }
-          }
+          items: resource_identifier_object_schema(related_type)
         }
       }
     }
