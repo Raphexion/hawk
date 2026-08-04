@@ -7,11 +7,17 @@
 </p>
 
 <p align="center">
-Hawk is an opinionated Phoenix backend foundation for resource-heavy systems
-that need the same policy-safe domain surface exposed through internal admin UI
-and backend APIs.
+Hawk spent five years circling in my head in various forms before finally taking flight.
+<a href="https://github.com/landfolk">Landfolk</a> paid for every token and gives me a fantastic place
+to work, grow, and try something new. Their support made the flight possible;
+every ruffled feather and sharp edge is entirely my own.
 </p>
 
+<p align="center">
+If AI-powered development and systems are your kind of airspace, explore
+<a href="https://github.com/landfolk/jobs">Landfolk Jobs</a> or don’t hesitate to reach out.<br>
+Landfolk is an amazing place to work, and I genuinely love it here.
+</p>
 
 # Hawk
 
