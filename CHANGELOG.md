@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-04
+
 ### Changed
 
 - **Actions are explicitly trusted application code.** Hawk passes authority to
@@ -198,6 +200,7 @@ Initial tracked release. Adds the MIT License and Hex package metadata
 (`licenses`, `links`, `files`) in `mix.exs`. Earlier 0.x versions are
 untracked history.
 
-[Unreleased]: https://github.com/Raphexion/hawk/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Raphexion/hawk/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Raphexion/hawk/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Raphexion/hawk/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Raphexion/hawk/releases/tag/v0.4.0
