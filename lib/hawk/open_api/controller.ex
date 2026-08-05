@@ -42,6 +42,8 @@ defmodule Hawk.OpenApi.Controller do
       ])
 
     quote do
+      use Phoenix.Controller, formats: []
+
       def spec do
         OpenApi.spec(unquote(resources), unquote(spec_opts))
       end

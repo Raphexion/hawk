@@ -525,6 +525,10 @@ unsupported media type or parameter. When a request sends `Accept`, it must allo
 JSON:API directly or through a wildcard; Hawk returns `406` when no acceptable
 media range remains.
 
+Generated controller modules implement the Phoenix controller/Plug contract, so
+they can be targeted directly by Phoenix routes without a host-application
+adapter.
+
 Generated actions follow resource capabilities:
 
 - `index/2`

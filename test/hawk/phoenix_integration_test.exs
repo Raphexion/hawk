@@ -14,20 +14,31 @@ defmodule Hawk.PhoenixIntegrationTest.OpenApiController do
     resources: [Videdal.Courses]
 end
 
+defmodule Hawk.PhoenixIntegrationTest.Router do
+  use Phoenix.Router
+
+  import Hawk.JsonApi.Router
+
+  hawk_json_api(Videdal.Courses, Hawk.PhoenixIntegrationTest.CoursesController)
+  get("/openapi.json", Hawk.PhoenixIntegrationTest.OpenApiController, :show)
+end
+
 defmodule Hawk.PhoenixIntegrationTest do
   use Videdal.DatabaseCase, async: true
 
+  @moduletag capture_log: true
+
   alias Hawk.Authority
-  alias Hawk.PhoenixIntegrationTest.{CoursesController, OpenApiController}
+  alias Hawk.PhoenixIntegrationTest.{CoursesController, Router}
   alias Videdal.LiveViews.CourseLive
 
-  test "JSON:API controller renders through a real Plug.Conn with the JSON:API content type" do
+  test "JSON:API controller routes through Phoenix with the JSON:API content type" do
     course = insert(:course, title: "Math")
 
     conn =
       Plug.Test.conn(:get, "/courses")
       |> Plug.Conn.assign(:hawk_authority, Authority.system())
-      |> CoursesController.index(%{})
+      |> Router.call(Router.init([]))
 
     assert conn.status == 200
     assert conn.state == :sent
@@ -107,10 +118,10 @@ defmodule Hawk.PhoenixIntegrationTest do
     assert conn.status == 406
   end
 
-  test "OpenAPI controller renders through a real Plug.Conn" do
+  test "OpenAPI controller routes through Phoenix" do
     conn =
       Plug.Test.conn(:get, "/openapi.json")
-      |> OpenApiController.show(%{})
+      |> Router.call(Router.init([]))
 
     assert conn.status == 200
     assert conn.state == :sent

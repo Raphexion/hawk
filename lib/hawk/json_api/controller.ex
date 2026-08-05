@@ -41,6 +41,8 @@ defmodule Hawk.JsonApi.Controller do
     reader = resource.__hawk_resource__(:reader)
 
     quote do
+      use Phoenix.Controller, formats: []
+
       def index(conn, params) do
         JsonApiController.index(
           conn,
