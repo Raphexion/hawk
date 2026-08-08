@@ -371,6 +371,7 @@ defmodule Hawk.JsonApi.Request do
         %{}
         |> put_page_value(:size, Map.get(page, "size") || Map.get(params, "page_size"))
         |> put_page_value(:number, Map.get(page, "number") || Map.get(params, "page_number"))
+        |> put_page_total(Map.get(page, "total"))
 
       _page ->
         raise ArgumentError, "page must be an object"
@@ -385,6 +386,17 @@ defmodule Hawk.JsonApi.Request do
 
   defp put_page_value(_page, key, _value),
     do: raise(ArgumentError, "page[#{key}] must be an integer")
+
+  defp put_page_total(page, nil), do: page
+  defp put_page_total(page, true), do: Map.put(page, :total, true)
+  defp put_page_total(page, "true"), do: Map.put(page, :total, true)
+  defp put_page_total(page, "1"), do: Map.put(page, :total, true)
+  defp put_page_total(page, false), do: Map.put(page, :total, false)
+  defp put_page_total(page, "false"), do: Map.put(page, :total, false)
+  defp put_page_total(page, "0"), do: Map.put(page, :total, false)
+
+  defp put_page_total(_page, _value),
+    do: raise(ArgumentError, "page[total] must be a boolean")
 
   defp parse_fields(nil), do: %{}
   defp parse_fields(fields) when fields == %{}, do: %{}

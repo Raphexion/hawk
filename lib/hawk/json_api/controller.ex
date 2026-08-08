@@ -172,13 +172,19 @@ defmodule Hawk.JsonApi.Controller do
         |> Keyword.put(:authority, authority)
         |> Keyword.put(:context, request_context(conn))
 
-      document =
-        Document.document(resource.all(opts),
+      models = resource.all(opts)
+      page = Keyword.get(opts, :page)
+
+      document_opts =
+        [
           preloads: Keyword.get(opts, :preloads, []),
           context: Keyword.get(opts, :context, %{}),
-          page: Keyword.get(opts, :page),
+          page: page,
           fields: fields
-        )
+        ]
+        |> maybe_put_total_count(resource, opts, page)
+
+      document = Document.document(models, document_opts)
 
       json(conn, 200, document)
     end)
@@ -433,6 +439,12 @@ defmodule Hawk.JsonApi.Controller do
       :error -> json(conn, 404, relationship_not_found(relationship_name))
     end
   end
+
+  defp maybe_put_total_count(document_opts, resource, opts, %{total: true}) do
+    Keyword.put(document_opts, :total_count, resource.count(opts))
+  end
+
+  defp maybe_put_total_count(document_opts, _resource, _opts, _page), do: document_opts
 
   defp respond_action(conn, resource, action_name, existing, params, authority) do
     if dry_run?(params) do

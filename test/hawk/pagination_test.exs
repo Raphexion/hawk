@@ -74,17 +74,33 @@ defmodule Hawk.PaginationTest do
   test "JSON:API request options parse page and sort parameters" do
     assert Hawk.JsonApi.Request.request_options(%{
              "sort" => "-title",
-             "page" => %{"number" => "2", "size" => "25"},
+             "page" => %{"number" => "2", "size" => "25", "total" => "true"},
              "include" => "teacher,grades"
            }) == [
              sort: [{:desc, :title}],
              preloads: [:teacher, :grades],
-             page: %{number: 2, size: 25}
+             page: %{number: 2, size: 25, total: true}
            ]
+  end
+
+  test "JSON:API request options reject invalid page total values" do
+    assert_raise ArgumentError, ~r/page\[total\] must be a boolean/, fn ->
+      Hawk.JsonApi.Request.request_options(%{"page" => %{"total" => "sometimes"}})
+    end
   end
 
   test "JSON:API request options parse page_size alias" do
     assert Hawk.JsonApi.Request.request_options(%{"page_size" => "2"}) == [page: %{size: 2}]
+  end
+
+  test "reader counts the authorized, unpaginated result set" do
+    insert_list(3, :course)
+
+    results = Courses.all(authority: Authority.system(), page: %{number: 1, size: 2})
+    total_count = Courses.count(authority: Authority.system(), page: %{number: 1, size: 2})
+
+    assert length(results) == 2
+    assert total_count == 3
   end
 
   test "JSON:API documents include pagination metadata for collection pages" do
@@ -92,5 +108,15 @@ defmodule Hawk.PaginationTest do
       Hawk.JsonApi.Document.document([%Videdal.Course{id: 1, title: "Math"}], page: %{number: 2, size: 1})
 
     assert document.meta == %{page: %{number: 2, size: 1, count: 1}}
+  end
+
+  test "JSON:API documents include total count when requested by the controller" do
+    document =
+      Hawk.JsonApi.Document.document([%Videdal.Course{id: 1, title: "Math"}],
+        page: %{number: 2, size: 1, total: true},
+        total_count: 12
+      )
+
+    assert document.meta == %{page: %{number: 2, size: 1, count: 1, total_count: 12}}
   end
 end

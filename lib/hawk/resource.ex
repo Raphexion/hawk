@@ -218,6 +218,17 @@ defmodule Hawk.Resource do
   end
 
   @doc false
+  def call_reader_count(reader, opts) when is_atom(reader) do
+    if Code.ensure_loaded?(reader) and function_exported?(reader, :count, 1) do
+      reader.count(opts)
+    else
+      raise ArgumentError,
+            "Hawk resource reader module #{inspect(reader)} must define count/1 " <>
+              "to serve page[total]=true"
+    end
+  end
+
+  @doc false
   def call_writer_change(writer, function, args) when is_atom(writer) and is_atom(function) and is_list(args) do
     arity = length(args)
 
@@ -289,6 +300,7 @@ defmodule Hawk.Resource do
     quote do
       def one(opts), do: unquote(reader).one(opts)
       def all(opts), do: unquote(reader).all(opts)
+      def count(opts), do: Hawk.Resource.call_reader_count(unquote(reader), opts)
     end
   end
 

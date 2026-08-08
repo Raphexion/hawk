@@ -302,6 +302,7 @@ defmodule Hawk.Reader.Resource do
     quote do
       def one(opts), do: Hawk.Reader.one(config(), opts)
       def all(opts), do: Hawk.Reader.all(config(), opts)
+      def count(opts), do: Hawk.Reader.count(config(), opts)
 
       def preload_query(query, authority) do
         query

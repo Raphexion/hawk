@@ -74,6 +74,25 @@ defmodule Hawk.Reader do
   end
 
   @doc """
+  Counts records for the authorized, unpaginated reader query.
+  """
+  @spec count(config(), keyword() | map()) :: non_neg_integer()
+  def count(config, opts) do
+    opts = normalize_options(opts)
+    authority = Map.fetch!(opts, :authority)
+    caller_filter = Map.fetch!(opts, :filter)
+    sort = sort_order(config, Map.get(opts, :sort, []))
+    validate_sort_keys!(config, sort)
+
+    config.schema
+    |> from(as: :root)
+    |> apply_authorized_filter(config, authority, caller_filter, sort_columns(sort))
+    |> apply_scope(config, opts, %{authority: authority})
+    |> exclude(:order_by)
+    |> config.repo.aggregate(:count, :id)
+  end
+
+  @doc """
   Builds the query for a reader call.
   """
   @spec build_query(config(), keyword() | map()) :: Ecto.Query.t()
@@ -174,7 +193,8 @@ defmodule Hawk.Reader do
 
     %{
       size: Map.get(page, :size),
-      number: Map.get(page, :number)
+      number: Map.get(page, :number),
+      total: Map.get(page, :total)
     }
   end
 

@@ -275,6 +275,12 @@ defmodule Hawk.OpenApi do
       sort_parameter(resource),
       %{name: "page[size]", in: "query", schema: %{type: "integer", minimum: 0}},
       %{name: "page[number]", in: "query", schema: %{type: "integer", minimum: 1}},
+      %{
+        name: "page[total]",
+        in: "query",
+        schema: %{type: "boolean"},
+        description: "Set to true to include meta.page.total_count for the authorized, unpaginated collection."
+      },
       filter_parameter(resource),
       fields_parameter(resource)
     ]
