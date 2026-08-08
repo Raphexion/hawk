@@ -493,8 +493,20 @@ defmodule MyApp.Courses.JsonApi do
     doc: "The teacher responsible for the course.",
     example: %{type: "teachers", id: "..."}
   )
+
+  visibility do
+    role(:public, hide: [:slug])
+  end
 end
 ```
+
+Field visibility rules are subtractive: the adapter declares the full resource
+shape once, and each role may only remove declared attributes or relationships
+with `hide:`. Hawk applies the same visibility rules when parsing sparse
+fieldsets/includes, rendering JSON:API documents, and selecting root query
+columns, so hidden schema fields are not read just to be discarded later. Visible
+computed attributes should declare their `source:` when they depend on a backing
+schema field.
 
 `writable: true` means both creatable and updatable. Use `creatable:` and
 `updatable:` when create/update capabilities differ. `source:` maps the external

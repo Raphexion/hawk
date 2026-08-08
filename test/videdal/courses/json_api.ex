@@ -52,4 +52,8 @@ defmodule Videdal.Courses.JsonApi do
     doc: "Registrations submitted for this course, including final enrollment outcomes.",
     example: [%{type: "enrollments", id: "6"}]
   )
+
+  visibility do
+    role(:public, hide: [:seat_count, :enrollments])
+  end
 end

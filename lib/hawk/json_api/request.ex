@@ -124,10 +124,11 @@ defmodule Hawk.JsonApi.Request do
   def request_options(params, opts \\ []) when is_map(params) and is_list(opts) do
     reader = Keyword.get(opts, :reader)
     model = Keyword.get(opts, :model)
+    authority = Keyword.get(opts, :authority)
 
     []
     |> put_request_option(:page, parse_page(params), %{})
-    |> put_request_option(:preloads, parse_include(Map.get(params, "include"), reader, model), [])
+    |> put_request_option(:preloads, parse_include(Map.get(params, "include"), reader, model, authority), [])
     |> put_request_option(:filter, parse_filter(Map.get(params, "filter"), reader), :all)
     |> put_sort(Map.get(params, "sort"))
   end
@@ -510,36 +511,39 @@ defmodule Hawk.JsonApi.Request do
   defp parse_filter_scalar("false"), do: false
   defp parse_filter_scalar(value), do: value
 
-  defp parse_include(nil, _reader, _model), do: []
-  defp parse_include("", _reader, _model), do: []
+  defp parse_include(nil, _reader, _model, _authority), do: []
+  defp parse_include("", _reader, _model, _authority), do: []
 
-  defp parse_include(include, reader, model) when is_binary(include) do
+  defp parse_include(include, reader, model, authority) when is_binary(include) do
     include
     |> String.split(",", trim: true)
     |> Enum.map(&String.split(&1, ".", trim: true))
-    |> Enum.map(&include_path_to_preload(&1, reader, model))
+    |> Enum.map(&include_path_to_preload(&1, reader, model, authority))
     |> Enum.reduce([], &merge_preload/2)
     |> Enum.reverse()
   end
 
-  defp parse_include(_include, _reader, _model), do: raise(ArgumentError, "include must be a string")
+  defp parse_include(_include, _reader, _model, _authority), do: raise(ArgumentError, "include must be a string")
 
-  defp include_path_to_preload([segment], reader, model) do
-    include_atom!(segment, reader, model)
+  defp include_path_to_preload([segment], reader, model, authority) do
+    include_atom!(segment, reader, model, authority)
   end
 
-  defp include_path_to_preload([segment | rest], reader, model) do
-    key = include_atom!(segment, reader, model)
+  defp include_path_to_preload([segment | rest], reader, model, authority) do
+    key = include_atom!(segment, reader, model, authority)
     nested_reader = preload_reader(reader, model, key)
     nested_model = preload_model(model, key)
 
-    {key, [include_path_to_preload(rest, nested_reader, nested_model)]}
+    {key, [include_path_to_preload(rest, nested_reader, nested_model, authority)]}
   end
 
-  defp include_atom!(segment, reader, nil), do: internal_include_atom!(segment, reader)
+  defp include_atom!(segment, reader, nil, _authority), do: internal_include_atom!(segment, reader)
 
-  defp include_atom!(segment, reader, model) do
-    with {:ok, {_name, source}} <- Schema.relationship_mapping(Schema.metadata(model), segment),
+  defp include_atom!(segment, reader, model, authority) do
+    json_api = Schema.metadata(model)
+
+    with {:ok, {name, source}} <- Schema.relationship_mapping(json_api, segment),
+         true <- Schema.visible_field?(json_api, name, authority),
          true <- source in preload_keys(reader) do
       source
     else

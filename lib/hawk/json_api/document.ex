@@ -94,7 +94,8 @@ defmodule Hawk.JsonApi.Document do
   end
 
   defp resource_attributes(model, json_api, opts) do
-    json_api.attributes
+    json_api
+    |> Schema.visible_attributes(Keyword.get(opts, :authority))
     |> filter_sparse_fields(json_api, opts)
     |> Map.new(fn {name, metadata} ->
       {name, resource_attribute(model, name, metadata, opts)}
@@ -129,7 +130,8 @@ defmodule Hawk.JsonApi.Document do
   defp resource_relationships(model, json_api, opts) do
     preloads = Keyword.get(opts, :preloads, [])
 
-    json_api.relationships
+    json_api
+    |> Schema.visible_relationships(Keyword.get(opts, :authority))
     |> filter_sparse_fields(json_api, opts)
     |> Enum.reduce(%{}, fn {name, metadata}, relationships ->
       source = Map.get(metadata, :source, name)

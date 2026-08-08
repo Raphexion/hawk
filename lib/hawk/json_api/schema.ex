@@ -142,6 +142,63 @@ defmodule Hawk.JsonApi.Schema do
   end
 
   @doc """
+  Returns true when the JSON:API field is visible to the authority.
+  """
+  def visible_field?(json_api, field, authority) when is_map(json_api) and is_atom(field) do
+    not MapSet.member?(hidden_fields(json_api, authority), field)
+  end
+
+  @doc """
+  Filters declared attributes for an authority, preserving the metadata map shape.
+  """
+  def visible_attributes(json_api, authority) when is_map(json_api) do
+    filter_visible_fields(json_api.attributes, json_api, authority)
+  end
+
+  @doc """
+  Filters declared relationships for an authority, preserving the metadata map shape.
+  """
+  def visible_relationships(json_api, authority) when is_map(json_api) do
+    filter_visible_fields(json_api.relationships, json_api, authority)
+  end
+
+  @doc """
+  Returns the schema columns needed to render the visible JSON:API shape.
+
+  The projection includes the resource identity, visible attribute sources, and
+  owner keys for visible belongs-to relationships. Fields removed by role rules
+  are not selected unless another visible field needs the same source.
+  """
+  def select_fields(model, json_api, authority, sparse_fields \\ %{}, identity \\ :id) do
+    schema_fields = model.__schema__(:fields) |> MapSet.new()
+    fieldset = Map.get(sparse_fields, json_api.type)
+
+    visible_attributes =
+      json_api
+      |> visible_attributes(authority)
+      |> filter_sparse_map(fieldset)
+
+    visible_relationships =
+      json_api
+      |> visible_relationships(authority)
+      |> filter_sparse_map(fieldset)
+
+    attribute_sources =
+      visible_attributes
+      |> Enum.map(fn {name, metadata} -> field_source(name, metadata) end)
+      |> Enum.filter(&MapSet.member?(schema_fields, &1))
+
+    relationship_sources =
+      visible_relationships
+      |> Enum.flat_map(fn {name, metadata} -> relationship_select_fields(model, field_source(name, metadata)) end)
+      |> Enum.filter(&MapSet.member?(schema_fields, &1))
+
+    [identity | attribute_sources ++ relationship_sources]
+    |> Enum.filter(&MapSet.member?(schema_fields, &1))
+    |> Enum.uniq()
+  end
+
+  @doc """
   Resolves an external relationship name to its schema association source.
 
   Accepts either a binary external name (resolved through `relationship_mapping!/2`)
@@ -243,6 +300,34 @@ defmodule Hawk.JsonApi.Schema do
       end
     else
       nil
+    end
+  end
+
+  defp hidden_fields(_json_api, nil), do: MapSet.new()
+
+  defp hidden_fields(json_api, authority) do
+    role = Map.get(authority, :role)
+
+    json_api
+    |> Map.get(:field_filters, %{})
+    |> Map.get(role, MapSet.new())
+  end
+
+  defp filter_visible_fields(fields, json_api, authority) do
+    hidden = hidden_fields(json_api, authority)
+    Map.reject(fields, fn {name, _metadata} -> MapSet.member?(hidden, name) end)
+  end
+
+  defp filter_sparse_map(fields, nil), do: fields
+
+  defp filter_sparse_map(fields, fieldset) do
+    Map.filter(fields, fn {name, _metadata} -> MapSet.member?(fieldset, to_string(name)) end)
+  end
+
+  defp relationship_select_fields(model, source) do
+    case model.__schema__(:association, source) do
+      %Ecto.Association.BelongsTo{owner_key: owner_key} -> [owner_key]
+      _association -> []
     end
   end
 

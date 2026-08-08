@@ -166,17 +166,21 @@ defmodule Hawk.JsonApi.Controller do
       authority = authority!(conn, public?)
       fields = Request.sparse_fieldsets(params)
 
+      select = read_select(resource, model, authority, fields)
+
       opts =
         params
-        |> Request.request_options(reader: reader, model: model)
+        |> Request.request_options(reader: reader, model: model, authority: authority)
         |> Keyword.put(:authority, authority)
         |> Keyword.put(:context, request_context(conn))
+        |> Keyword.put(:select, select)
 
       models = resource.all(opts)
       page = Keyword.get(opts, :page)
 
       document_opts =
         [
+          authority: authority,
           preloads: Keyword.get(opts, :preloads, []),
           context: Keyword.get(opts, :context, %{}),
           page: page,
@@ -210,13 +214,16 @@ defmodule Hawk.JsonApi.Controller do
 
   defp show_by_uuid(conn, resource, authority, context, uuid, fields) do
     identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
+    model = resource.__hawk_resource__(:model)
+    select = read_select(resource, model, authority, fields)
 
-    case resource.one(authority: authority, context: context, filter: %{identity => uuid}) do
+    case resource.one(authority: authority, context: context, filter: %{identity => uuid}, select: select) do
       {:ok, model} ->
         json(
           conn,
           200,
           Document.document(model,
+            authority: authority,
             context: context,
             links: true,
             fields: fields
@@ -230,18 +237,22 @@ defmodule Hawk.JsonApi.Controller do
 
   defp show_by_short_id(conn, resource, authority, context, prefix, fields) do
     identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
+    model = resource.__hawk_resource__(:model)
+    select = read_select(resource, model, authority, fields)
 
     case resource.all(
            authority: authority,
            context: context,
            filter: Request.short_id_filter(prefix, identity),
-           page: %{size: 2}
+           page: %{size: 2},
+           select: select
          ) do
       [model] ->
         json(
           conn,
           200,
           Document.document(model,
+            authority: authority,
             context: context,
             links: true,
             fields: fields
@@ -375,7 +386,7 @@ defmodule Hawk.JsonApi.Controller do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
 
-      with_relationship(conn, model, relationship_name, fn relationship ->
+      with_relationship(conn, model, relationship_name, authority, fn relationship ->
         render_relationship(conn, resource, model, id, relationship_name, relationship, authority)
       end)
     end)
@@ -397,7 +408,7 @@ defmodule Hawk.JsonApi.Controller do
       authority = authority!(conn, public?)
       fields = Request.sparse_fieldsets(params)
 
-      with_relationship(conn, model, relationship_name, fn relationship ->
+      with_relationship(conn, model, relationship_name, authority, fn relationship ->
         render_related(conn, resource, id, relationship_name, relationship, authority, fields)
       end)
     end)
@@ -408,11 +419,14 @@ defmodule Hawk.JsonApi.Controller do
     preloads = if match?(%{cardinality: :many}, association), do: [relationship], else: []
     identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
 
+    select = read_select(resource, model, authority, %{})
+
     case resource.one(
            authority: authority,
            context: request_context(conn),
            filter: %{identity => normalize_id(id)},
-           preloads: preloads
+           preloads: preloads,
+           select: select
          ) do
       {:ok, loaded} -> json(conn, 200, Document.relationship_document(loaded, relationship_name))
       :not_found -> json(conn, 404, not_found(resource))
@@ -422,22 +436,43 @@ defmodule Hawk.JsonApi.Controller do
   defp render_related(conn, resource, id, relationship_name, relationship, authority, fields) do
     identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
 
+    model = resource.__hawk_resource__(:model)
+
     case resource.one(
            authority: authority,
            context: request_context(conn),
            filter: %{identity => normalize_id(id)},
-           preloads: [relationship]
+           preloads: [relationship],
+           select: read_select(resource, model, authority, fields)
          ) do
-      {:ok, model} -> json(conn, 200, Document.related_document(model, relationship_name, fields: fields))
-      :not_found -> json(conn, 404, not_found(resource))
+      {:ok, model} ->
+        json(conn, 200, Document.related_document(model, relationship_name, authority: authority, fields: fields))
+
+      :not_found ->
+        json(conn, 404, not_found(resource))
     end
   end
 
-  defp with_relationship(conn, model, relationship_name, fun) do
-    case Schema.relationship_mapping(Schema.metadata(model), relationship_name) do
-      {:ok, {_name, source}} -> fun.(source)
-      :error -> json(conn, 404, relationship_not_found(relationship_name))
+  defp with_relationship(conn, model, relationship_name, authority, fun) do
+    json_api = Schema.metadata(model)
+
+    case Schema.relationship_mapping(json_api, relationship_name) do
+      {:ok, {name, source}} ->
+        if Schema.visible_field?(json_api, name, authority) do
+          fun.(source)
+        else
+          json(conn, 404, relationship_not_found(relationship_name))
+        end
+
+      :error ->
+        json(conn, 404, relationship_not_found(relationship_name))
     end
+  end
+
+  defp read_select(resource, model, authority, fields) do
+    model
+    |> Schema.metadata()
+    |> then(&Schema.select_fields(model, &1, authority, fields, Schema.identity_for_facade(resource)))
   end
 
   defp maybe_put_total_count(document_opts, resource, opts, %{total: true}) do

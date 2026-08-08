@@ -20,6 +20,7 @@ defmodule Hawk.JsonApi.Resource do
       `:creatable`, `:updatable`, `:doc`, `:example`, `:resolver`.
     * `relationship/2` — an external relationship, with `:source`, `:writable`,
       `:doc`, `:example`.
+    * `visibility/1` — per-role subtractive field visibility rules.
 
   ## Attribute options
 
@@ -53,6 +54,10 @@ defmodule Hawk.JsonApi.Resource do
 
         relationship(:school, writable: true, doc: "The offering school.")
         relationship(:grades, doc: "Grades awarded in this course.")
+
+        visibility do
+          role(:public, hide: [:slug, :grades])
+        end
       end
 
   ## Generated functions
@@ -74,8 +79,10 @@ defmodule Hawk.JsonApi.Resource do
         only: [
           attribute: 2,
           doc: 1,
+          visibility: 1,
           group: 1,
           relationship: 2,
+          role: 2,
           tag: 1,
           tag: 2,
           type: 1
@@ -85,6 +92,7 @@ defmodule Hawk.JsonApi.Resource do
       Module.register_attribute(__MODULE__, :hawk_json_api_relationships, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_json_api_creatable, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_json_api_updatable, accumulate: true)
+      Module.register_attribute(__MODULE__, :hawk_json_api_field_filters, accumulate: true)
       @before_compile Hawk.JsonApi.Resource
     end
   end
@@ -147,6 +155,37 @@ defmodule Hawk.JsonApi.Resource do
     quote_field(:hawk_json_api_relationships, name, opts, __CALLER__)
   end
 
+  @doc """
+  Declares role-specific field visibility rules.
+
+  Rules are subtractive only: every JSON:API field is visible by default, and a
+  role can only remove declared attributes or relationships with `hide:`.
+  """
+  defmacro visibility(do: block) do
+    quote do
+      unquote(block)
+    end
+  end
+
+  @doc """
+  Removes JSON:API fields for one role.
+  """
+  defmacro role(role, opts) when is_atom(role) and is_list(opts) do
+    hidden = Keyword.get(opts, :hide, [])
+
+    unless Keyword.keys(opts) == [:hide] do
+      raise ArgumentError, "JSON:API visibility role #{inspect(role)} only supports :hide"
+    end
+
+    unless is_list(hidden) and Enum.all?(hidden, &is_atom/1) do
+      raise ArgumentError, "JSON:API visibility role #{inspect(role)} :hide must be a list of atoms"
+    end
+
+    quote do
+      @hawk_json_api_field_filters {unquote(role), unquote(hidden)}
+    end
+  end
+
   defmacro __before_compile__(env) do
     metadata = %{
       attributes: field_map(env.module, :hawk_json_api_attributes),
@@ -166,6 +205,8 @@ defmodule Hawk.JsonApi.Resource do
 
     metadata =
       put_optional(metadata, :group, Module.get_attribute(env.module, :hawk_json_api_group))
+
+    metadata = put_optional_nonempty(metadata, :field_filters, field_filters(env.module))
 
     quote do
       def __hawk_json_api__, do: unquote(Macro.escape(metadata))
@@ -224,6 +265,29 @@ defmodule Hawk.JsonApi.Resource do
     end
   end
 
+  defp field_filters(module) do
+    declared_fields =
+      module
+      |> field_map(:hawk_json_api_attributes)
+      |> Map.keys()
+      |> Kernel.++(module |> field_map(:hawk_json_api_relationships) |> Map.keys())
+      |> MapSet.new()
+
+    module
+    |> Module.get_attribute(:hawk_json_api_field_filters)
+    |> Enum.reverse()
+    |> Enum.reduce(%{}, fn {role, except}, filters ->
+      unknown = Enum.reject(except, &MapSet.member?(declared_fields, &1))
+
+      if unknown != [] do
+        raise ArgumentError,
+              "JSON:API field role #{inspect(role)} excludes unknown fields #{inspect(Enum.sort(unknown))}"
+      end
+
+      Map.update(filters, role, MapSet.new(except), &MapSet.union(&1, MapSet.new(except)))
+    end)
+  end
+
   defp field_map(module, attribute) do
     module
     |> Module.get_attribute(attribute)
@@ -239,6 +303,9 @@ defmodule Hawk.JsonApi.Resource do
 
   defp put_optional(map, _key, nil), do: map
   defp put_optional(map, key, value), do: Map.put(map, key, value)
+
+  defp put_optional_nonempty(map, _key, value) when value == %{}, do: map
+  defp put_optional_nonempty(map, key, value), do: Map.put(map, key, value)
 
   defp literal!(quoted, caller) do
     {value, _binding} = Code.eval_quoted(quoted, [], caller)

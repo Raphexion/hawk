@@ -14,7 +14,7 @@ defmodule Hawk.Reader do
   alias Hawk.Reader.JoinPlan
   alias Hawk.Reader.Preloader
 
-  @allowed_options MapSet.new([:authority, :context, :filter, :page, :preloads, :sort])
+  @allowed_options MapSet.new([:authority, :context, :filter, :page, :preloads, :select, :sort])
   @sort_dirs [:asc, :desc, :asc_nulls_first, :asc_nulls_last, :desc_nulls_first, :desc_nulls_last]
 
   @type config :: %{
@@ -111,6 +111,7 @@ defmodule Hawk.Reader do
     |> from(as: :root)
     |> apply_authorized_filter(config, authority, caller_filter, sort_columns(sort))
     |> apply_scope(config, opts, %{authority: authority})
+    |> apply_select(Map.get(opts, :select))
     |> apply_sort(sort)
     |> apply_offset(page)
     |> apply_limit(page)
@@ -184,9 +185,23 @@ defmodule Hawk.Reader do
       filter: Map.get(opts, :filter, :all),
       page: normalize_page(Map.get(opts, :page, %{})),
       preloads: Map.get(opts, :preloads, []),
+      select: normalize_select(Map.get(opts, :select)),
       sort: normalize_sort(Map.get(opts, :sort, []))
     }
   end
+
+  defp normalize_select(nil), do: nil
+
+  defp normalize_select(fields) when is_list(fields) do
+    Enum.each(fields, fn
+      field when is_atom(field) -> :ok
+      field -> raise ArgumentError, "select fields must be atoms, got: #{inspect(field)}"
+    end)
+
+    Enum.uniq(fields)
+  end
+
+  defp normalize_select(fields), do: raise(ArgumentError, "select must be a list of atoms, got: #{inspect(fields)}")
 
   defp normalize_page(page) when is_map(page) do
     reject_smuggled_sort_keys!(page)
@@ -273,6 +288,12 @@ defmodule Hawk.Reader do
   end
 
   defp sort_columns(sort), do: Keyword.values(sort)
+
+  defp apply_select(query, nil), do: query
+
+  defp apply_select(query, fields) do
+    select(query, [root: row], struct(row, ^fields))
+  end
 
   defp apply_sort(query, sort) do
     Enum.reduce(sort, query, fn {dir, column}, query ->
