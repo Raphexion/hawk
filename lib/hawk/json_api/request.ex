@@ -130,7 +130,7 @@ defmodule Hawk.JsonApi.Request do
     |> put_request_option(:page, parse_page(params), %{})
     |> put_request_option(:preloads, parse_include(Map.get(params, "include"), reader, model, authority), [])
     |> put_request_option(:filter, parse_filter(Map.get(params, "filter"), reader), :all)
-    |> put_sort(Map.get(params, "sort"))
+    |> put_sort(Map.get(params, "sort"), reader)
   end
 
   @doc """
@@ -345,26 +345,26 @@ defmodule Hawk.JsonApi.Request do
   defp put_request_option(opts, _key, value, value), do: opts
   defp put_request_option(opts, key, value, _empty), do: Keyword.put(opts, key, value)
 
-  defp put_sort(opts, nil), do: opts
-  defp put_sort(opts, ""), do: opts
+  defp put_sort(opts, nil, _reader), do: opts
+  defp put_sort(opts, "", _reader), do: opts
 
-  defp put_sort(opts, sort) when is_binary(sort) do
+  defp put_sort(opts, sort, reader) when is_binary(sort) do
     order =
       sort
       |> String.split(",")
-      |> Enum.map(&parse_sort_field!/1)
+      |> Enum.map(&parse_sort_field!(&1, reader))
 
     Keyword.put(opts, :sort, order)
   end
 
-  defp put_sort(_opts, _sort), do: raise(ArgumentError, "sort must be a string")
+  defp put_sort(_opts, _sort, _reader), do: raise(ArgumentError, "sort must be a string")
 
-  defp parse_sort_field!(""), do: raise(ArgumentError, "sort fields must not be empty")
+  defp parse_sort_field!("", _reader), do: raise(ArgumentError, "sort fields must not be empty")
 
-  defp parse_sort_field!("-" <> column),
-    do: {:desc, existing_param_atom!(column, "sort column")}
+  defp parse_sort_field!("-" <> column, reader),
+    do: {:desc, declared_reader_key!(reader, :sort_keys, column, "sort column")}
 
-  defp parse_sort_field!(column), do: {:asc, existing_param_atom!(column, "sort column")}
+  defp parse_sort_field!(column, reader), do: {:asc, declared_reader_key!(reader, :sort_keys, column, "sort column")}
 
   defp parse_page(params) do
     case Map.get(params, "page", %{}) do
@@ -429,7 +429,7 @@ defmodule Hawk.JsonApi.Request do
 
   defp parse_filter(filter, reader) when is_map(filter) do
     Map.new(filter, fn {key, value} ->
-      key = parse_filter_key!(key)
+      key = parse_filter_key!(key, reader)
       value = parse_filter_value!(value)
       validate_declared_near!(key, value, reader)
       {key, value}
@@ -456,13 +456,10 @@ defmodule Hawk.JsonApi.Request do
 
   defp validate_declared_near!(_key, _value, _reader), do: :ok
 
-  defp parse_filter_key!(key) when is_atom(key), do: key
+  defp parse_filter_key!(key, _reader) when is_atom(key), do: key
 
-  defp parse_filter_key!(key) when is_binary(key) do
-    String.to_existing_atom(key)
-  rescue
-    ArgumentError ->
-      reraise ArgumentError, [message: "unknown filter key #{inspect(key)}"], __STACKTRACE__
+  defp parse_filter_key!(key, reader) when is_binary(key) do
+    declared_reader_key!(reader, :filter_keys, key, "filter key")
   end
 
   defp parse_filter_value!(%{} = value) when map_size(value) == 1 do
@@ -560,6 +557,22 @@ defmodule Hawk.JsonApi.Request do
     |> case do
       nil -> raise ArgumentError, "unknown include #{inspect(segment)}"
       key -> key
+    end
+  end
+
+  defp declared_reader_key!(nil, _function, value, label), do: existing_param_atom!(value, label)
+
+  defp declared_reader_key!(reader, function, value, label) do
+    if Code.ensure_loaded?(reader) and function_exported?(reader, function, 0) do
+      reader
+      |> apply(function, [])
+      |> Enum.find(&(to_string(&1) == value))
+      |> case do
+        nil -> raise ArgumentError, "unknown #{label} #{inspect(value)}"
+        key -> key
+      end
+    else
+      existing_param_atom!(value, label)
     end
   end
 

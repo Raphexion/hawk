@@ -27,7 +27,7 @@ defmodule Hawk.JsonApiControllerErrorBoundaryTest do
     assert [error] = resp(conn).errors
     assert error.status == "400"
     assert error.code == "bad_request"
-    assert error.detail == "unsupported sort column :teacher_id"
+    assert error.detail == ~s(unknown sort column "teacher_id")
   end
 
   test "invalid pagination returns a JSON:API 400 error" do

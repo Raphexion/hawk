@@ -85,6 +85,26 @@ defmodule Hawk.JsonApi.RequestTest do
     end
   end
 
+  test "request options resolve filters through reader declarations" do
+    assert Request.request_options(%{"filter" => %{"school_name" => "Videdal"}}, reader: Videdal.Courses.Reader) == [
+             filter: %{school_name: "Videdal"}
+           ]
+
+    assert_raise ArgumentError, ~r/unknown filter key "title"/, fn ->
+      Request.request_options(%{"filter" => %{"title" => "Math"}}, reader: Videdal.Schools.Reader)
+    end
+  end
+
+  test "request options resolve sort through reader declarations" do
+    assert Request.request_options(%{"sort" => "title,-id"}, reader: Videdal.Courses.Reader) == [
+             sort: [asc: :title, desc: :id]
+           ]
+
+    assert_raise ArgumentError, ~r/unknown sort column "registration_state"/, fn ->
+      Request.request_options(%{"sort" => "registration_state"}, reader: Videdal.Courses.Reader)
+    end
+  end
+
   test "request options reject unsupported filter operators" do
     assert_raise ArgumentError, ~r/unsupported filter operator "starts_with"/, fn ->
       Request.request_options(%{"filter" => %{"name" => %{"starts_with" => "math"}}})
