@@ -626,8 +626,43 @@ order:
 /api/v1/courses?sort=title,-id
 ```
 
-Some requests support declared reader filters through JSON:API-style query params.
-Bare values become equality filters, and supported operators use one nested key:
+Collection requests support filters explicitly declared by the Reader. Declaring
+an integer schema field once keeps the query surface deliberate while enabling
+exact and range filtering automatically:
+
+```elixir
+defmodule MyApp.Listings.Reader do
+  use Hawk.Reader.Resource,
+    repo: MyApp.Repo,
+    schema: MyApp.Listing
+
+  filter(:number_of_bedrooms)
+end
+```
+
+Resource callers use bare values for equality and operator tuples for comparisons:
+
+```elixir
+MyApp.Listings.all(authority: authority, filter: %{number_of_bedrooms: 2})
+MyApp.Listings.all(authority: authority, filter: %{number_of_bedrooms: {:gt, 5}})
+MyApp.Listings.all(authority: authority, filter: %{number_of_bedrooms: {:lt, 3}})
+```
+
+The equivalent JSON:API query parameters are:
+
+```text
+/api/v1/listings?filter[number_of_bedrooms]=2
+/api/v1/listings?filter[number_of_bedrooms][gt]=5
+/api/v1/listings?filter[number_of_bedrooms][lt]=3
+```
+
+`gt`/`lt` are strict comparisons; `gte`/`lte` are inclusive. Integer filters
+also support `eq`, `neq`, `in`, and `not_in`. Hawk casts query-string operands
+to integers before building the Ecto query, returns `400` for invalid integer
+values, and rejects text-only operators such as `like`/`ilike` on integer fields.
+Filter names are Reader keys; JSON:API attribute `source:` aliases do not rename
+the filter contract. Custom `filter/2` handlers continue to own their operand
+semantics. The same nested query shape applies to other declared filters:
 
 ```text
 /api/v1/courses?filter[school_id]=school-1&filter[active][eq]=true&filter[name][ilike]=%25math%25

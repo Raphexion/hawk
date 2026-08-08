@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Typed integer filters.** A declared direct integer Reader filter accepts
+  equality/list operators plus `lt`, `lte`, `gt`, and `gte`. Hawk casts integer
+  operands before query construction for both resource and JSON:API callers,
+  rejects text operators on integer fields, and returns a JSON:API `400` for
+  invalid integer values instead of allowing an `Ecto.Query.CastError` to escape.
+  OpenAPI descriptions identify integer filter fields and their operator set.
+
 ## [0.6.0] - 2026-08-04
 
 ### Changed

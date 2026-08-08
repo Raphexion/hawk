@@ -104,6 +104,18 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
     assert fields.schema == %{type: "object", additionalProperties: %{type: "string"}}
   end
 
+  test "filter parameters document the integer operator contract" do
+    spec = OpenApiController.spec()
+
+    filter =
+      spec.paths["/api/v1/grades"].get.parameters
+      |> Enum.find(&(&1.name == "filter"))
+
+    assert String.contains?(filter.description, "Integer fields (score)")
+    assert String.contains?(filter.description, "eq, neq, in, not_in, lt, lte, gt, gte")
+    assert String.contains?(filter.description, "invalid values are rejected")
+  end
+
   test "operations document JSON:API content negotiation failures" do
     spec = OpenApiController.spec()
     index_responses = spec.paths["/api/v1/courses"].get.responses

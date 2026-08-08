@@ -303,14 +303,14 @@ defmodule Hawk.OpenApi do
   # JSON:API filter serialization is not standardized, so this is a free-form
   # object rather than a rigid per-key schema: the parser accepts any subset of
   # the reader's declared filter keys, and custom `filter/2` handlers may build
-  # arbitrary Ecto fragments from the parsed value. The declared keys and the
-  # supported operators are listed in the description so clients know the
-  # surface without the schema overpromising precision the runtime does not
-  # guarantee.
+  # arbitrary Ecto fragments from the parsed value. The description names the
+  # declared keys and calls out the narrower, type-checked integer contract
+  # without pretending custom handlers have schema-derived semantics.
   defp filter_parameter(resource) do
     keys = filter_key_names(resource)
     ops = Enum.join(filter_operators(), ", ")
     keys_desc = if keys == [], do: "none", else: Enum.join(keys, ", ")
+    integer_desc = integer_filter_description(resource)
 
     %{
       name: "filter",
@@ -318,7 +318,8 @@ defmodule Hawk.OpenApi do
       description:
         "JSON:API-style filters over declared reader columns (`filter[key]=value` or " <>
           "`filter[key][op]=value`). Keys: #{keys_desc}. A bare value is an equality " <>
-          "filter; a nested object uses one operator: #{ops}.",
+          "filter; a nested object uses one operator. Available operator names: #{ops}." <>
+          integer_desc,
       schema: %{type: "object", additionalProperties: true}
     }
   end
@@ -339,6 +340,39 @@ defmodule Hawk.OpenApi do
   end
 
   defp filter_operators, do: ["eq", "neq", "in", "not_in", "lt", "lte", "gt", "gte", "like", "ilike"]
+
+  defp integer_filter_description(resource) do
+    integer_keys = integer_filter_key_names(resource)
+
+    case integer_keys do
+      [] ->
+        ""
+
+      keys ->
+        operators =
+          Hawk.Reader.FilterCompiler.integer_operators()
+          |> Enum.map_join(", ", &to_string/1)
+
+        " Integer fields (#{Enum.join(keys, ", ")}) accept: #{operators}. " <>
+          "Their operands are cast to integers; invalid values are rejected."
+    end
+  end
+
+  defp integer_filter_key_names(resource) do
+    custom_keys =
+      if Code.ensure_loaded?(resource.reader) and function_exported?(resource.reader, :filter_handlers, 0) do
+        resource.reader.filter_handlers() |> Map.keys() |> MapSet.new()
+      else
+        MapSet.new()
+      end
+
+    resource.reader
+    |> filter_keys()
+    |> Enum.reject(&MapSet.member?(custom_keys, &1))
+    |> Enum.filter(&(resource.model.__schema__(:type, &1) == :integer))
+    |> Enum.sort()
+    |> Enum.map(&to_string/1)
+  end
 
   defp include_parameter(resource) do
     %{

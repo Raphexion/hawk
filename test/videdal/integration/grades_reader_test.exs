@@ -1,3 +1,8 @@
+defmodule Videdal.Integration.GradesReaderTest.Controller do
+  use Hawk.JsonApi.Controller,
+    resource: Videdal.Grades
+end
+
 defmodule Videdal.Integration.GradesReaderTest.Reader do
   @moduledoc false
 
@@ -49,12 +54,85 @@ end
 defmodule Videdal.Integration.GradesReaderTest do
   use Videdal.DatabaseCase, async: false
 
+  import Hawk.TestConn, only: [resp: 1]
+
   alias Hawk.Authority
-  alias Videdal.{Course, Grade, Parent, ParentStudent, Repo, School, Student, Teacher}
-  alias Videdal.Integration.GradesReaderTest.Reader
+  alias Videdal.{Course, Grade, Grades, Parent, ParentStudent, Repo, School, Student, Teacher}
+  alias Videdal.Integration.GradesReaderTest.{Controller, Reader}
 
   setup do
     {:ok, seed_school()}
+  end
+
+  test "resource supports the declared integer filter operators" do
+    authority = Authority.system()
+
+    for {filter, expected} <- [
+          {%{score: 10}, [10]},
+          {%{score: {:neq, 10}}, [7, 12]},
+          {%{score: {:gt, 10}}, [12]},
+          {%{score: {:gte, 10}}, [10, 12]},
+          {%{score: {:lt, 10}}, [7]},
+          {%{score: {:lte, 10}}, [7, 10]},
+          {%{score: {:in, [7, 12]}}, [7, 12]},
+          {%{score: {:not_in, [10]}}, [7, 12]}
+        ] do
+      scores = Grades.all(authority: authority, filter: filter) |> Enum.map(& &1.score) |> Enum.sort()
+      assert scores == expected
+    end
+  end
+
+  test "JSON:API casts and applies the declared integer filter operators" do
+    authority = Authority.system()
+
+    for {query, expected} <- [
+          {"filter%5Bscore%5D=10", [10]},
+          {"filter%5Bscore%5D%5Bneq%5D=10", [7, 12]},
+          {"filter%5Bscore%5D%5Bgt%5D=10", [12]},
+          {"filter%5Bscore%5D%5Bgte%5D=10", [10, 12]},
+          {"filter%5Bscore%5D%5Blt%5D=10", [7]},
+          {"filter%5Bscore%5D%5Blte%5D=10", [7, 10]},
+          {"filter%5Bscore%5D%5Bin%5D%5B%5D=7&filter%5Bscore%5D%5Bin%5D%5B%5D=12", [7, 12]},
+          {"filter%5Bscore%5D%5Bnot_in%5D%5B%5D=10", [7, 12]}
+        ] do
+      request =
+        Plug.Test.conn(:get, "/?" <> query)
+        |> Plug.Conn.fetch_query_params()
+        |> Plug.Conn.assign(:hawk_authority, authority)
+
+      response = Controller.index(request, request.query_params)
+
+      assert response.status == 200
+
+      scores =
+        response
+        |> resp()
+        |> Map.fetch!(:data)
+        |> Enum.map(& &1.attributes.score)
+        |> Enum.sort()
+
+      assert scores == expected
+    end
+  end
+
+  test "JSON:API rejects invalid integer operands and operators with a bad request" do
+    for {query, detail} <- [
+          {"filter%5Bscore%5D%5Bgt%5D=many", ~s(invalid integer filter value "many" for field :score)},
+          {"filter%5Bscore%5D%5Bin%5D%5B%5D=7&filter%5Bscore%5D%5Bin%5D%5B%5D=many",
+           ~s(invalid integer filter value "many" for field :score)},
+          {"filter%5Bscore%5D%5Bilike%5D=1%25", "filter operator :ilike is not supported for integer field :score"}
+        ] do
+      request =
+        Plug.Test.conn(:get, "/?" <> query)
+        |> Plug.Conn.fetch_query_params()
+        |> Plug.Conn.assign(:hawk_authority, Authority.system())
+
+      response = Controller.index(request, request.query_params)
+
+      assert response.status == 400
+      assert [error] = resp(response).errors
+      assert error.detail == detail
+    end
   end
 
   test "teachers query all grades for their courses with batched preloads", data do

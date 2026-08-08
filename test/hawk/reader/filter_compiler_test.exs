@@ -4,7 +4,7 @@ defmodule Hawk.Reader.FilterCompilerTest do
   import Ecto.Query
 
   alias Hawk.Reader.FilterCompiler
-  alias Videdal.Student
+  alias Videdal.{Grade, Student}
 
   describe "compile/3" do
     test "leaves all filters unconstrained" do
@@ -39,17 +39,41 @@ defmodule Hawk.Reader.FilterCompilerTest do
     end
 
     test "compiles list operators with deterministic empty-list behavior" do
-      assert_query(compile(%{id: {:in, [1, 2, 3]}}), "s0.id in ^[1, 2, 3]")
-      assert_query(compile(%{id: {:in, []}}), "where: false")
-      assert compile(%{id: {:not_in, []}}).wheres == []
-      assert_query(compile(%{id: {:not_in, [1, 2]}}), "s0.id not in ^[1, 2]")
+      assert_query(compile_grade(%{score: {:in, [1, 2, 3]}}), "g0.score in ^[1, 2, 3]")
+      assert_query(compile_grade(%{score: {:in, []}}), "where: false")
+      assert compile_grade(%{score: {:not_in, []}}).wheres == []
+      assert_query(compile_grade(%{score: {:not_in, [1, 2]}}), "g0.score not in ^[1, 2]")
     end
 
-    test "compiles comparison operators" do
-      assert_query(compile(%{id: {:lt, 10}}), "s0.id < ^10")
-      assert_query(compile(%{id: {:lte, 10}}), "s0.id <= ^10")
-      assert_query(compile(%{id: {:gt, 10}}), "s0.id > ^10")
-      assert_query(compile(%{id: {:gte, 10}}), "s0.id >= ^10")
+    test "compiles integer comparison operators" do
+      assert_query(compile_grade(%{score: {:lt, 10}}), "g0.score < ^10")
+      assert_query(compile_grade(%{score: {:lte, 10}}), "g0.score <= ^10")
+      assert_query(compile_grade(%{score: {:gt, 10}}), "g0.score > ^10")
+      assert_query(compile_grade(%{score: {:gte, 10}}), "g0.score >= ^10")
+    end
+
+    test "casts integer filter operands before compiling the query" do
+      assert_query(compile_grade(%{score: "2"}), "g0.score == ^2")
+      assert_query(compile_grade(%{score: {:gt, "5"}}), "g0.score > ^5")
+      assert_query(compile_grade(%{score: {:in, ["2", "5"]}}), "g0.score in ^[2, 5]")
+    end
+
+    test "rejects invalid integer operands and operators" do
+      assert_raise ArgumentError, ~s(invalid integer filter value "many" for field :score), fn ->
+        compile_grade(%{score: {:gt, "many"}})
+      end
+
+      assert_raise ArgumentError,
+                   "filter operator :in requires a list for integer field :score",
+                   fn ->
+                     compile_grade(%{score: {:in, "2"}})
+                   end
+
+      assert_raise ArgumentError,
+                   "filter operator :ilike is not supported for integer field :score",
+                   fn ->
+                     compile_grade(%{score: {:ilike, "2%"}})
+                   end
     end
 
     test "compiles text matching operators" do
@@ -117,6 +141,10 @@ defmodule Hawk.Reader.FilterCompilerTest do
 
   defp compile(filter) do
     FilterCompiler.compile(Student, Student, filter)
+  end
+
+  defp compile_grade(filter) do
+    FilterCompiler.compile(Grade, Grade, filter)
   end
 
   defp assert_query(query, expected) do

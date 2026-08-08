@@ -2,8 +2,10 @@ defmodule Hawk.Reader.FilterCompiler do
   @moduledoc """
   Compiles Hawk filter ASTs into Ecto query predicates.
 
-  This module implements the default direct-field behavior. Reader modules will
-  later layer custom handlers and join planning around this compiler.
+  This module implements the default direct-field behavior. Direct integer
+  filters are cast and operator-checked before query construction so malformed
+  external input fails as `ArgumentError` instead of escaping from Ecto later.
+  Reader modules layer custom handlers and join planning around this compiler.
   """
 
   import Ecto.Query
@@ -11,6 +13,8 @@ defmodule Hawk.Reader.FilterCompiler do
   alias Hawk.Filter
 
   @operators [:eq, :neq, :in, :not_in, :lt, :lte, :gt, :gte, :like, :ilike]
+  @integer_operators [:eq, :neq, :in, :not_in, :lt, :lte, :gt, :gte]
+  @comparison_operators [:lt, :lte, :gt, :gte]
 
   @type handler :: (Filter.value() -> Ecto.Query.dynamic_expr() | :all | :none)
   @type handlers :: %{optional(atom()) => handler()}
@@ -77,6 +81,7 @@ defmodule Hawk.Reader.FilterCompiler do
   defp compile_root_field_value(schema, field, value) do
     validate_field!(schema, field)
 
+    value = prepare_root_field_value!(schema, field, value)
     compile_validated_root_field_value(field, value)
   end
 
@@ -143,6 +148,49 @@ defmodule Hawk.Reader.FilterCompiler do
   defp combine(:or, :none, right), do: right
   defp combine(:or, left, :none), do: left
   defp combine(:or, left, right), do: dynamic([row], ^left or ^right)
+
+  @doc false
+  def integer_operators, do: @integer_operators
+
+  defp prepare_root_field_value!(schema, field, value) do
+    case schema.__schema__(:type, field) do
+      :integer -> prepare_integer_value!(field, value)
+      _type -> value
+    end
+  end
+
+  defp prepare_integer_value!(field, {operator, values})
+       when operator in [:in, :not_in] and is_list(values) do
+    {operator, Enum.map(values, &cast_integer!(&1, field))}
+  end
+
+  defp prepare_integer_value!(field, {operator, _value}) when operator in [:in, :not_in] do
+    raise ArgumentError,
+          "filter operator #{inspect(operator)} requires a list for integer field #{inspect(field)}"
+  end
+
+  defp prepare_integer_value!(field, {operator, nil}) when operator in @comparison_operators do
+    raise ArgumentError,
+          "filter operator #{inspect(operator)} requires an integer for field #{inspect(field)}"
+  end
+
+  defp prepare_integer_value!(field, {operator, value}) when operator in @integer_operators do
+    {operator, cast_integer!(value, field)}
+  end
+
+  defp prepare_integer_value!(field, {operator, _value}) when operator in @operators do
+    raise ArgumentError,
+          "filter operator #{inspect(operator)} is not supported for integer field #{inspect(field)}"
+  end
+
+  defp cast_integer!(nil, _field), do: nil
+
+  defp cast_integer!(value, field) do
+    case Ecto.Type.cast(:integer, value) do
+      {:ok, integer} -> integer
+      :error -> raise ArgumentError, "invalid integer filter value #{inspect(value)} for field #{inspect(field)}"
+    end
+  end
 
   defp validate_field!(schema, field) when is_atom(field) do
     if field in schema.__schema__(:fields) do

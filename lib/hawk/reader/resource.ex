@@ -118,6 +118,10 @@ defmodule Hawk.Reader.Resource do
   @doc """
   Declares a filterable column. Compiled by `Hawk.Reader.FilterCompiler` into
   an Ecto `where` clause keyed on the external filter name.
+
+  Integer columns accept equality and list operators plus `:lt`, `:lte`, `:gt`,
+  and `:gte`. String operands are cast to integers before compilation; invalid
+  values raise `ArgumentError`.
   """
   defmacro filter(key) when is_atom(key) do
     quote do
