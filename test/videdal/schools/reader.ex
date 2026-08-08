@@ -9,4 +9,5 @@ defmodule Videdal.Schools.Reader do
 
   filter(:id)
   filter(:name)
+  filter(:location, type: :coordinates, max_radius_meters: 100_000)
 end

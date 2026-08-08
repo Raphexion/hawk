@@ -5,7 +5,8 @@ defmodule Videdal.Schools.ReaderTest do
   alias Videdal.Schools.Reader
 
   test "declares the resource filter keys" do
-    assert Reader.filter_keys() == MapSet.new([:id, :name])
+    assert Reader.filter_keys() == MapSet.new([:id, :name, :location])
+    assert Reader.coordinate_filters() == %{location: %{max_radius_meters: 100_000}}
   end
 
   test "delegates read policy to the resource policy module" do

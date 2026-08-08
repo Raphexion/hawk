@@ -7,5 +7,6 @@ defmodule Videdal.School do
 
   model "schools" do
     field(:name, :string)
+    field(:location, Geo.PostGIS.Geometry)
   end
 end

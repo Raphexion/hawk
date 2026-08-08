@@ -22,6 +22,7 @@ defmodule Hawk.ResourceContract do
     maybe_validate_relationship_preloads!(reader, json_api, opts)
     validate_reader_sorts!(reader, model)
     validate_reader_filters!(reader, model)
+    validate_reader_coordinate_filters!(reader, model)
     validate_policy_filters!(policy, reader)
 
     :ok
@@ -196,6 +197,26 @@ defmodule Hawk.ResourceContract do
     |> reader_values(:filter_keys)
     |> Enum.reject(&(MapSet.member?(schema_fields, &1) or MapSet.member?(handlers, &1)))
     |> raise_if_any!("reader filters must be schema fields or custom filter handlers")
+  end
+
+  defp validate_reader_coordinate_filters!(reader, model) do
+    coordinate_filters = reader_values(reader, :coordinate_filters)
+
+    invalid_keys =
+      case coordinate_filters do
+        filters when is_map(filters) ->
+          filters
+          |> Map.keys()
+          |> Enum.reject(&(model.__schema__(:type, &1) == Geo.PostGIS.Geometry))
+
+        _missing ->
+          []
+      end
+
+    raise_if_any!(
+      invalid_keys,
+      "reader coordinate filters must be Geo.PostGIS.Geometry schema fields"
+    )
   end
 
   defp validate_policy_filters!(policy, reader) do

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Indexed coordinate near filters.** Readers can declare an opt-in PostGIS
+  coordinate filter with `type: :coordinates` and a required maximum radius.
+  Resource and nested JSON:API `near` filters validate WGS84 latitude/longitude
+  plus `radius_meters`, then compile to `ST_DWithin` without casting the indexed
+  `geography(Point, 4326)` column. OpenAPI describes the field contract and
+  maximum; malformed requests return `400`. GeoPostGIS remains optional for
+  applications that do not use coordinate filters.
+
 ### Changed
 
 - **Typed integer filters.** A declared direct integer Reader filter accepts

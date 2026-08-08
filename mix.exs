@@ -75,7 +75,8 @@ defmodule Hawk.MixProject do
           Hawk.Result,
           Hawk.Error,
           Hawk.Errors,
-          Hawk.Filter
+          Hawk.Filter,
+          Hawk.Reader.Coordinates
         ],
         "Real-time": [
           Hawk.PubSub,
@@ -131,6 +132,9 @@ defmodule Hawk.MixProject do
       {:ecto, ">= 3.5.0 and < 4.0.0"},
       {:ecto_sql, ">= 3.5.0 and < 4.0.0"},
       {:postgrex, ">= 0.15.0 and < 1.0.0"},
+      # Optional: coordinate filters target PostGIS geography(Point, 4326)
+      # columns. Host applications opt in by depending on geo_postgis too.
+      {:geo_postgis, "~> 3.7", optional: true},
       {:telemetry, "~> 1.0"},
       # Phoenix is a required dependency: Hawk generates JSON:API controllers and
       # LiveView helpers that call Phoenix/Plug directly. Host applications still

@@ -97,11 +97,47 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
            )
 
     assert String.contains?(filter.description, "eq, neq, in, not_in")
+    refute String.contains?(filter.description, "near")
 
     assert %{name: "fields", in: "query"} =
              fields = Enum.find(parameters, &(&1.name == "fields"))
 
     assert fields.schema == %{type: "object", additionalProperties: %{type: "string"}}
+  end
+
+  test "filter parameters document the coordinate near contract" do
+    spec = Hawk.OpenApi.spec([Videdal.Schools], title: "Videdal API")
+
+    filter =
+      spec.paths["/schools"].get.parameters
+      |> Enum.find(&(&1.name == "filter"))
+
+    assert String.contains?(filter.description, "Coordinate fields (location)")
+    assert String.contains?(filter.description, "near requires lat, lng, and radius_meters")
+    assert String.contains?(filter.description, "maximum radius: 100000 meters")
+
+    assert filter.schema.properties.location == %{
+             type: "object",
+             additionalProperties: false,
+             required: [:near],
+             properties: %{
+               near: %{
+                 type: "object",
+                 additionalProperties: false,
+                 required: [:lat, :lng, :radius_meters],
+                 properties: %{
+                   lat: %{type: "number", format: "double", minimum: -90, maximum: 90},
+                   lng: %{type: "number", format: "double", minimum: -180, maximum: 180},
+                   radius_meters: %{
+                     type: "number",
+                     format: "double",
+                     exclusiveMinimum: 0,
+                     maximum: 100_000
+                   }
+                 }
+               }
+             }
+           }
   end
 
   test "filter parameters document the integer operator contract" do

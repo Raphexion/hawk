@@ -23,6 +23,7 @@ defmodule Hawk.Reader do
           required(:filter_keys) => Enumerable.t(),
           required(:read_filter) => (term() -> Filter.t()),
           optional(:filter_handlers) => FilterCompiler.handlers(),
+          optional(:coordinate_filters) => %{optional(atom()) => Hawk.Reader.Coordinates.options()},
           optional(:join_plan) => [JoinPlan.rule()],
           optional(:forced_filter) => Filter.t(),
           optional(:preload_keys) => Enumerable.t(),
@@ -111,7 +112,12 @@ defmodule Hawk.Reader do
 
     query
     |> JoinPlan.apply(Map.get(config, :join_plan, []), filter, sort_key)
-    |> FilterCompiler.compile(config.schema, filter, Map.get(config, :filter_handlers, %{}))
+    |> FilterCompiler.compile(
+      config.schema,
+      filter,
+      Map.get(config, :filter_handlers, %{}),
+      Map.get(config, :coordinate_filters, %{})
+    )
   end
 
   @doc """

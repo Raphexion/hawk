@@ -10,7 +10,8 @@ defmodule Hawk.JsonApi.Request do
   and extracts writer attrs from request bodies. ID handling (full UUIDs and
   read-only short-id prefixes) also lives here. Include paths resolve external
   JSON:API relationship names to internal Reader preload keys at every path
-  segment.
+  segment. Coordinate `near` filters preserve their nested parameter object for
+  the declared Reader coordinate handler to validate and compile.
 
   The external shape used for validation is resolved through
   `Hawk.JsonApi.Schema.metadata/1`.
@@ -127,7 +128,7 @@ defmodule Hawk.JsonApi.Request do
     []
     |> put_request_option(:page, parse_page(params), %{})
     |> put_request_option(:preloads, parse_include(Map.get(params, "include"), reader, model), [])
-    |> put_request_option(:filter, parse_filter(Map.get(params, "filter")), :all)
+    |> put_request_option(:filter, parse_filter(Map.get(params, "filter"), reader), :all)
     |> put_sort(Map.get(params, "sort"))
   end
 
@@ -410,14 +411,37 @@ defmodule Hawk.JsonApi.Request do
 
   defp parse_fieldset!(_fieldset), do: raise(ArgumentError, "field set must be a string")
 
-  defp parse_filter(nil), do: :all
-  defp parse_filter(filter) when filter == %{}, do: :all
+  defp parse_filter(nil, _reader), do: :all
+  defp parse_filter(filter, _reader) when filter == %{}, do: :all
 
-  defp parse_filter(filter) when is_map(filter) do
-    Map.new(filter, fn {key, value} -> {parse_filter_key!(key), parse_filter_value!(value)} end)
+  defp parse_filter(filter, reader) when is_map(filter) do
+    Map.new(filter, fn {key, value} ->
+      key = parse_filter_key!(key)
+      value = parse_filter_value!(value)
+      validate_declared_near!(key, value, reader)
+      {key, value}
+    end)
   end
 
-  defp parse_filter(_filter), do: raise(ArgumentError, "filter must be an object")
+  defp parse_filter(_filter, _reader), do: raise(ArgumentError, "filter must be an object")
+
+  defp validate_declared_near!(_key, _value, nil), do: :ok
+
+  defp validate_declared_near!(key, {:near, _params}, reader) do
+    coordinate_filters =
+      if Code.ensure_loaded?(reader) and function_exported?(reader, :coordinate_filters, 0) do
+        reader.coordinate_filters()
+      else
+        %{}
+      end
+
+    unless Map.has_key?(coordinate_filters, key) do
+      raise ArgumentError,
+            "filter operator near requires a declared coordinate filter for #{inspect(key)}"
+    end
+  end
+
+  defp validate_declared_near!(_key, _value, _reader), do: :ok
 
   defp parse_filter_key!(key) when is_atom(key), do: key
 
@@ -439,6 +463,11 @@ defmodule Hawk.JsonApi.Request do
 
   defp parse_filter_value!(value), do: parse_filter_scalar(value)
 
+  defp parse_filter_operand!(:near, operand) when is_map(operand), do: operand
+
+  defp parse_filter_operand!(:near, _operand),
+    do: raise(ArgumentError, "filter operator near requires an object")
+
   defp parse_filter_operand!(operator, values) when operator in [:in, :not_in] and is_list(values),
     do: Enum.map(values, &parse_filter_scalar!/1)
 
@@ -458,7 +487,7 @@ defmodule Hawk.JsonApi.Request do
   defp parse_filter_operator!(operator) when is_atom(operator), do: operator
 
   defp parse_filter_operator!(operator)
-       when operator in ["eq", "neq", "in", "not_in", "lt", "lte", "gt", "gte", "like", "ilike"] do
+       when operator in ["eq", "neq", "in", "not_in", "lt", "lte", "gt", "gte", "like", "ilike", "near"] do
     String.to_existing_atom(operator)
   end
 

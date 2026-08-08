@@ -5,19 +5,22 @@ defmodule Hawk.Reader.FilterCompiler do
   This module implements the default direct-field behavior. Direct integer
   filters are cast and operator-checked before query construction so malformed
   external input fails as `ArgumentError` instead of escaping from Ecto later.
-  Reader modules layer custom handlers and join planning around this compiler.
+  Declared coordinate filters dispatch through `Hawk.Reader.Coordinates` before
+  generic custom handlers. Reader modules layer custom handlers and join
+  planning around this compiler.
   """
 
   import Ecto.Query
 
   alias Hawk.Filter
 
-  @operators [:eq, :neq, :in, :not_in, :lt, :lte, :gt, :gte, :like, :ilike]
+  @operators [:eq, :neq, :in, :not_in, :lt, :lte, :gt, :gte, :like, :ilike, :near]
   @integer_operators [:eq, :neq, :in, :not_in, :lt, :lte, :gt, :gte]
   @comparison_operators [:lt, :lte, :gt, :gte]
 
   @type handler :: (Filter.value() -> Ecto.Query.dynamic_expr() | :all | :none)
   @type handlers :: %{optional(atom()) => handler()}
+  @type coordinate_filters :: %{optional(atom()) => Hawk.Reader.Coordinates.options()}
 
   @doc """
   Applies a filter AST to an Ecto queryable.
@@ -25,41 +28,66 @@ defmodule Hawk.Reader.FilterCompiler do
   `schema` is used to validate direct fields. Unknown fields fail loudly unless
   a custom handler exists for the key.
   """
-  @spec compile(Ecto.Queryable.t(), module(), Filter.t(), handlers()) :: Ecto.Query.t()
-  def compile(queryable, schema, filter, handlers \\ %{}) when is_atom(schema) do
+  @spec compile(Ecto.Queryable.t(), module(), Filter.t(), handlers(), coordinate_filters()) ::
+          Ecto.Query.t()
+  def compile(queryable, schema, filter, handlers \\ %{}, coordinate_filters \\ %{})
+      when is_atom(schema) do
     reject_unsupported_operator_shorthand!(filter, handlers)
     query = Ecto.Queryable.to_query(queryable)
 
-    case compile_filter(schema, Filter.normalize(filter), handlers) do
+    case compile_filter(schema, Filter.normalize(filter), handlers, coordinate_filters) do
       :all -> query
       :none -> where(query, false)
       dynamic -> where(query, ^dynamic)
     end
   end
 
-  defp compile_filter(_schema, :all, _handlers), do: :all
-  defp compile_filter(_schema, :none, _handlers), do: :none
+  defp compile_filter(_schema, :all, _handlers, _coordinate_filters), do: :all
+  defp compile_filter(_schema, :none, _handlers, _coordinate_filters), do: :none
 
-  defp compile_filter(schema, {:and, left, right}, handlers) do
-    combine(:and, compile_filter(schema, left, handlers), compile_filter(schema, right, handlers))
+  defp compile_filter(schema, {:and, left, right}, handlers, coordinate_filters) do
+    combine(
+      :and,
+      compile_filter(schema, left, handlers, coordinate_filters),
+      compile_filter(schema, right, handlers, coordinate_filters)
+    )
   end
 
-  defp compile_filter(schema, {:or, left, right}, handlers) do
-    combine(:or, compile_filter(schema, left, handlers), compile_filter(schema, right, handlers))
+  defp compile_filter(schema, {:or, left, right}, handlers, coordinate_filters) do
+    combine(
+      :or,
+      compile_filter(schema, left, handlers, coordinate_filters),
+      compile_filter(schema, right, handlers, coordinate_filters)
+    )
   end
 
-  defp compile_filter(schema, filter, handlers) when is_map(filter) do
+  defp compile_filter(schema, filter, handlers, coordinate_filters) when is_map(filter) do
     Enum.reduce(filter, :all, fn {field, value}, acc ->
-      combine(:and, acc, compile_value(schema, field, value, handlers))
+      combine(:and, acc, compile_value(schema, field, value, handlers, coordinate_filters))
     end)
   end
 
-  defp compile_value(schema, field, value, handlers) do
-    case Map.fetch(handlers, field) do
-      {:ok, handler} -> run_handler!(field, handler, value)
-      :error -> compile_root_field_value(schema, field, value)
+  defp compile_value(schema, field, value, handlers, coordinate_filters) do
+    case Map.fetch(coordinate_filters, field) do
+      {:ok, metadata} ->
+        Hawk.Reader.Coordinates.filter_dynamic(field, value, metadata)
+
+      :error ->
+        reject_undeclared_near!(field, value)
+
+        case Map.fetch(handlers, field) do
+          {:ok, handler} -> run_handler!(field, handler, value)
+          :error -> compile_root_field_value(schema, field, value)
+        end
     end
   end
+
+  defp reject_undeclared_near!(field, {:near, _params}) do
+    raise ArgumentError,
+          "filter operator :near requires a declared coordinate filter for field #{inspect(field)}"
+  end
+
+  defp reject_undeclared_near!(_field, _value), do: :ok
 
   defp run_handler!(field, handler, value) when is_function(handler, 1) do
     case handler.(value) do
@@ -135,6 +163,11 @@ defmodule Hawk.Reader.FilterCompiler do
 
   defp compile_validated_root_field_value(field, {:ilike, value}) when is_binary(value) do
     dynamic([row], ilike(field(row, ^field), ^value))
+  end
+
+  defp compile_validated_root_field_value(field, {:near, _params}) do
+    raise ArgumentError,
+          "filter operator :near requires a declared coordinate filter for field #{inspect(field)}"
   end
 
   defp combine(:and, :none, _right), do: :none

@@ -30,7 +30,9 @@ defmodule Hawk.Reader.Resource do
 
     * `filter/1` — declare a filterable column (compiled by
       `Hawk.Reader.FilterCompiler`).
-    * `filter/2` — declare a filter with a custom handler block.
+    * `filter/2` with a block — declare a filter with a custom handler.
+    * `filter/2` with `type: :coordinates` — declare an indexed PostGIS
+      coordinate filter with a required `:max_radius_meters`.
     * `sort/1` — declare a sortable column.
     * `preload/1` — declare a preloadable association (resolved through the
       associated resource's reader and policy).
@@ -60,8 +62,9 @@ defmodule Hawk.Reader.Resource do
 
     * `one/1`, `all/1` — read a member or collection, scoped by policy.
     * `preload_query/2` — an authorized preload query for an association.
-    * `filter_keys/0`, `sort_keys/0`, `preload_keys/0`, `preload_readers/0`,
-      `filter_handlers/0`, `join_plan/0` — the declared metadata.
+    * `filter_keys/0`, `coordinate_filters/0`, `sort_keys/0`, `preload_keys/0`,
+      `preload_readers/0`, `filter_handlers/0`, `join_plan/0` — the declared
+      metadata.
     * `read_filter/1` — delegates to the policy.
     * `repo/0` — the configured repo.
 
@@ -106,6 +109,7 @@ defmodule Hawk.Reader.Resource do
 
       Module.register_attribute(__MODULE__, :hawk_reader_filter_keys, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_filter_handlers, accumulate: true)
+      Module.register_attribute(__MODULE__, :hawk_reader_coordinate_filters, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_join_rules, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_preload_keys, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_preload_readers, accumulate: true)
@@ -130,10 +134,17 @@ defmodule Hawk.Reader.Resource do
   end
 
   @doc """
-  Declares a filterable column with a custom handler block.
+  Declares either a custom filter handler or a PostGIS coordinate filter.
 
-  The block must evaluate to a function of one argument (the supplied filter
-  value) returning an Ecto query fragment or keyword filter.
+  A custom block must evaluate to a function of one argument (the supplied
+  filter value) returning an Ecto query fragment or keyword filter.
+
+  A coordinate filter uses options instead of a block. Its schema field must
+  use `Geo.PostGIS.Geometry` over a database `geography(Point, 4326)` column
+  with a GiST index. `:max_radius_meters` is required and bounds every `near`
+  request.
+
+      filter(:location, type: :coordinates, max_radius_meters: 100_000)
   """
   defmacro filter(key, do: block) when is_atom(key) do
     handler_name = :"__hawk_filter_#{key}__"
@@ -146,6 +157,15 @@ defmodule Hawk.Reader.Resource do
         handler = unquote(block)
         handler.(value)
       end
+    end
+  end
+
+  defmacro filter(key, opts) when is_atom(key) and is_list(opts) do
+    metadata = coordinate_filter_metadata!(key, opts, __CALLER__)
+
+    quote do
+      @hawk_reader_filter_keys unquote(key)
+      @hawk_reader_coordinate_filters {unquote(key), unquote(Macro.escape(metadata))}
     end
   end
 
@@ -216,6 +236,7 @@ defmodule Hawk.Reader.Resource do
   defmacro __before_compile__(env) do
     declarations = reader_declarations(env.module)
 
+    validate_filter_keys!(declarations.filter_keys)
     validate_join_rules!(declarations.join_rules)
     validate_preload_keys!(declarations.preload_keys)
 
@@ -234,6 +255,7 @@ defmodule Hawk.Reader.Resource do
     %{
       filter_keys: reversed_attribute(module, :hawk_reader_filter_keys),
       filter_handlers: reversed_attribute(module, :hawk_reader_filter_handlers),
+      coordinate_filters: reversed_attribute(module, :hawk_reader_coordinate_filters),
       join_rules: reversed_attribute(module, :hawk_reader_join_rules),
       preload_keys: reversed_attribute(module, :hawk_reader_preload_keys),
       preload_readers: reversed_attribute(module, :hawk_reader_preload_readers),
@@ -257,6 +279,7 @@ defmodule Hawk.Reader.Resource do
 
   defp quote_metadata_functions(declarations) do
     handler_entries = quote_filter_handlers(declarations.filter_handlers)
+    coordinate_filter_entries = quote_coordinate_filters(declarations.coordinate_filters)
     join_rule_entries = quote_join_rules(declarations.join_rules)
     preload_reader_entries = quote_preload_readers(declarations.preload_readers)
     filter_keys = declarations.filter_keys
@@ -266,6 +289,7 @@ defmodule Hawk.Reader.Resource do
     quote do
       def filter_keys, do: MapSet.new(unquote(filter_keys))
       def filter_handlers, do: Map.new([unquote_splicing(handler_entries)])
+      def coordinate_filters, do: Map.new([unquote_splicing(coordinate_filter_entries)])
       def join_plan, do: [unquote_splicing(join_rule_entries)]
       def preload_keys, do: MapSet.new(unquote(preload_keys))
       def preload_readers, do: Map.new([unquote_splicing(preload_reader_entries)])
@@ -300,6 +324,7 @@ defmodule Hawk.Reader.Resource do
           schema: @hawk_reader_schema,
           filter_keys: filter_keys(),
           filter_handlers: filter_handlers(),
+          coordinate_filters: coordinate_filters(),
           join_plan: join_plan(),
           read_filter: &read_filter/1,
           forced_filter: @hawk_reader_forced_filter,
@@ -327,6 +352,14 @@ defmodule Hawk.Reader.Resource do
     end)
   end
 
+  defp quote_coordinate_filters(coordinate_filters) do
+    Enum.map(coordinate_filters, fn {key, metadata} ->
+      quote do
+        {unquote(key), unquote(Macro.escape(metadata))}
+      end
+    end)
+  end
+
   defp quote_join_rules(join_rules) do
     Enum.map(join_rules, fn {name, when_filter, when_sort, handler_name} ->
       quote do
@@ -348,6 +381,53 @@ defmodule Hawk.Reader.Resource do
     end)
   end
 
+  defp coordinate_filter_metadata!(key, opts, caller) do
+    unless Keyword.keyword?(opts) do
+      raise ArgumentError, "coordinate filter #{inspect(key)} options must be a keyword list"
+    end
+
+    duplicate_options =
+      opts
+      |> Keyword.keys()
+      |> Enum.frequencies()
+      |> Enum.filter(fn {_option, count} -> count > 1 end)
+      |> Enum.map(fn {option, _count} -> option end)
+
+    if duplicate_options != [] do
+      raise ArgumentError,
+            "duplicate coordinate filter options #{inspect(Enum.sort(duplicate_options))} for #{inspect(key)}"
+    end
+
+    unknown_options = Keyword.keys(opts) -- [:type, :max_radius_meters]
+
+    if unknown_options != [] do
+      raise ArgumentError,
+            "unknown coordinate filter options #{inspect(Enum.uniq(unknown_options))} for #{inspect(key)}"
+    end
+
+    type = opts |> Keyword.get(:type) |> Macro.expand(caller)
+
+    unless type == :coordinates do
+      raise ArgumentError, "filter #{inspect(key)} type must be :coordinates"
+    end
+
+    case Keyword.fetch(opts, :max_radius_meters) do
+      {:ok, quoted_maximum} ->
+        maximum = Macro.expand(quoted_maximum, caller)
+
+        if is_number(maximum) and maximum > 0 do
+          %{max_radius_meters: maximum}
+        else
+          raise ArgumentError,
+                "coordinate filter #{inspect(key)} requires a positive :max_radius_meters"
+        end
+
+      _missing_or_invalid ->
+        raise ArgumentError,
+              "coordinate filter #{inspect(key)} requires a positive :max_radius_meters"
+    end
+  end
+
   defp validate_options!(opts) do
     Enum.each(@required_options, fn option ->
       unless Keyword.has_key?(opts, option) do
@@ -363,6 +443,25 @@ defmodule Hawk.Reader.Resource do
   defp validate_preload_reader!(key, reader) do
     raise ArgumentError,
           "reader preload #{inspect(key)} reader must be a module, got: #{inspect(reader)}"
+  end
+
+  defp validate_filter_keys!(filter_keys) do
+    duplicate_keys =
+      filter_keys
+      |> Enum.frequencies()
+      |> Enum.filter(fn {_key, count} -> count > 1 end)
+      |> Enum.map(fn {key, _count} -> key end)
+
+    case duplicate_keys do
+      [] ->
+        :ok
+
+      [key] ->
+        raise ArgumentError, "duplicate reader filter #{inspect(key)}"
+
+      keys ->
+        raise ArgumentError, "duplicate reader filters #{inspect(Enum.sort(keys))}"
+    end
   end
 
   defp validate_join_rules!(join_rules) do

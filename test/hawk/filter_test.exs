@@ -22,7 +22,8 @@ defmodule Hawk.FilterTest do
       filter = %{
         id: {:in, [1, 2]},
         student_id: {:neq, nil},
-        enrolled_on_or_after: {:gte, ~D[2026-01-01]}
+        enrolled_on_or_after: {:gte, ~D[2026-01-01]},
+        location: {:near, %{lat: 55.6761, lng: 12.5683, radius_meters: 10_000}}
       }
 
       assert Filter.normalize(filter) == filter

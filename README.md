@@ -668,6 +668,81 @@ semantics. The same nested query shape applies to other declared filters:
 /api/v1/courses?filter[school_id]=school-1&filter[active][eq]=true&filter[name][ilike]=%25math%25
 ```
 
+#### Coordinate near filters
+
+Coordinate filtering is an opt-in read capability over an indexed PostGIS
+`geography(Point, 4326)` column. Hawk does not make PostGIS mandatory for
+resources that do not declare coordinate filters. Applications using the
+capability add Hawk's optional GeoPostGIS dependency directly:
+
+```elixir
+{:geo_postgis, "~> 3.7"}
+```
+
+Configure the Postgrex extension as described by
+[GeoPostGIS](https://geo-postgis.hexdocs.pm/readme.html):
+
+```elixir
+Postgrex.Types.define(
+  MyApp.PostgresTypes,
+  [Geo.PostGIS.Extension] ++ Ecto.Adapters.Postgres.extensions(),
+  json: Jason
+)
+
+config :my_app, MyApp.Repo, types: MyApp.PostgresTypes
+```
+
+The host application owns the PostGIS extension, geography column, and GiST
+index. Keep the column itself as geography — Hawk deliberately does not cast the
+indexed column inside the query:
+
+```elixir
+execute "CREATE EXTENSION IF NOT EXISTS postgis"
+execute "ALTER TABLE homes ADD COLUMN location geography(Point, 4326)"
+execute "CREATE INDEX homes_location_gist_index ON homes USING GIST (location)"
+```
+
+Declare the Ecto field and an explicit Reader maximum:
+
+```elixir
+# Model. Geo.Point coordinates use {longitude, latitude} order.
+field(:location, Geo.PostGIS.Geometry)
+
+# Reader
+filter(:location, type: :coordinates, max_radius_meters: 100_000)
+```
+
+Resource callers use the `near` operator:
+
+```elixir
+MyApp.Homes.all(
+  authority: authority,
+  filter: %{
+    location:
+      {:near, %{lat: 55.6761, lng: 12.5683, radius_meters: 10_000}}
+  }
+)
+```
+
+The equivalent JSON:API request is:
+
+```text
+/homes?filter[location][near][lat]=55.6761&filter[location][near][lng]=12.5683&filter[location][near][radius_meters]=10000
+```
+
+Hawk validates latitude (`-90..90`), longitude (`-180..180`), a positive radius,
+the declared maximum, required keys, and unknown keys before querying. Invalid
+JSON:API input returns `400`; rows with `null` locations do not match. `near`
+filters with PostGIS
+[`ST_DWithin`](https://postgis.net/docs/en/ST_DWithin.html), whose geography
+radius is measured in meters and whose bounding-box check can use the GiST index.
+It filters only — it does not implicitly sort by distance or expose distance in
+the response.
+
+This slice is intentionally read-only. The host application owns coordinate
+writes and JSON:API attribute serialization, including construction of
+`%Geo.Point{coordinates: {lng, lat}, srid: 4326}` values.
+
 Sparse fieldsets use standard JSON:API `fields[type]` params on collection,
 member, and related-resource responses. Fieldsets apply independently per
 resource type, including included resources:

@@ -27,6 +27,64 @@ defmodule Hawk.JsonApi.RequestTest do
            }
   end
 
+  test "request options preserve structured coordinate near filters" do
+    assert Request.request_options(%{
+             "filter" => %{
+               "location" => %{
+                 "near" => %{
+                   "lat" => "55.6761",
+                   "lng" => "12.5683",
+                   "radius_meters" => "10000"
+                 }
+               }
+             }
+           }) == [
+             filter: %{
+               location:
+                 {:near,
+                  %{
+                    "lat" => "55.6761",
+                    "lng" => "12.5683",
+                    "radius_meters" => "10000"
+                  }}
+             }
+           ]
+  end
+
+  test "request options reject near on direct and custom fields without a coordinate declaration" do
+    for {key, reader} <- [
+          {:name, Videdal.Schools.Reader},
+          {:school_name, Videdal.Courses.Reader}
+        ] do
+      assert_raise ArgumentError,
+                   "filter operator near requires a declared coordinate filter for #{inspect(key)}",
+                   fn ->
+                     Request.request_options(
+                       %{
+                         "filter" => %{
+                           to_string(key) => %{
+                             "near" => %{
+                               "lat" => "55.6761",
+                               "lng" => "12.5683",
+                               "radius_meters" => "10000"
+                             }
+                           }
+                         }
+                       },
+                       reader: reader
+                     )
+                   end
+    end
+  end
+
+  test "request options require an object for coordinate near filters" do
+    assert_raise ArgumentError, "filter operator near requires an object", fn ->
+      Request.request_options(%{
+        "filter" => %{"location" => %{"near" => "55.6761,12.5683"}}
+      })
+    end
+  end
+
   test "request options reject unsupported filter operators" do
     assert_raise ArgumentError, ~r/unsupported filter operator "starts_with"/, fn ->
       Request.request_options(%{"filter" => %{"name" => %{"starts_with" => "math"}}})

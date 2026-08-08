@@ -24,6 +24,7 @@ defmodule Hawk.Filter do
           | {:gte, scalar()}
           | {:like, String.t()}
           | {:ilike, String.t()}
+          | {:near, map()}
 
   @type t ::
           :all
@@ -32,7 +33,7 @@ defmodule Hawk.Filter do
           | {:and, t(), t()}
           | {:or, t(), t()}
 
-  @operators [:eq, :neq, :in, :not_in, :lt, :lte, :gt, :gte, :like, :ilike]
+  @operators [:eq, :neq, :in, :not_in, :lt, :lte, :gt, :gte, :like, :ilike, :near]
 
   @doc """
   Normalizes map shorthand into explicit equality values.

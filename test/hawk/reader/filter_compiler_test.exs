@@ -136,6 +136,23 @@ defmodule Hawk.Reader.FilterCompilerTest do
       assert_raise ArgumentError, ~r/unsupported filter operator :starts_with/, fn ->
         compile(%{name: {:starts_with, "Ada"}})
       end
+
+      near = {:near, %{lat: 55.6761, lng: 12.5683, radius_meters: 10_000}}
+
+      assert_raise ArgumentError,
+                   "filter operator :near requires a declared coordinate filter for field :name",
+                   fn -> compile(%{name: near}) end
+
+      assert_raise ArgumentError,
+                   "filter operator :near requires a declared coordinate filter for field :student_id",
+                   fn ->
+                     FilterCompiler.compile(
+                       Student,
+                       Student,
+                       %{student_id: near},
+                       %{student_id: fn _value -> :all end}
+                     )
+                   end
     end
   end
 

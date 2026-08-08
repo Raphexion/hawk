@@ -304,13 +304,15 @@ defmodule Hawk.OpenApi do
   # object rather than a rigid per-key schema: the parser accepts any subset of
   # the reader's declared filter keys, and custom `filter/2` handlers may build
   # arbitrary Ecto fragments from the parsed value. The description names the
-  # declared keys and calls out the narrower, type-checked integer contract
-  # without pretending custom handlers have schema-derived semantics.
+  # declared keys and calls out typed integer and coordinate contracts without
+  # pretending generic custom handlers have schema-derived semantics. Declared
+  # coordinate fields get a concrete nested schema; other fields remain open.
   defp filter_parameter(resource) do
     keys = filter_key_names(resource)
-    ops = Enum.join(filter_operators(), ", ")
+    ops = Enum.join(filter_operators(resource), ", ")
     keys_desc = if keys == [], do: "none", else: Enum.join(keys, ", ")
     integer_desc = integer_filter_description(resource)
+    coordinate_desc = coordinate_filter_description(resource)
 
     %{
       name: "filter",
@@ -319,8 +321,8 @@ defmodule Hawk.OpenApi do
         "JSON:API-style filters over declared reader columns (`filter[key]=value` or " <>
           "`filter[key][op]=value`). Keys: #{keys_desc}. A bare value is an equality " <>
           "filter; a nested object uses one operator. Available operator names: #{ops}." <>
-          integer_desc,
-      schema: %{type: "object", additionalProperties: true}
+          integer_desc <> coordinate_desc,
+      schema: filter_schema(resource)
     }
   end
 
@@ -339,7 +341,88 @@ defmodule Hawk.OpenApi do
     end
   end
 
-  defp filter_operators, do: ["eq", "neq", "in", "not_in", "lt", "lte", "gt", "gte", "like", "ilike"]
+  defp filter_operators(resource) do
+    operators = ["eq", "neq", "in", "not_in", "lt", "lte", "gt", "gte", "like", "ilike"]
+
+    if map_size(reader_coordinate_filters(resource.reader)) > 0 do
+      operators ++ ["near"]
+    else
+      operators
+    end
+  end
+
+  defp filter_schema(resource) do
+    coordinate_properties =
+      Map.new(reader_coordinate_filters(resource.reader), fn {key, metadata} ->
+        {key,
+         %{
+           type: "object",
+           additionalProperties: false,
+           required: [:near],
+           properties: %{
+             near: %{
+               type: "object",
+               additionalProperties: false,
+               required: [:lat, :lng, :radius_meters],
+               properties: %{
+                 lat: %{type: "number", format: "double", minimum: -90, maximum: 90},
+                 lng: %{type: "number", format: "double", minimum: -180, maximum: 180},
+                 radius_meters: %{
+                   type: "number",
+                   format: "double",
+                   exclusiveMinimum: 0,
+                   maximum: metadata.max_radius_meters
+                 }
+               }
+             }
+           }
+         }}
+      end)
+
+    %{type: "object", additionalProperties: true}
+    |> maybe_put_filter_properties(coordinate_properties)
+  end
+
+  defp maybe_put_filter_properties(schema, properties) when properties == %{}, do: schema
+  defp maybe_put_filter_properties(schema, properties), do: Map.put(schema, :properties, properties)
+
+  defp coordinate_filter_description(resource) do
+    coordinate_filters = reader_coordinate_filters(resource.reader)
+
+    case Enum.sort(coordinate_filters) do
+      [] ->
+        ""
+
+      filters ->
+        keys = Enum.map_join(filters, ", ", fn {key, _metadata} -> to_string(key) end)
+
+        maximum_description = coordinate_maximum_description(filters)
+
+        " Coordinate fields (#{keys}): near requires lat, lng, and radius_meters; " <>
+          maximum_description <> "."
+    end
+  end
+
+  defp coordinate_maximum_description([{_key, metadata}]) do
+    "maximum radius: #{metadata.max_radius_meters} meters"
+  end
+
+  defp coordinate_maximum_description(filters) do
+    maxima =
+      Enum.map_join(filters, ", ", fn {key, metadata} ->
+        "#{key}=#{metadata.max_radius_meters} meters"
+      end)
+
+    "maximum radii: #{maxima}"
+  end
+
+  defp reader_coordinate_filters(reader) do
+    if Code.ensure_loaded?(reader) and function_exported?(reader, :coordinate_filters, 0) do
+      reader.coordinate_filters()
+    else
+      %{}
+    end
+  end
 
   defp integer_filter_description(resource) do
     integer_keys = integer_filter_key_names(resource)

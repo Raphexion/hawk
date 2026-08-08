@@ -9,6 +9,7 @@ repo_config =
         database: "hawk_test",
         hostname: "localhost",
         pool: Ecto.Adapters.SQL.Sandbox,
+        types: Videdal.PostgresTypes,
         telemetry_prefix: [:videdal, :repo],
         log: false
       ]
@@ -17,6 +18,7 @@ repo_config =
       [
         url: database_url,
         pool: Ecto.Adapters.SQL.Sandbox,
+        types: Videdal.PostgresTypes,
         telemetry_prefix: [:videdal, :repo],
         log: false
       ]
