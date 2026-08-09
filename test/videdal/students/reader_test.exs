@@ -100,9 +100,10 @@ defmodule Videdal.Students.ReaderTest do
     school = insert(:school)
     insert(:student, school_id: school.id)
     insert(:student, school_id: school.id)
+    insert(:student, school_id: school.id)
 
     assert_raise RuntimeError, ~r/expected one result, got 2/, fn ->
-      Students.one(authority: Authority.system(), filter: %{school_id: school.id})
+      Students.one(authority: Authority.system(), filter: %{school_id: school.id}, preloads: [:school])
     end
   end
 end

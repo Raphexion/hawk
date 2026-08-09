@@ -66,10 +66,38 @@ defmodule Hawk.Reader do
   """
   @spec one(config(), keyword() | map()) :: {:ok, struct()} | :not_found
   def one(config, opts) do
-    case all(config, opts) do
-      [model] -> {:ok, model}
-      [] -> :not_found
-      results -> raise "expected one result, got #{length(results)}"
+    opts = normalize_options(opts)
+
+    Preloader.validate_preloads!(
+      opts.preloads,
+      Map.get(config, :preload_keys, []),
+      config.schema,
+      Map.get(config, :preload_readers, %{})
+    )
+
+    results =
+      config
+      |> build_query(%{opts | page: %{size: 2}, preloads: []})
+      |> config.repo.all()
+
+    case results do
+      [model] ->
+        [model]
+        |> Preloader.preload(
+          config.repo,
+          opts.preloads,
+          Map.get(config, :preload_keys, []),
+          opts.authority,
+          Map.get(config, :preload_readers, %{})
+        )
+        |> List.first()
+        |> then(&{:ok, &1})
+
+      [] ->
+        :not_found
+
+      _results ->
+        raise "expected one result, got 2"
     end
   end
 
