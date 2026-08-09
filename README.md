@@ -7,16 +7,15 @@
 </p>
 
 <p align="center">
-Hawk spent five years circling in my head in various forms before finally taking flight.
-<a href="https://github.com/landfolk">Landfolk</a> paid for every token and gives me a fantastic place
-to work, grow, and try something new. Their support made the flight possible;
-every ruffled feather and sharp edge is entirely my own.
+Hawk is an independent project developed on my own time, with support from
+<a href="https://github.com/landfolk">Landfolk</a>. Landfolk provided encouragement,
+a strong engineering environment, and AI tooling that helped make this work possible.
+The project direction, implementation choices, and any remaining rough edges are my own.
 </p>
 
 <p align="center">
-If AI-powered development and systems are your kind of airspace, explore
-<a href="https://github.com/landfolk/jobs">Landfolk Jobs</a> or don’t hesitate to reach out.<br>
-Landfolk is an amazing place to work, and I genuinely love it here.
+If you are interested in AI-assisted software development and thoughtful product engineering,
+see <a href="https://github.com/landfolk/jobs">Landfolk Jobs</a>.
 </p>
 
 # Hawk
@@ -674,29 +673,29 @@ an integer schema field once keeps the query surface deliberate while enabling
 exact and range filtering automatically:
 
 ```elixir
-defmodule MyApp.Listings.Reader do
+defmodule MyApp.Courses.Reader do
   use Hawk.Reader.Resource,
     repo: MyApp.Repo,
-    schema: MyApp.Listing
+    schema: MyApp.Course
 
-  filter(:number_of_bedrooms)
+  filter(:credit_count)
 end
 ```
 
 Resource callers use bare values for equality and operator tuples for comparisons:
 
 ```elixir
-MyApp.Listings.all(authority: authority, filter: %{number_of_bedrooms: 2})
-MyApp.Listings.all(authority: authority, filter: %{number_of_bedrooms: {:gt, 5}})
-MyApp.Listings.all(authority: authority, filter: %{number_of_bedrooms: {:lt, 3}})
+MyApp.Courses.all(authority: authority, filter: %{credit_count: 2})
+MyApp.Courses.all(authority: authority, filter: %{credit_count: {:gt, 5}})
+MyApp.Courses.all(authority: authority, filter: %{credit_count: {:lt, 3}})
 ```
 
 The equivalent JSON:API query parameters are:
 
 ```text
-/api/v1/listings?filter[number_of_bedrooms]=2
-/api/v1/listings?filter[number_of_bedrooms][gt]=5
-/api/v1/listings?filter[number_of_bedrooms][lt]=3
+/api/v1/courses?filter[credit_count]=2
+/api/v1/courses?filter[credit_count][gt]=5
+/api/v1/courses?filter[credit_count][lt]=3
 ```
 
 `gt`/`lt` are strict comparisons; `gte`/`lte` are inclusive. Integer filters
@@ -741,8 +740,8 @@ indexed column inside the query:
 
 ```elixir
 execute "CREATE EXTENSION IF NOT EXISTS postgis"
-execute "ALTER TABLE homes ADD COLUMN location geography(Point, 4326)"
-execute "CREATE INDEX homes_location_gist_index ON homes USING GIST (location)"
+execute "ALTER TABLE campuses ADD COLUMN location geography(Point, 4326)"
+execute "CREATE INDEX campuses_location_gist_index ON campuses USING GIST (location)"
 ```
 
 Declare the Ecto field and an explicit Reader maximum:
@@ -758,7 +757,7 @@ filter(:location, type: :coordinates, max_radius_meters: 100_000)
 Resource callers use the `near` operator:
 
 ```elixir
-MyApp.Homes.all(
+MyApp.Campuses.all(
   authority: authority,
   filter: %{
     location:
@@ -770,7 +769,7 @@ MyApp.Homes.all(
 The equivalent JSON:API request is:
 
 ```text
-/homes?filter[location][near][lat]=55.6761&filter[location][near][lng]=12.5683&filter[location][near][radius_meters]=10000
+/campuses?filter[location][near][lat]=55.6761&filter[location][near][lng]=12.5683&filter[location][near][radius_meters]=10000
 ```
 
 Hawk validates latitude (`-90..90`), longitude (`-180..180`), a positive radius,
