@@ -67,7 +67,10 @@ end
 ```
 
 The facade generates public reader/writer functions plus `action/4`, and exposes
-resource introspection through `__hawk_resource__/1`. JSON:API rendering discovers
+resource introspection through `__hawk_resource__/1`. For JSON:API-enabled resources,
+`json_api_select_fields/2` returns the schema-field projection Hawk will use for a
+role and sparse fieldset, giving tests a side-effect-free way to assert visibility
+without attaching global repo telemetry. JSON:API rendering discovers
 sibling adapter metadata from related models' resource facades, so each resource
 has a single source of JSON:API truth. JSON:API controllers generate a stable
 `hawk_action/2` entrypoint; at runtime it returns not found when no matching

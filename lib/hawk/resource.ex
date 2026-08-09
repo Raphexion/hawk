@@ -99,7 +99,9 @@ defmodule Hawk.Resource do
   Every facade exposes `__hawk_resource__/1`, which returns the resolved
   sibling module for `:model`, `:reader`, `:policy`, `:writer`, `:actions`,
   and the declared `:identity`; `:json_api` and `:live_view` return the adapter
-  module or `false` when disabled. The `:capabilities` map reports the
+  module or `false` when disabled. JSON:API-enabled facades also expose
+  `json_api_select_fields/2`, a side-effect-free projection planner for tests
+  and diagnostics. The `:capabilities` map reports the
   optional adapter flags (`:json_api`, `:live_view`, `:actions`); the reader
   and writer are always present, so they have no capability flag. `mix
   hawk.validate`, `mix hawk.openapi`, and `Hawk.Plans.Registry` all discover
@@ -172,6 +174,7 @@ defmodule Hawk.Resource do
     quote do
       unquote(quote_introspection(modules, runtime_modules))
       unquote(quote_reader_delegates(modules.reader))
+      unquote(quote_json_api_delegates(modules))
       unquote(quote_writer_delegates(modules.writer))
       unquote(quote_action_dispatch(caller))
     end
@@ -301,6 +304,25 @@ defmodule Hawk.Resource do
       def one(opts), do: unquote(reader).one(opts)
       def all(opts), do: unquote(reader).all(opts)
       def count(opts), do: Hawk.Resource.call_reader_count(unquote(reader), opts)
+    end
+  end
+
+  defp quote_json_api_delegates(%{json_api: false}), do: nil
+
+  defp quote_json_api_delegates(%{model: model, json_api: json_api, identity: identity}) do
+    quote do
+      @doc """
+      Returns the schema fields Hawk selects when rendering this resource's JSON:API shape.
+
+      This is a side-effect-free projection planner for tests and diagnostics:
+      callers can assert role visibility and sparse-field projection without
+      attaching global repo telemetry handlers or executing a query.
+      """
+      def json_api_select_fields(authority, sparse_fields \\ %{}) do
+        unquote(json_api)
+        |> Hawk.JsonApi.Schema.metadata()
+        |> then(&Hawk.JsonApi.Schema.select_fields(unquote(model), &1, authority, sparse_fields, unquote(identity)))
+      end
     end
   end
 

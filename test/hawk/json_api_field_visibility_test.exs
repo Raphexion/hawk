@@ -4,7 +4,7 @@ defmodule Hawk.JsonApiFieldVisibilityTest.CoursesController do
 end
 
 defmodule Hawk.JsonApiFieldVisibilityTest do
-  use Videdal.DatabaseCase, async: false
+  use Videdal.DatabaseCase, async: true
 
   import Hawk.TestConn, only: [conn: 1, resp: 1]
 
@@ -76,17 +76,22 @@ defmodule Hawk.JsonApiFieldVisibilityTest do
     assert Map.has_key?(resp(conn).data.relationships, :enrollments)
   end
 
-  test "reader projection does not select role-filtered fields but keeps sources needed for visible fields and relationships" do
-    %{course: _course} = seed_course(seat_count: 42)
+  test "JSON:API facade projection does not select role-filtered fields but keeps sources needed for visible fields and relationships" do
+    fields = Videdal.Courses.json_api_select_fields(Authority.public())
 
-    {conn, queries} = capture_queries(fn -> CoursesController.index(conn(Authority.public()), %{}) end)
+    refute :seat_count in fields
+    assert :title in fields
+    assert :teacher_id in fields
+    assert :school_id in fields
+  end
 
-    assert conn.status == 200
-    course_query = Enum.find(queries, &String.contains?(&1, ~s(FROM "courses")))
+  test "JSON:API facade projection follows sparse fieldsets without letting callers re-add hidden fields" do
+    fields =
+      Videdal.Courses.json_api_select_fields(Authority.public(), %{
+        "courses" => MapSet.new(["title", "seat_count", "teacher"])
+      })
 
-    refute course_query =~ "seat_count"
-    assert course_query =~ "title"
-    assert course_query =~ "teacher_id"
+    assert fields == [:id, :title, :teacher_id]
   end
 
   test "role-filtered relationships cannot be included or fetched through relationship endpoints" do
@@ -111,39 +116,5 @@ defmodule Hawk.JsonApiFieldVisibilityTest do
     course = insert(:course, Keyword.merge([school_id: school.id, teacher_id: teacher.id, title: "Math"], attrs))
 
     %{school: school, teacher: teacher, course: course}
-  end
-
-  defp capture_queries(fun) do
-    test_pid = self()
-    ref = make_ref()
-    handler_id = {__MODULE__, self(), ref}
-
-    :telemetry.attach(
-      handler_id,
-      [:videdal, :repo, :query],
-      &__MODULE__.handle_query_event/4,
-      %{test_pid: test_pid, ref: ref}
-    )
-
-    try do
-      result = fun.()
-      {result, drain_queries(ref, [])}
-    after
-      :telemetry.detach(handler_id)
-    end
-  end
-
-  def handle_query_event(_event, _measurements, metadata, %{test_pid: test_pid, ref: ref}) do
-    unless metadata[:source] == "schema_migrations" do
-      send(test_pid, {ref, metadata.query})
-    end
-  end
-
-  defp drain_queries(ref, queries) do
-    receive do
-      {^ref, query} -> drain_queries(ref, [query | queries])
-    after
-      0 -> Enum.reverse(queries)
-    end
   end
 end
