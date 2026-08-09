@@ -238,10 +238,7 @@ defmodule Hawk.JsonApi.Document do
   defp put_included(document, models, opts) do
     primary_resources = MapSet.new(models, &resource_identity/1)
 
-    included =
-      models
-      |> included_resources(Keyword.get(opts, :preloads, []), opts)
-      |> Enum.reject(&MapSet.member?(primary_resources, {&1.type, &1.id}))
+    {included, _seen} = included_resources(models, Keyword.get(opts, :preloads, []), opts, primary_resources)
 
     if included == [] do
       document
@@ -254,28 +251,40 @@ defmodule Hawk.JsonApi.Document do
     {Schema.metadata(model).type, to_string(Map.get(model, Schema.identity(model)))}
   end
 
-  defp included_resources(models, preloads, opts) do
-    models
-    |> Enum.flat_map(&included_resources_for_model(&1, preloads, opts))
-    |> Enum.uniq_by(&{&1.type, &1.id})
-  end
-
-  defp included_resources_for_model(model, preloads, opts) do
-    Enum.flat_map(preloads, fn
-      name when is_atom(name) ->
-        direct_included_resources(model, name, [], opts)
-
-      {name, nested} when is_atom(name) ->
-        direct_included_resources(model, name, nested, opts)
+  defp included_resources(models, preloads, opts, seen) do
+    Enum.reduce(models, {[], seen}, fn model, {included, seen} ->
+      {model_included, seen} = included_resources_for_model(model, preloads, opts, seen)
+      {included ++ model_included, seen}
     end)
   end
 
-  defp direct_included_resources(model, name, nested, opts) do
+  defp included_resources_for_model(model, preloads, opts, seen) do
+    Enum.reduce(preloads, {[], seen}, fn
+      name, {included, seen} when is_atom(name) ->
+        {direct, seen} = direct_included_resources(model, name, [], opts, seen)
+        {included ++ direct, seen}
+
+      {name, nested}, {included, seen} when is_atom(name) ->
+        {direct, seen} = direct_included_resources(model, name, nested, opts, seen)
+        {included ++ direct, seen}
+    end)
+  end
+
+  defp direct_included_resources(model, name, nested, opts, seen) do
     model
     |> related_models(name)
-    |> Enum.flat_map(fn related ->
-      [resource_object(related, Keyword.put(opts, :preloads, nested))] ++
-        included_resources_for_model(related, nested, opts)
+    |> Enum.reduce({[], seen}, fn related, {included, seen} ->
+      identity = resource_identity(related)
+
+      if MapSet.member?(seen, identity) do
+        {nested_included, seen} = included_resources_for_model(related, nested, opts, seen)
+        {included ++ nested_included, seen}
+      else
+        seen = MapSet.put(seen, identity)
+        object = resource_object(related, Keyword.put(opts, :preloads, nested))
+        {nested_included, seen} = included_resources_for_model(related, nested, opts, seen)
+        {included ++ [object | nested_included], seen}
+      end
     end)
   end
 

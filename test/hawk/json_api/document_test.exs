@@ -1,7 +1,44 @@
+defmodule Hawk.JsonApi.DocumentTest.Author do
+  @moduledoc false
+
+  use Hawk.Model
+  use Hawk.JsonApi.Resource
+
+  model "document_test_authors" do
+    field(:name, :string)
+  end
+
+  type("document-test-authors")
+  attribute(:name, resolver: &__MODULE__.render_name/1)
+
+  def render_name(%{name: :raise_if_rendered}) do
+    raise "duplicate author was rendered"
+  end
+
+  def render_name(author), do: author.name
+end
+
+defmodule Hawk.JsonApi.DocumentTest.Article do
+  @moduledoc false
+
+  use Hawk.Model
+  use Hawk.JsonApi.Resource
+
+  model "document_test_articles" do
+    field(:title, :string)
+    belongs_to(:author, Hawk.JsonApi.DocumentTest.Author)
+  end
+
+  type("document-test-articles")
+  attribute(:title, [])
+  relationship(:author, [])
+end
+
 defmodule Hawk.JsonApi.DocumentTest do
   use ExUnit.Case, async: true
 
   alias Hawk.JsonApi.Document
+  alias Hawk.JsonApi.DocumentTest.{Article, Author}
 
   test "renders a collection without a json_api_by_model override, resolving per record" do
     courses = [
@@ -19,6 +56,31 @@ defmodule Hawk.JsonApi.DocumentTest do
            ]
 
     assert Enum.map(document.data, & &1.attributes.title) == ["Math", "History"]
+  end
+
+  test "renders duplicate included resources once" do
+    author_id = "00000000-0000-0000-0000-000000000021"
+    author = %Author{id: author_id, name: "Ada"}
+    duplicate_author = %Author{id: author_id, name: :raise_if_rendered}
+
+    articles = [
+      %Article{
+        id: "00000000-0000-0000-0000-000000000001",
+        title: "One",
+        author_id: author.id,
+        author: author
+      },
+      %Article{
+        id: "00000000-0000-0000-0000-000000000002",
+        title: "Two",
+        author_id: duplicate_author.id,
+        author: duplicate_author
+      }
+    ]
+
+    document = Document.document(articles, preloads: [:author])
+
+    assert [%{type: "document-test-authors", id: ^author_id}] = document.included
   end
 
   test "renders sparse fieldsets for attributes and relationships" do
