@@ -114,7 +114,7 @@ defmodule Hawk.Reader do
 
     config.schema
     |> from(as: :root)
-    |> apply_authorized_filter(config, authority, caller_filter, sort_columns(sort))
+    |> apply_authorized_filter(config, authority, caller_filter, [])
     |> apply_scope(config, opts, %{authority: authority})
     |> exclude(:order_by)
     |> config.repo.aggregate(:count, :id)

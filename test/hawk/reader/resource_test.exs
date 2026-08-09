@@ -35,6 +35,22 @@ defmodule Hawk.Reader.ResourceTest.Reader do
   end
 end
 
+defmodule Hawk.Reader.ResourceTest.CountReader do
+  @moduledoc false
+
+  use Hawk.Reader.Resource,
+    repo: Videdal.Repo,
+    schema: Videdal.Student,
+    policy: Hawk.Reader.ResourceTest.Policy
+
+  filter(:id)
+  sort(:parent_student_id)
+
+  attach :parent_students, when_sort: [:parent_student_id] do
+    join(query, :inner, [root: student], parent_student in assoc(student, :parent_students), as: :parent_student)
+  end
+end
+
 defmodule Hawk.Reader.ResourceTest.ScopedReader do
   @moduledoc false
 
@@ -57,6 +73,7 @@ defmodule Hawk.Reader.ResourceTest do
   import Ecto.Query, only: [from: 2]
 
   alias Hawk.Authority
+  alias Hawk.Reader.ResourceTest.CountReader
   alias Hawk.Reader.ResourceTest.Reader
   alias Hawk.Reader.ResourceTest.ScopedReader
 
@@ -91,6 +108,29 @@ defmodule Hawk.Reader.ResourceTest do
     [result] = Reader.all(authority: Authority.system(), filter: %{school_name: "Videdal Skole"})
 
     assert result.id == student.id
+  end
+
+  test "count/1 ignores joins triggered only by sort" do
+    school = insert(:school)
+    student = insert(:student, school_id: school.id)
+    parent_one = insert(:parent, school_id: school.id)
+    parent_two = insert(:parent, school_id: school.id)
+
+    Repo.insert!(%Videdal.ParentStudent{
+      id: Ecto.UUID.generate(),
+      school_id: school.id,
+      student_id: student.id,
+      parent_id: parent_one.id
+    })
+
+    Repo.insert!(%Videdal.ParentStudent{
+      id: Ecto.UUID.generate(),
+      school_id: school.id,
+      student_id: student.id,
+      parent_id: parent_two.id
+    })
+
+    assert CountReader.count(authority: Authority.system(), sort: [asc: :parent_student_id]) == 1
   end
 
   test "applies reader scope to root reads and preload queries" do
