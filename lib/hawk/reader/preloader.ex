@@ -74,11 +74,11 @@ defmodule Hawk.Reader.Preloader do
 
     Enum.each(requested, fn
       key when is_atom(key) ->
-        :ok
+        validate_preload_reader!(root_schema, key, readers)
 
       {key, nested} when is_atom(key) and is_list(nested) ->
-        reader = fetch_reader!(root_schema, key, readers)
-        association = root_schema.__schema__(:association, key)
+        reader = validate_preload_reader!(root_schema, key, readers)
+        association = fetch_association!(root_schema, key)
 
         validate_preloads!(
           nested,
@@ -146,6 +146,13 @@ defmodule Hawk.Reader.Preloader do
     end
   end
 
+  defp validate_preload_reader!(root_schema, key, readers) do
+    reader = fetch_reader!(root_schema, key, readers)
+    validate_preload_association!(root_schema, key)
+    validate_preload_query!(key, reader)
+    reader
+  end
+
   defp fetch_reader!(root_schema, key, readers) do
     with :error <- Map.fetch(readers, key),
          :error <- fetch_model_reader(root_schema, key) do
@@ -153,6 +160,29 @@ defmodule Hawk.Reader.Preloader do
             "reader preload #{inspect(key)} must declare a reader module on the reader or model association"
     else
       {:ok, reader} -> reader
+    end
+  end
+
+  defp validate_preload_association!(root_schema, key) do
+    fetch_association!(root_schema, key)
+    :ok
+  end
+
+  defp fetch_association!(root_schema, key) do
+    case root_schema.__schema__(:association, key) do
+      nil ->
+        raise ArgumentError,
+              "reader preload #{inspect(key)} must reference an association on #{inspect(root_schema)}"
+
+      association ->
+        association
+    end
+  end
+
+  defp validate_preload_query!(key, reader) do
+    unless Code.ensure_loaded?(reader) and function_exported?(reader, :preload_query, 2) do
+      raise ArgumentError,
+            "reader preload #{inspect(key)} reader #{inspect(reader)} must define preload_query/2"
     end
   end
 
