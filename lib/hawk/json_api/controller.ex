@@ -10,6 +10,8 @@ defmodule Hawk.JsonApi.Controller do
   otherwise Hawk returns `406`.
   """
 
+  import Ecto.Query
+
   alias Hawk.JsonApi.Controller, as: JsonApiController
   alias Hawk.JsonApi.{Document, Request, Schema}
 
@@ -72,6 +74,7 @@ defmodule Hawk.JsonApi.Controller do
           conn,
           unquote(resource),
           unquote(model),
+          unquote(reader),
           params,
           unquote(public?)
         )
@@ -82,6 +85,7 @@ defmodule Hawk.JsonApi.Controller do
           conn,
           unquote(resource),
           unquote(model),
+          unquote(reader),
           params,
           unquote(public?)
         )
@@ -376,18 +380,29 @@ defmodule Hawk.JsonApi.Controller do
         conn,
         resource,
         model,
-        %{"id" => id, "relationship" => relationship_name},
+        reader,
+        %{"id" => id, "relationship" => relationship_name} = params,
         public? \\ false
       ) do
-    do_relationship(conn, resource, model, id, relationship_name, public?)
+    do_relationship(conn, resource, model, reader, id, relationship_name, params, public?)
   end
 
-  defp do_relationship(conn, resource, model, id, relationship_name, public?) do
+  defp do_relationship(conn, resource, model, reader, id, relationship_name, params, public?) do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
 
       with_relationship(conn, model, relationship_name, authority, fn relationship ->
-        render_relationship(conn, resource, model, id, relationship_name, relationship, authority)
+        render_relationship(%{
+          conn: conn,
+          resource: resource,
+          model: model,
+          reader: reader,
+          id: id,
+          relationship_name: relationship_name,
+          relationship: relationship,
+          authority: authority,
+          params: params
+        })
       end)
     end)
   end
@@ -397,28 +412,49 @@ defmodule Hawk.JsonApi.Controller do
         conn,
         resource,
         model,
+        reader,
         %{"id" => id, "relationship" => relationship_name} = params,
         public? \\ false
       ) do
-    do_related(conn, resource, model, id, relationship_name, params, public?)
+    do_related(conn, resource, model, reader, id, relationship_name, params, public?)
   end
 
-  defp do_related(conn, resource, model, id, relationship_name, params, public?) do
+  defp do_related(conn, resource, model, reader, id, relationship_name, params, public?) do
     with_error_boundary(conn, fn ->
       authority = authority!(conn, public?)
       fields = Request.sparse_fieldsets(params)
 
       with_relationship(conn, model, relationship_name, authority, fn relationship ->
-        render_related(conn, resource, id, relationship_name, relationship, authority, fields)
+        render_related(%{
+          conn: conn,
+          resource: resource,
+          reader: reader,
+          id: id,
+          relationship_name: relationship_name,
+          relationship: relationship,
+          authority: authority,
+          fields: fields,
+          params: params
+        })
       end)
     end)
   end
 
-  defp render_relationship(conn, resource, model, id, relationship_name, relationship, authority) do
+  defp render_relationship(%{model: model, relationship: relationship} = request) do
     association = model.__schema__(:association, relationship)
+
+    if direct_to_many_association?(association) do
+      render_to_many_relationship(request)
+    else
+      render_preloaded_relationship(request, association)
+    end
+  end
+
+  defp render_preloaded_relationship(%{} = request, association) do
+    %{conn: conn, resource: resource, model: model, id: id, relationship_name: relationship_name} = request
+    %{relationship: relationship, authority: authority} = request
     preloads = if match?(%{cardinality: :many}, association), do: [relationship], else: []
     identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
-
     select = read_select(resource, model, authority, %{})
 
     case resource.one(
@@ -433,10 +469,21 @@ defmodule Hawk.JsonApi.Controller do
     end
   end
 
-  defp render_related(conn, resource, id, relationship_name, relationship, authority, fields) do
-    identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
-
+  defp render_related(%{resource: resource, relationship: relationship} = request) do
     model = resource.__hawk_resource__(:model)
+    association = model.__schema__(:association, relationship)
+
+    if direct_to_many_association?(association) do
+      request |> Map.put(:model, model) |> render_to_many_related()
+    else
+      render_preloaded_related(request, model)
+    end
+  end
+
+  defp render_preloaded_related(%{} = request, model) do
+    %{conn: conn, resource: resource, id: id, relationship_name: relationship_name} = request
+    %{relationship: relationship, authority: authority, fields: fields} = request
+    identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
 
     case resource.one(
            authority: authority,
@@ -451,6 +498,249 @@ defmodule Hawk.JsonApi.Controller do
       :not_found ->
         json(conn, 404, not_found(resource))
     end
+  end
+
+  defp direct_to_many_association?(%Ecto.Association.Has{cardinality: :many}), do: true
+  defp direct_to_many_association?(_association), do: false
+
+  defp render_to_many_relationship(%{} = request) do
+    %{conn: conn, resource: resource, model: model, id: id, authority: authority} = request
+
+    case fetch_parent(resource, model, id, authority, request_context(conn)) do
+      {:ok, parent} ->
+        request = Map.put(request, :parent, parent)
+        related = load_to_many_related(request, :linkage, %{})
+        json(conn, 200, linkage_document(parent, model, request.relationship_name, related))
+
+      :not_found ->
+        json(conn, 404, not_found(resource))
+    end
+  end
+
+  defp render_to_many_related(%{} = request) do
+    %{conn: conn, resource: resource, model: model, id: id, relationship: relationship} = request
+    %{authority: authority, fields: fields} = request
+
+    case fetch_parent(resource, model, id, authority, request_context(conn)) do
+      {:ok, parent} ->
+        related = request |> Map.put(:parent, parent) |> load_to_many_related(:resource, fields)
+
+        document_opts =
+          [
+            authority: authority,
+            context: request_context(conn),
+            page: related.page,
+            fields: fields,
+            links: true,
+            self: related_collection_path(model, relationship)
+          ]
+          |> maybe_put_related_total_count(related)
+
+        document = Document.document(related.models, document_opts)
+
+        json(conn, 200, document)
+
+      :not_found ->
+        json(conn, 404, not_found(resource))
+    end
+  end
+
+  defp fetch_parent(resource, model, id, authority, context) do
+    identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
+
+    resource.one(
+      authority: authority,
+      context: context,
+      filter: %{identity => normalize_id(id)},
+      select: read_select(resource, model, authority, %{})
+    )
+  end
+
+  defp load_to_many_related(%{} = request, mode, fields) do
+    %{model: model, reader: reader, parent: parent, relationship: relationship} = request
+    %{authority: authority, params: params} = request
+    association = model.__schema__(:association, relationship)
+    related_reader = related_reader!(reader, model, relationship)
+    related_model = association.related
+    request_opts = related_request_options(params, related_reader, related_model, authority)
+    page = request_opts |> Keyword.get(:page, %{}) |> normalize_related_page(related_reader)
+    sort = Keyword.get(request_opts, :sort, related_default_sort(related_reader))
+    select = related_select(mode, related_model, authority, fields)
+
+    base_query =
+      parent
+      |> Ecto.assoc(relationship)
+      |> from(as: :root)
+      |> related_reader.preload_query(authority)
+
+    query =
+      base_query
+      |> apply_related_select(select)
+      |> apply_related_sort(sort)
+      |> apply_related_offset(page)
+      |> apply_related_limit(page)
+
+    %{
+      models: related_reader.repo().all(query),
+      page: page,
+      total_count: related_total_count(base_query, related_reader, page)
+    }
+  end
+
+  defp related_total_count(query, reader, %{total: true}) do
+    query
+    |> exclude(:order_by)
+    |> reader.repo().aggregate(:count, :id)
+  end
+
+  defp related_total_count(_query, _reader, _page), do: nil
+
+  defp maybe_put_related_total_count(opts, %{total_count: nil}), do: opts
+
+  defp maybe_put_related_total_count(opts, %{total_count: total_count}),
+    do: Keyword.put(opts, :total_count, total_count)
+
+  defp related_request_options(params, reader, model, authority) do
+    params
+    |> Map.take(["page", "page_number", "page_size", "sort"])
+    |> Request.request_options(reader: reader, model: model, authority: authority)
+  end
+
+  defp related_reader!(reader, model, relationship) do
+    declared_reader =
+      if Code.ensure_loaded?(reader) and function_exported?(reader, :preload_readers, 0) do
+        Map.get(reader.preload_readers(), relationship)
+      end
+
+    declared_reader || association_reader!(model, relationship)
+  end
+
+  defp association_reader!(model, relationship) do
+    if function_exported?(model, :__hawk_association_reader__, 1) do
+      case model.__hawk_association_reader__(relationship) do
+        {:ok, reader} -> reader
+        :error -> raise ArgumentError, "relationship #{inspect(relationship)} has no Hawk reader"
+      end
+    else
+      raise ArgumentError, "relationship #{inspect(relationship)} has no Hawk reader"
+    end
+  end
+
+  defp normalize_related_page(page, reader) do
+    page
+    |> apply_related_default_page_size(reader_default_page_size(reader))
+    |> enforce_related_max_page_size!(reader_max_page_size(reader))
+  end
+
+  defp reader_default_page_size(reader) do
+    if Code.ensure_loaded?(reader) and function_exported?(reader, :default_page_size, 0),
+      do: reader.default_page_size(),
+      else: 100
+  end
+
+  defp reader_max_page_size(reader) do
+    if Code.ensure_loaded?(reader) and function_exported?(reader, :max_page_size, 0),
+      do: reader.max_page_size(),
+      else: 100
+  end
+
+  defp related_default_sort(reader) do
+    if Code.ensure_loaded?(reader) and function_exported?(reader, :default_sort, 0),
+      do: reader.default_sort(),
+      else: [asc: :id]
+  end
+
+  defp apply_related_default_page_size(%{size: nil} = page, default_page_size),
+    do: apply_related_default_page_size(Map.delete(page, :size), default_page_size)
+
+  defp apply_related_default_page_size(page, nil), do: page
+  defp apply_related_default_page_size(%{size: _size} = page, _default_page_size), do: page
+  defp apply_related_default_page_size(page, default_page_size), do: Map.put(page, :size, default_page_size)
+
+  defp enforce_related_max_page_size!(%{size: nil} = page, _max_page_size), do: page
+  defp enforce_related_max_page_size!(page, nil), do: page
+
+  defp enforce_related_max_page_size!(%{size: size} = page, max_page_size)
+       when is_integer(size) and is_integer(max_page_size) and size <= max_page_size,
+       do: page
+
+  defp enforce_related_max_page_size!(%{size: size}, max_page_size) do
+    raise ArgumentError, "page size #{inspect(size)} exceeds maximum #{inspect(max_page_size)}"
+  end
+
+  defp related_select(:linkage, model, _authority, _fields), do: [Schema.identity(model)]
+
+  defp related_select(:resource, model, authority, fields) do
+    model
+    |> Schema.metadata()
+    |> then(&Schema.select_fields(model, &1, authority, fields, Schema.identity(model)))
+  end
+
+  defp apply_related_select(query, fields), do: select(query, [root: row], struct(row, ^fields))
+
+  defp apply_related_sort(query, sort) do
+    Enum.reduce(sort, query, fn {dir, column}, query ->
+      order_by(query, [root: row], [{^dir, field(row, ^column)}])
+    end)
+  end
+
+  defp apply_related_offset(query, page) when not is_map_key(page, :number), do: query
+  defp apply_related_offset(query, %{number: nil}), do: query
+  defp apply_related_offset(query, %{number: 1}), do: query
+
+  defp apply_related_offset(query, %{number: number, size: size})
+       when is_integer(number) and number > 1 and is_integer(size) and size >= 0 do
+    offset(query, ^((number - 1) * size))
+  end
+
+  defp apply_related_offset(_query, %{number: number}) do
+    raise ArgumentError, "page number must be a positive integer, got: #{inspect(number)}"
+  end
+
+  defp apply_related_limit(query, %{size: nil}), do: query
+  defp apply_related_limit(query, %{size: size}) when is_integer(size) and size >= 0, do: limit(query, ^size)
+
+  defp apply_related_limit(_query, %{size: size}) do
+    raise ArgumentError, "page size must be a non-negative integer, got: #{inspect(size)}"
+  end
+
+  defp linkage_document(parent, model, relationship_name, related) do
+    data =
+      Enum.map(related.models, fn model ->
+        %{type: Schema.metadata(model).type, id: to_string(Map.get(model, Schema.identity(model)))}
+      end)
+
+    page = related_page_meta(related.page, length(data), related.total_count)
+
+    %{
+      links: relationship_links(parent, model, relationship_name),
+      data: data,
+      meta: %{page: page}
+    }
+  end
+
+  defp related_page_meta(page, count, nil) do
+    %{size: Map.get(page, :size), number: Map.get(page, :number, 1), count: count}
+  end
+
+  defp related_page_meta(page, count, total_count) do
+    page
+    |> related_page_meta(count, nil)
+    |> Map.put(:total_count, total_count)
+  end
+
+  defp relationship_links(parent, model, relationship_name) do
+    base = "/" <> Schema.metadata(model).type <> "/" <> to_string(Map.get(parent, Schema.identity(model)))
+
+    %{
+      self: base <> "/relationships/" <> relationship_name,
+      related: base <> "/" <> relationship_name
+    }
+  end
+
+  defp related_collection_path(model, relationship) do
+    association = model.__schema__(:association, relationship)
+    "/" <> Schema.metadata(association.related).type
   end
 
   defp with_relationship(conn, model, relationship_name, authority, fun) do

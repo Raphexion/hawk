@@ -319,6 +319,10 @@ defmodule Hawk.Reader.Resource do
       """
       def repo, do: @hawk_reader_repo
 
+      def default_sort, do: @hawk_reader_default_sort
+      def default_page_size, do: @hawk_reader_default_page_size
+      def max_page_size, do: @hawk_reader_max_page_size
+
       defp config do
         %{
           repo: @hawk_reader_repo,

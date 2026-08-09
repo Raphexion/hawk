@@ -234,30 +234,80 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest do
     assert resp(conn).data.relationships == %{}
   end
 
-  test "related to-many endpoint uses one root query and one batched preload query" do
-    %{course: course} = seed_courses_with_grades(4)
+  test "related to-many endpoint uses one root query and one bounded related query" do
+    %{course: course} = seed_course_with_grades(4)
 
     {conn, query_count} =
       count_queries(fn ->
-        CoursesController.related(conn(Authority.system()), %{"id" => course.id, "relationship" => "grades"})
+        CoursesController.related(conn(Authority.system()), %{
+          "id" => course.id,
+          "relationship" => "grades",
+          "page" => %{"size" => "2"}
+        })
       end)
 
     assert conn.status == 200
-    assert length(resp(conn).data) == 1
+    assert length(resp(conn).data) == 2
+    assert resp(conn).meta.page == %{count: 2, number: 1, size: 2}
     assert query_count == 2
   end
 
-  test "to-many relationship linkage endpoint preloads related identifiers" do
-    %{course: course} = seed_courses_with_grades(4)
+  test "related to-many endpoint applies the related reader default page size" do
+    %{course: course} = seed_course_with_grades(101)
+
+    conn = CoursesController.related(conn(Authority.system()), %{"id" => course.id, "relationship" => "grades"})
+
+    assert conn.status == 200
+    assert length(resp(conn).data) == 100
+    assert resp(conn).meta.page == %{count: 100, number: 1, size: 100}
+  end
+
+  test "related to-many endpoint includes total count when requested" do
+    %{course: course} = seed_course_with_grades(4)
+
+    conn =
+      CoursesController.related(conn(Authority.system()), %{
+        "id" => course.id,
+        "relationship" => "grades",
+        "page" => %{"size" => "2", "total" => "true"}
+      })
+
+    assert conn.status == 200
+    assert length(resp(conn).data) == 2
+    assert resp(conn).meta.page == %{count: 2, number: 1, size: 2, total_count: 4}
+  end
+
+  test "to-many relationship linkage endpoint uses one root query and one bounded identifier query" do
+    %{course: course} = seed_course_with_grades(4)
 
     {conn, query_count} =
       count_queries(fn ->
-        CoursesController.relationship(conn(Authority.system()), %{"id" => course.id, "relationship" => "grades"})
+        CoursesController.relationship(conn(Authority.system()), %{
+          "id" => course.id,
+          "relationship" => "grades",
+          "page" => %{"size" => "2"}
+        })
       end)
 
     assert conn.status == 200
-    assert [%{type: "grades"}] = resp(conn).data
+    assert [%{type: "grades"}, %{type: "grades"}] = resp(conn).data
+    assert resp(conn).meta.page == %{count: 2, number: 1, size: 2}
     assert query_count == 2
+  end
+
+  test "to-many relationship linkage endpoint includes total count when requested" do
+    %{course: course} = seed_course_with_grades(4)
+
+    conn =
+      CoursesController.relationship(conn(Authority.system()), %{
+        "id" => course.id,
+        "relationship" => "grades",
+        "page" => %{"size" => "2", "total" => "true"}
+      })
+
+    assert conn.status == 200
+    assert [%{type: "grades"}, %{type: "grades"}] = resp(conn).data
+    assert resp(conn).meta.page == %{count: 2, number: 1, size: 2, total_count: 4}
   end
 
   test "to-one relationship linkage endpoint returns identifiers from the foreign key without a preload" do
@@ -303,5 +353,35 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest do
       end)
 
     %{school: school, teacher: teacher, course: hd(courses), courses: courses}
+  end
+
+  defp seed_course_with_grades(count) do
+    Repo.delete_all(Grade)
+    Repo.delete_all(Course)
+    Repo.delete_all(Student)
+
+    school = Repo.insert!(%School{name: "Videdal Skole"})
+    teacher = Repo.insert!(%Teacher{name: "Ms. Curie", school_id: school.id})
+
+    course =
+      Repo.insert!(%Course{
+        title: "Course",
+        school_id: school.id,
+        teacher_id: teacher.id
+      })
+
+    grades =
+      Enum.map(1..count, fn index ->
+        student = Repo.insert!(%Student{name: "Student #{index}", school_id: school.id})
+
+        Repo.insert!(%Grade{
+          score: index,
+          school_id: school.id,
+          student_id: student.id,
+          course_id: course.id
+        })
+      end)
+
+    %{school: school, teacher: teacher, course: course, grades: grades}
   end
 end

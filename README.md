@@ -276,9 +276,13 @@ Readers apply `default_page_size` when the caller does not request a page size
 and reject requests above `max_page_size`. Both default to `100` and can be
 overridden per resource. Collection JSON:API responses include `meta.page` with
 `size`, `number`, and returned `count`. Hawk accepts `page[size]` / `page[number]`
-and the shorthand `page_size` / `page_number` query parameters. When a client
-passes `page[total]=true`, JSON:API controllers also run the same authorized,
-unpaginated reader query as a count and include `meta.page.total_count`.
+and the shorthand `page_size` / `page_number` query parameters. Direct
+`has_many` related-resource and relationship-linkage endpoints use the related
+reader's pagination settings too, so `GET /courses/:id/grades` and
+`GET /courses/:id/relationships/grades` do not preload an unbounded child
+collection. When a client passes `page[total]=true`, JSON:API controllers also
+run the same authorized, unpaginated reader query as a count and include
+`meta.page.total_count`.
 
 ### Writer
 
