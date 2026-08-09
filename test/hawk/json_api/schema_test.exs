@@ -1,3 +1,27 @@
+defmodule Hawk.JsonApi.SchemaTest.FeaturedTeacher do
+  use Ecto.Schema
+
+  @primary_key {:id, :binary_id, autogenerate: false}
+  schema "schema_test_featured_teachers" do
+    field(:name, :string)
+  end
+end
+
+defmodule Hawk.JsonApi.SchemaTest.CourseWithFeaturedTeacher do
+  use Ecto.Schema
+
+  @primary_key {:id, :binary_id, autogenerate: false}
+  schema "schema_test_courses_with_featured_teachers" do
+    field(:title, :string)
+    field(:featured_teacher_id, :binary_id)
+
+    has_one(:featured_teacher, Hawk.JsonApi.SchemaTest.FeaturedTeacher,
+      foreign_key: :id,
+      references: :featured_teacher_id
+    )
+  end
+end
+
 defmodule Hawk.JsonApi.SchemaTest do
   use ExUnit.Case, async: true
 
@@ -55,6 +79,28 @@ defmodule Hawk.JsonApi.SchemaTest do
 
     test "resolves a relationship name on a module to its schema source" do
       assert Schema.relationship_key!(Videdal.Course, "teacher") == :teacher
+    end
+  end
+
+  describe "select_fields/5" do
+    test "selects owner keys for visible has_one relationships backed by parent columns" do
+      json_api = %{
+        type: "courses",
+        attributes: %{title: %{}},
+        relationships: %{featured_teacher: %{}},
+        field_filters: %{}
+      }
+
+      fields =
+        Schema.select_fields(
+          Hawk.JsonApi.SchemaTest.CourseWithFeaturedTeacher,
+          json_api,
+          nil,
+          %{"courses" => MapSet.new(["featured_teacher"])},
+          :id
+        )
+
+      assert fields == [:id, :featured_teacher_id]
     end
   end
 

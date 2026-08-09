@@ -166,8 +166,9 @@ defmodule Hawk.JsonApi.Schema do
   Returns the schema columns needed to render the visible JSON:API shape.
 
   The projection includes the resource identity, visible attribute sources, and
-  owner keys for visible belongs-to relationships. Fields removed by role rules
-  are not selected unless another visible field needs the same source.
+  owner keys for visible relationships whose owner key lives on the parent
+  schema. Fields removed by role rules are not selected unless another visible
+  field needs the same source.
   """
   def select_fields(model, json_api, authority, sparse_fields \\ %{}, identity \\ :id) do
     schema_fields = model.__schema__(:fields) |> MapSet.new()
@@ -326,7 +327,7 @@ defmodule Hawk.JsonApi.Schema do
 
   defp relationship_select_fields(model, source) do
     case model.__schema__(:association, source) do
-      %Ecto.Association.BelongsTo{owner_key: owner_key} -> [owner_key]
+      %{owner_key: owner_key} when is_atom(owner_key) -> [owner_key]
       _association -> []
     end
   end
