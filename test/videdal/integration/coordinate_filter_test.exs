@@ -10,8 +10,8 @@ defmodule Videdal.Integration.CoordinateFilterTest do
 
   alias Hawk.Authority
   alias Hawk.Reader.FilterCompiler
-  alias Videdal.{Repo, School, Schools}
   alias Videdal.Integration.CoordinateFilterTest.Controller
+  alias Videdal.{Repo, School, Schools}
 
   @copenhagen %{lat: 55.6761, lng: 12.5683}
 

@@ -13,8 +13,8 @@ defmodule Videdal.LiveViews.ScopedAnnouncementLiveTest do
   import Hawk.TestSocket, only: [socket: 0]
 
   alias Hawk.{Authority, LiveView, PubSub}
-  alias Videdal.ScopedAnnouncements
   alias Videdal.LiveViews.ScopedAnnouncementLive
+  alias Videdal.ScopedAnnouncements
 
   test "a school A index refreshes from its own write, not a school B write" do
     school_a = insert(:school)

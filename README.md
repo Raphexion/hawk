@@ -37,6 +37,32 @@ and Phoenix Ecto). It does not define or supervise a concrete `Ecto.Repo`.
 Applications provide their own Repo modules, database configuration, migrations,
 authentication, and supervision tree.
 
+## Installation
+
+Hawk is not published on Hex yet. Install it from GitHub while the API is still
+moving quickly:
+
+```elixir
+def deps do
+  [
+    {:hawk, github: "Raphexion/hawk", tag: "v0.7.0"}
+  ]
+end
+```
+
+Then fetch, compile, and run Hawk's contract gate in the host app:
+
+```sh
+mix deps.get
+mix compile
+mix hawk.validate
+```
+
+If you are trying Hawk in a fresh Phoenix app, start with one existing Ecto schema
+and build the resource siblings around it. Hawk expects the app to own the Repo,
+migrations, authentication, endpoint, and router; Hawk owns the reusable resource
+boundary on top.
+
 ## Golden path
 
 A Hawk resource facade ties the resource parts together and follows convention by default:

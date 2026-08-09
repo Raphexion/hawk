@@ -4,7 +4,7 @@ defmodule Hawk.ErrorTest do
   alias Hawk.Authority
   alias Hawk.Errors
   alias Hawk.MutationContext
-  alias Videdal.{Grade, Grades, Student, ExternalCourse}
+  alias Videdal.{ExternalCourse, Grade, Grades, Student}
 
   @course_id Videdal.course_id()
   @grade_id Videdal.grade_id()

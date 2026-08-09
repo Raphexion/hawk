@@ -74,11 +74,9 @@ defmodule Hawk.Plans.Registry do
   end
 
   defp hawk_resource?(module) do
-    try do
-      Code.ensure_loaded(module) == {:module, module} and
-        function_exported?(module, :__hawk_resource__, 1)
-    rescue
-      _ -> false
-    end
+    Code.ensure_loaded(module) == {:module, module} and
+      function_exported?(module, :__hawk_resource__, 1)
+  rescue
+    _ -> false
   end
 end

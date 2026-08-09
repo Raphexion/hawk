@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **GitHub-first installation guidance.** The README now documents installing
+  Hawk from the tagged GitHub dependency while the package remains unpublished
+  on Hex.
+
 ## [0.7.0] - 2026-08-09
 
 ### Added
