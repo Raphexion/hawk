@@ -33,6 +33,8 @@ defmodule Hawk.Reader.Resource do
     * `filter/2` with a block — declare a filter with a custom handler.
     * `filter/2` with `type: :coordinates` — declare an indexed PostGIS
       coordinate filter with a required `:max_radius_meters`.
+    * `import_filters/1` — compose a resource-specific
+      `Hawk.Reader.FilterSet` into this reader.
     * `sort/1` — declare a sortable column.
     * `preload/1` — declare a preloadable association (resolved through the
       associated resource's reader and policy).
@@ -75,6 +77,7 @@ defmodule Hawk.Reader.Resource do
   ## See also
 
     * `Hawk.Reader` — the execution engine.
+    * `Hawk.Reader.FilterSet` — independently testable filter groups.
     * `Hawk.Reader.FilterCompiler` — how `filter/1` compiles to Ecto.
     * `Hawk.Policy` — the read policy that scopes queries.
   """
@@ -97,7 +100,7 @@ defmodule Hawk.Reader.Resource do
       import Ecto.Query, except: [preload: 2]
 
       import Hawk.Reader.Resource,
-        only: [attach: 3, filter: 1, filter: 2, preload: 1, preload: 2, sort: 1]
+        only: [attach: 3, filter: 1, filter: 2, import_filters: 1, preload: 1, preload: 2, sort: 1]
 
       @hawk_reader_repo unquote(repo)
       @hawk_reader_schema unquote(schema)
@@ -111,6 +114,7 @@ defmodule Hawk.Reader.Resource do
       Module.register_attribute(__MODULE__, :hawk_reader_filter_handlers, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_coordinate_filters, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_join_rules, accumulate: true)
+      Module.register_attribute(__MODULE__, :hawk_reader_filter_sets, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_preload_keys, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_preload_readers, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_sort_keys, accumulate: true)
@@ -161,11 +165,30 @@ defmodule Hawk.Reader.Resource do
   end
 
   defmacro filter(key, opts) when is_atom(key) and is_list(opts) do
-    metadata = coordinate_filter_metadata!(key, opts, __CALLER__)
+    metadata = __coordinate_filter_metadata__(key, opts, __CALLER__)
 
     quote do
       @hawk_reader_filter_keys unquote(key)
       @hawk_reader_coordinate_filters {unquote(key), unquote(Macro.escape(metadata))}
+    end
+  end
+
+  @doc """
+  Imports a resource-specific `Hawk.Reader.FilterSet`.
+
+  Imported filter keys, handlers, coordinate metadata, and attach rules become
+  part of the reader's normal metadata and query compilation. Filter sets must
+  declare the same schema as the reader.
+  """
+  defmacro import_filters(filter_set) do
+    filter_set = Macro.expand(filter_set, __CALLER__)
+
+    unless is_atom(filter_set) do
+      raise ArgumentError, "reader filter set must be a module, got: #{Macro.to_string(filter_set)}"
+    end
+
+    quote do
+      @hawk_reader_filter_sets unquote(filter_set)
     end
   end
 
@@ -235,12 +258,21 @@ defmodule Hawk.Reader.Resource do
 
   defmacro __before_compile__(env) do
     declarations = reader_declarations(env.module)
+    schema = Module.get_attribute(env.module, :hawk_reader_schema)
 
     validate_filter_keys!(declarations.filter_keys)
     validate_join_rules!(declarations.join_rules)
     validate_preload_keys!(declarations.preload_keys)
 
-    quote_reader(declarations)
+    Hawk.Reader.FilterSet.validate_imports!(
+      env.module,
+      schema,
+      declarations.filter_keys,
+      Enum.map(declarations.join_rules, &elem(&1, 0)),
+      declarations.filter_sets
+    )
+
+    quote_reader(declarations, schema)
   end
 
   defp convention_policy(reader_module) do
@@ -257,6 +289,7 @@ defmodule Hawk.Reader.Resource do
       filter_handlers: reversed_attribute(module, :hawk_reader_filter_handlers),
       coordinate_filters: reversed_attribute(module, :hawk_reader_coordinate_filters),
       join_rules: reversed_attribute(module, :hawk_reader_join_rules),
+      filter_sets: reversed_attribute(module, :hawk_reader_filter_sets),
       preload_keys: reversed_attribute(module, :hawk_reader_preload_keys),
       preload_readers: reversed_attribute(module, :hawk_reader_preload_readers),
       sort_keys: reversed_attribute(module, :hawk_reader_sort_keys)
@@ -269,31 +302,57 @@ defmodule Hawk.Reader.Resource do
     |> Enum.reverse()
   end
 
-  defp quote_reader(declarations) do
-    [
-      quote_metadata_functions(declarations),
-      quote_public_reader_functions(),
-      quote_config_function()
-    ]
+  defp quote_reader(declarations, schema) do
+    quote_filter_metadata_functions(declarations, schema) ++
+      [
+        quote_reader_metadata_functions(declarations),
+        quote_public_reader_functions(),
+        quote_config_function()
+      ]
   end
 
-  defp quote_metadata_functions(declarations) do
+  defp quote_filter_metadata_functions(declarations, schema) do
     handler_entries = quote_filter_handlers(declarations.filter_handlers)
     coordinate_filter_entries = quote_coordinate_filters(declarations.coordinate_filters)
     join_rule_entries = quote_join_rules(declarations.join_rules)
+
+    [
+      quote do
+        defp local_filter_declarations do
+          %{
+            source: __MODULE__,
+            schema: unquote(schema),
+            filter_keys: MapSet.new(unquote(declarations.filter_keys)),
+            filter_handlers: Map.new([unquote_splicing(handler_entries)]),
+            coordinate_filters: Map.new([unquote_splicing(coordinate_filter_entries)]),
+            join_plan: [unquote_splicing(join_rule_entries)]
+          }
+        end
+      end,
+      quote do
+        defp filter_declarations do
+          Hawk.Reader.FilterSet.compose(
+            local_filter_declarations(),
+            unquote(declarations.filter_sets),
+            unquote(schema)
+          )
+        end
+
+        def filter_keys, do: filter_declarations().filter_keys
+        def filter_handlers, do: filter_declarations().filter_handlers
+        def coordinate_filters, do: filter_declarations().coordinate_filters
+        def join_plan, do: filter_declarations().join_plan
+      end
+    ]
+  end
+
+  defp quote_reader_metadata_functions(declarations) do
     preload_reader_entries = quote_preload_readers(declarations.preload_readers)
-    filter_keys = declarations.filter_keys
-    preload_keys = declarations.preload_keys
-    sort_keys = declarations.sort_keys
 
     quote do
-      def filter_keys, do: MapSet.new(unquote(filter_keys))
-      def filter_handlers, do: Map.new([unquote_splicing(handler_entries)])
-      def coordinate_filters, do: Map.new([unquote_splicing(coordinate_filter_entries)])
-      def join_plan, do: [unquote_splicing(join_rule_entries)]
-      def preload_keys, do: MapSet.new(unquote(preload_keys))
+      def preload_keys, do: MapSet.new(unquote(declarations.preload_keys))
       def preload_readers, do: Map.new([unquote_splicing(preload_reader_entries)])
-      def sort_keys, do: MapSet.new(unquote(sort_keys))
+      def sort_keys, do: MapSet.new(unquote(declarations.sort_keys))
       def read_filter(authority), do: @hawk_reader_policy.read_filter(authority)
     end
   end
@@ -324,13 +383,15 @@ defmodule Hawk.Reader.Resource do
       def max_page_size, do: @hawk_reader_max_page_size
 
       defp config do
+        filter_declarations = filter_declarations()
+
         %{
           repo: @hawk_reader_repo,
           schema: @hawk_reader_schema,
-          filter_keys: filter_keys(),
-          filter_handlers: filter_handlers(),
-          coordinate_filters: coordinate_filters(),
-          join_plan: join_plan(),
+          filter_keys: filter_declarations.filter_keys,
+          filter_handlers: filter_declarations.filter_handlers,
+          coordinate_filters: filter_declarations.coordinate_filters,
+          join_plan: filter_declarations.join_plan,
           read_filter: &read_filter/1,
           forced_filter: @hawk_reader_forced_filter,
           default_sort: @hawk_reader_default_sort,
@@ -386,7 +447,8 @@ defmodule Hawk.Reader.Resource do
     end)
   end
 
-  defp coordinate_filter_metadata!(key, opts, caller) do
+  @doc false
+  def __coordinate_filter_metadata__(key, opts, caller) do
     unless Keyword.keyword?(opts) do
       raise ArgumentError, "coordinate filter #{inspect(key)} options must be a keyword list"
     end

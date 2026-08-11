@@ -25,6 +25,7 @@ defmodule Hawk do
 
     * `Hawk.Model` — schema DSL and association resource metadata.
     * `Hawk.Reader.Resource` — filters, sorts, preloads.
+    * `Hawk.Reader.FilterSet` — composable, independently testable filter groups.
     * `Hawk.Writer.Resource` — create/update/delete pipelines.
     * `Hawk.Policy` — read/write authorization.
     * `Hawk.Actions` — custom `/-actions/`.

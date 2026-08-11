@@ -46,6 +46,7 @@ defmodule Hawk.MixProject do
         "DSL modules": [
           Hawk.Model,
           Hawk.Reader.Resource,
+          Hawk.Reader.FilterSet,
           Hawk.Writer.Resource,
           Hawk.Policy,
           Hawk.Actions,

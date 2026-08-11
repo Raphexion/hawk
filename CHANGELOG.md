@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Composable Reader filter sets.** Resource-specific `Hawk.Reader.FilterSet`
+  modules group filters with their attach rules and helpers, compose dynamically
+  through `import_filters/1`, and expose `apply_to/2` for focused query tests.
+  Imported declarations retain the Reader's JSON:API/OpenAPI metadata contract,
+  reject schema mismatches and duplicate keys or joins, and remain compatible
+  with Phoenix development code reloading.
+
 ### Changed
 
 - **GitHub-first installation guidance.** The README now documents installing

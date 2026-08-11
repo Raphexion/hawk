@@ -110,7 +110,7 @@ A Hawk resource has four small modules plus Phoenix-facing helpers:
 
 - `Model` declares the Ecto schema and association resource metadata.
 - `Policy` declares who can read/write.
-- `Reader` owns filtering, sorting, pagination, and policy-aware preloads.
+- `Reader` owns filtering, sorting, pagination, and policy-aware preloads; cohesive filter groups may live in `Hawk.Reader.FilterSet` modules.
 - `Writer` owns validation and mutations.
 - `Actions` is optional and declares imperative JSON:API custom actions under `/-actions/`.
 - JSON:API, OpenAPI, LiveView, and Plans helpers are generated from those declarations.
@@ -257,6 +257,69 @@ defmodule MyApp.Courses.Reader do
   preload(:grades)
 end
 ```
+
+Readers can extract cohesive search capabilities into resource-specific filter
+sets. A filter set owns its filters, attach rules, constants, and private helpers;
+the Reader continues to own policy, sorting, pagination, preloads, and its
+resource-wide scope:
+
+```elixir
+defmodule MyApp.Courses.StudentFilters do
+  use Hawk.Reader.FilterSet, schema: MyApp.Course
+
+  attach :student, when_filter: [:student_name] do
+    join(query, :inner, [root: course], student in assoc(course, :students), as: :student)
+  end
+
+  filter :student_name do
+    fn name -> dynamic([student: student], student.name == ^name) end
+  end
+end
+
+defmodule MyApp.Courses.Reader do
+  use Hawk.Reader.Resource,
+    repo: MyApp.Repo,
+    schema: MyApp.Course
+
+  filter(:id)
+  import_filters(MyApp.Courses.StudentFilters)
+  sort(:id)
+end
+```
+
+Imported sets contribute to the Reader's normal `filter_keys/0`,
+`filter_handlers/0`, `coordinate_filters/0`, and `join_plan/0` metadata, so
+JSON:API parsing, OpenAPI, policies, and cross-set boolean filter expressions use
+the composed contract. Duplicate filter keys and join aliases are rejected
+rather than silently overwritten, and a set can only be imported by a Reader for
+the same schema. Imported attach rules run in filter-set import order before
+resource-local attach rules. As with local Reader attaches, every rule triggered
+by the active filter keys is applied before the boolean filter AST is compiled;
+use a semantics-preserving join such as a left join when another `OR` branch
+must retain roots without the attached association.
+
+Filter sets are composed dynamically from one metadata snapshot per set. In a
+Phoenix development server, changing only a filter-set module is therefore
+visible to the next Reader call without caching stale declarations in the
+Reader. The generated handlers use external module captures so helpers remain
+local to the set and normal code reloading can replace their implementation.
+
+For focused tests, apply a set to an existing root query:
+
+```elixir
+query =
+  MyApp.Course
+  |> from(as: :root)
+  |> MyApp.Courses.StudentFilters.apply_to(%{student_name: "Ada"})
+
+assert [%MyApp.Course{}] = MyApp.Repo.all(query)
+```
+
+`apply_to/2` validates against only that set and applies its attach rules and
+filter compiler. It deliberately does not apply Reader policy, pagination,
+preloads, default sorting, or resource scope; those remain Reader and transport
+integration-test responsibilities. Readers still compose the complete filter
+AST before compilation, preserving `AND`/`OR` expressions across sets.
 
 Nested includes such as `include=grades.student` are turned into nested Ecto
 preloads where every layer uses that resource's own reader and policy. Include
