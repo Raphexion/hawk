@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **OR-safe Reader attachments.** Reader and filter-set `attach` declarations
+  now default to non-root-preserving and reject boolean filters where applying
+  an attachment before the predicate could silently remove results from another
+  satisfiable `OR` path. Applications can mark genuinely root-preserving query
+  transformations with `preserves_roots: true`; attach options are validated at
+  compile time.
+
 - **GitHub-first installation guidance.** The README now documents installing
   Hawk from the tagged GitHub dependency while the package remains unpublished
   on Hex.

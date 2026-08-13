@@ -30,6 +30,7 @@ defmodule Hawk.MixProject do
         "lib",
         "mix.exs",
         "README.md",
+        "guides",
         "LICENSE",
         "CHANGELOG.md",
         ".formatter.exs"
@@ -41,6 +42,7 @@ defmodule Hawk.MixProject do
     [
       main: "Hawk",
       source_url: @source_url,
+      extras: ["guides/preserves-roots.md"],
       groups_for_modules: [
         "Resource facade": [Hawk.Resource],
         "DSL modules": [

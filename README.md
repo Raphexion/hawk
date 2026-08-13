@@ -267,12 +267,12 @@ resource-wide scope:
 defmodule MyApp.Courses.StudentFilters do
   use Hawk.Reader.FilterSet, schema: MyApp.Course
 
-  attach :student, when_filter: [:student_name] do
-    join(query, :inner, [root: course], student in assoc(course, :students), as: :student)
+  attach :student, when_filter: [:student_name], preserves_roots: true do
+    join(query, :left, [root: course], student in assoc(course, :students), as: :student)
   end
 
   filter :student_name do
-    fn name -> dynamic([student: student], student.name == ^name) end
+    fn {:eq, name} -> dynamic([student: student], student.name == ^name) end
   end
 end
 
@@ -294,9 +294,32 @@ the composed contract. Duplicate filter keys and join aliases are rejected
 rather than silently overwritten, and a set can only be imported by a Reader for
 the same schema. Imported attach rules run in filter-set import order before
 resource-local attach rules. As with local Reader attaches, every rule triggered
-by the active filter keys is applied before the boolean filter AST is compiled;
-use a semantics-preserving join such as a left join when another `OR` branch
-must retain roots without the attached association.
+by the active filter keys is applied before the boolean filter AST is compiled.
+
+Attachments default to `preserves_roots: false`. Hawk rejects a filter when a
+non-preserving attachment is active but some satisfiable `OR` path does not
+require it, because applying that transformation first could silently remove a
+valid result. Mark an attachment `preserves_roots: true` only when it keeps every
+root row available to the query, such as a normal left join with no root-narrowing
+predicate:
+
+```elixir
+attach :student, when_filter: [:student_name], preserves_roots: true do
+  join(query, :left, [root: course], student in assoc(course, :students), as: :student)
+end
+```
+
+Root preservation concerns inclusion, not uniqueness: a to-many left join may
+still duplicate roots. A key declared in `when_filter` must semantically require
+its attachment whenever that filter can match; custom handlers must not return
+`:all` for such a value. If every satisfiable path requires the same attachment,
+including through an enclosing policy or forced `AND` filter, a non-preserving
+attachment remains valid. Sort-triggered attachments are Reader-owned, but
+sorting does not make an otherwise unsafe filter attachment safe: the same
+transformation still runs before the `OR` predicate and may remove roots. See
+[Understanding `preserves_roots`](guides/preserves-roots.md) for a
+beginner-oriented explanation, SQL examples, edge cases, and a testing
+checklist.
 
 Filter sets are composed dynamically from one metadata snapshot per set. In a
 Phoenix development server, changing only a filter-set module is therefore

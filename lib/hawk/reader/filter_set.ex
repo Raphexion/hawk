@@ -20,8 +20,8 @@ defmodule Hawk.Reader.FilterSet do
       defmodule MyApp.Courses.StudentFilters do
         use Hawk.Reader.FilterSet, schema: MyApp.Course
 
-        attach :student, when_filter: [:student_name] do
-          join(query, :inner, [root: course], student in assoc(course, :students), as: :student)
+        attach :student, when_filter: [:student_name], preserves_roots: true do
+          join(query, :left, [root: course], student in assoc(course, :students), as: :student)
         end
 
         filter :student_name do
@@ -115,22 +115,22 @@ defmodule Hawk.Reader.FilterSet do
 
   @doc """
   Declares a filter-triggered query attachment owned by this filter set.
+
+  Set `preserves_roots: true` only when the attachment keeps every root row
+  available to other `OR` paths. It defaults to `false`.
   """
   defmacro attach(name, opts, do: block) when is_atom(name) and is_list(opts) do
     handler_name = :"__hawk_join_#{name}__"
-    when_filter = Keyword.get(opts, :when_filter, [])
-    when_sort = Keyword.get(opts, :when_sort, [])
 
-    if when_sort != [] do
-      raise ArgumentError,
-            "filter set attach #{inspect(name)} cannot use :when_sort; sorting belongs to the reader"
-    end
+    {when_filter, when_sort, preserves_roots} =
+      Hawk.Reader.Resource.__attach_options__(name, opts, __CALLER__, :filter_set)
 
     query_var = Macro.var(:query, __MODULE__)
     rewritten_block = rewrite_query_var(block, query_var)
 
     quote do
-      @hawk_reader_join_rules {unquote(name), unquote(when_filter), unquote(when_sort), unquote(handler_name)}
+      @hawk_reader_join_rules {unquote(name), unquote(when_filter), unquote(when_sort), unquote(preserves_roots),
+                               unquote(handler_name)}
 
       @doc false
       def unquote(handler_name)(unquote(query_var)) do
@@ -165,12 +165,13 @@ defmodule Hawk.Reader.FilterSet do
       end)
 
     join_entries =
-      Enum.map(join_rules, fn {name, when_filter, when_sort, handler_name} ->
+      Enum.map(join_rules, fn {name, when_filter, when_sort, preserves_roots, handler_name} ->
         quote do
           %{
             name: unquote(name),
             when_filter: MapSet.new(unquote(when_filter)),
             when_sort: MapSet.new(unquote(when_sort)),
+            preserves_roots: unquote(preserves_roots),
             apply: Function.capture(__MODULE__, unquote(handler_name), 1)
           }
         end
@@ -210,7 +211,8 @@ defmodule Hawk.Reader.FilterSet do
       declarations.schema,
       filter,
       declarations.filter_handlers,
-      declarations.coordinate_filters
+      declarations.coordinate_filters,
+      JoinPlan.trigger_keys(declarations.join_plan)
     )
   end
 
@@ -244,7 +246,13 @@ defmodule Hawk.Reader.FilterSet do
       coordinate_filters: %{},
       join_plan:
         Enum.map(local_join_names, fn name ->
-          %{name: name, when_filter: MapSet.new(), when_sort: MapSet.new(), apply: &Function.identity/1}
+          %{
+            name: name,
+            when_filter: MapSet.new(),
+            when_sort: MapSet.new(),
+            preserves_roots: false,
+            apply: &Function.identity/1
+          }
         end)
     }
 

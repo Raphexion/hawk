@@ -237,18 +237,25 @@ defmodule Hawk.Reader.Resource do
 
     * `:when_filter` — keys that trigger this join.
     * `:when_sort` — sort keys that trigger this join.
+    * `:preserves_roots` — whether the attachment keeps every root row available
+      to the query (default `false`). Set this only for transformations such as a
+      left join that cannot remove roots needed by another `OR` path.
 
-  The block receives the query variable and must return an Ecto query.
+  A triggering filter must semantically require the attachment whenever it can
+  match. The block receives the query variable and must return an Ecto query.
   """
   defmacro attach(name, opts, do: block) when is_atom(name) and is_list(opts) do
     handler_name = :"__hawk_join_#{name}__"
-    when_filter = Keyword.get(opts, :when_filter, [])
-    when_sort = Keyword.get(opts, :when_sort, [])
+
+    {when_filter, when_sort, preserves_roots} =
+      __attach_options__(name, opts, __CALLER__, :reader)
+
     query_var = Macro.var(:query, __MODULE__)
     rewritten_block = rewrite_query_var(block, query_var)
 
     quote do
-      @hawk_reader_join_rules {unquote(name), unquote(when_filter), unquote(when_sort), unquote(handler_name)}
+      @hawk_reader_join_rules {unquote(name), unquote(when_filter), unquote(when_sort), unquote(preserves_roots),
+                               unquote(handler_name)}
 
       defp unquote(handler_name)(unquote(query_var)) do
         unquote(rewritten_block)
@@ -427,12 +434,13 @@ defmodule Hawk.Reader.Resource do
   end
 
   defp quote_join_rules(join_rules) do
-    Enum.map(join_rules, fn {name, when_filter, when_sort, handler_name} ->
+    Enum.map(join_rules, fn {name, when_filter, when_sort, preserves_roots, handler_name} ->
       quote do
         %{
           name: unquote(name),
           when_filter: MapSet.new(unquote(when_filter)),
           when_sort: MapSet.new(unquote(when_sort)),
+          preserves_roots: unquote(preserves_roots),
           apply: fn query -> unquote(handler_name)(query) end
         }
       end
@@ -445,6 +453,69 @@ defmodule Hawk.Reader.Resource do
         {unquote(key), unquote(reader)}
       end
     end)
+  end
+
+  @doc false
+  def __attach_options__(name, opts, caller, owner) do
+    label = if owner == :filter_set, do: "filter set attach", else: "reader attach"
+
+    unless Keyword.keyword?(opts) do
+      raise ArgumentError, "#{label} #{inspect(name)} options must be a keyword list"
+    end
+
+    duplicate_options =
+      opts
+      |> Keyword.keys()
+      |> Enum.frequencies()
+      |> Enum.filter(fn {_option, count} -> count > 1 end)
+      |> Enum.map(&elem(&1, 0))
+      |> Enum.sort()
+
+    if duplicate_options != [] do
+      raise ArgumentError,
+            "duplicate #{label} options #{inspect(duplicate_options)} for #{inspect(name)}"
+    end
+
+    if owner == :filter_set and Keyword.has_key?(opts, :when_sort) do
+      raise ArgumentError,
+            "filter set attach #{inspect(name)} cannot use :when_sort; sorting belongs to the reader"
+    end
+
+    allowed_options =
+      if owner == :filter_set, do: [:when_filter, :preserves_roots], else: [:when_filter, :when_sort, :preserves_roots]
+
+    unknown_options = Keyword.keys(opts) -- allowed_options
+
+    if unknown_options != [] do
+      [option | _rest] = Enum.uniq(unknown_options)
+      raise ArgumentError, "unknown #{label} option #{inspect(option)} for #{inspect(name)}"
+    end
+
+    when_filter = opts |> Keyword.get(:when_filter, []) |> Macro.expand(caller)
+    when_sort = opts |> Keyword.get(:when_sort, []) |> Macro.expand(caller)
+    preserves_roots = opts |> Keyword.get(:preserves_roots, false) |> Macro.expand(caller)
+
+    validate_attach_keys!(label, name, :when_filter, when_filter)
+    validate_attach_keys!(label, name, :when_sort, when_sort)
+
+    unless preserves_roots in [true, false] do
+      raise ArgumentError,
+            "#{label} #{inspect(name)} :preserves_roots must be a boolean"
+    end
+
+    {when_filter, when_sort, preserves_roots}
+  end
+
+  defp validate_attach_keys!(label, name, option, keys) when is_list(keys) do
+    unless Enum.all?(keys, &is_atom/1) do
+      raise ArgumentError,
+            "#{label} #{inspect(name)} #{inspect(option)} must be a list of atoms, got: #{inspect(keys)}"
+    end
+  end
+
+  defp validate_attach_keys!(label, name, option, keys) do
+    raise ArgumentError,
+          "#{label} #{inspect(name)} #{inspect(option)} must be a list of atoms, got: #{inspect(keys)}"
   end
 
   @doc false

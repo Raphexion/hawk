@@ -28,42 +28,63 @@ defmodule Hawk.Reader.FilterCompiler do
   `schema` is used to validate direct fields. Unknown fields fail loudly unless
   a custom handler exists for the key.
   """
-  @spec compile(Ecto.Queryable.t(), module(), Filter.t(), handlers(), coordinate_filters()) ::
-          Ecto.Query.t()
-  def compile(queryable, schema, filter, handlers \\ %{}, coordinate_filters \\ %{})
+  @spec compile(
+          Ecto.Queryable.t(),
+          module(),
+          Filter.t(),
+          handlers(),
+          coordinate_filters(),
+          MapSet.t(atom())
+        ) :: Ecto.Query.t()
+  def compile(
+        queryable,
+        schema,
+        filter,
+        handlers \\ %{},
+        coordinate_filters \\ %{},
+        attach_trigger_keys \\ MapSet.new()
+      )
       when is_atom(schema) do
     reject_unsupported_operator_shorthand!(filter, handlers)
     query = Ecto.Queryable.to_query(queryable)
 
-    case compile_filter(schema, Filter.normalize(filter), handlers, coordinate_filters) do
+    case compile_filter(
+           schema,
+           Filter.normalize(filter),
+           handlers,
+           coordinate_filters,
+           attach_trigger_keys
+         ) do
       :all -> query
       :none -> where(query, false)
       dynamic -> where(query, ^dynamic)
     end
   end
 
-  defp compile_filter(_schema, :all, _handlers, _coordinate_filters), do: :all
-  defp compile_filter(_schema, :none, _handlers, _coordinate_filters), do: :none
+  defp compile_filter(_schema, :all, _handlers, _coordinate_filters, _attach_trigger_keys), do: :all
+  defp compile_filter(_schema, :none, _handlers, _coordinate_filters, _attach_trigger_keys), do: :none
 
-  defp compile_filter(schema, {:and, left, right}, handlers, coordinate_filters) do
+  defp compile_filter(schema, {:and, left, right}, handlers, coordinate_filters, attach_trigger_keys) do
     combine(
       :and,
-      compile_filter(schema, left, handlers, coordinate_filters),
-      compile_filter(schema, right, handlers, coordinate_filters)
+      compile_filter(schema, left, handlers, coordinate_filters, attach_trigger_keys),
+      compile_filter(schema, right, handlers, coordinate_filters, attach_trigger_keys)
     )
   end
 
-  defp compile_filter(schema, {:or, left, right}, handlers, coordinate_filters) do
+  defp compile_filter(schema, {:or, left, right}, handlers, coordinate_filters, attach_trigger_keys) do
     combine(
       :or,
-      compile_filter(schema, left, handlers, coordinate_filters),
-      compile_filter(schema, right, handlers, coordinate_filters)
+      compile_filter(schema, left, handlers, coordinate_filters, attach_trigger_keys),
+      compile_filter(schema, right, handlers, coordinate_filters, attach_trigger_keys)
     )
   end
 
-  defp compile_filter(schema, filter, handlers, coordinate_filters) when is_map(filter) do
+  defp compile_filter(schema, filter, handlers, coordinate_filters, attach_trigger_keys) when is_map(filter) do
     Enum.reduce(filter, :all, fn {field, value}, acc ->
-      combine(:and, acc, compile_value(schema, field, value, handlers, coordinate_filters))
+      compiled = compile_value(schema, field, value, handlers, coordinate_filters)
+      reject_all_attach_trigger!(field, compiled, attach_trigger_keys)
+      combine(:and, acc, compiled)
     end)
   end
 
@@ -88,6 +109,16 @@ defmodule Hawk.Reader.FilterCompiler do
   end
 
   defp reject_undeclared_near!(_field, _value), do: :ok
+
+  defp reject_all_attach_trigger!(field, :all, attach_trigger_keys) do
+    if MapSet.member?(attach_trigger_keys, field) do
+      raise ArgumentError,
+            "reader attach trigger filter #{inspect(field)} returned :all; " <>
+              "a triggering filter must require its attachment whenever it can match"
+    end
+  end
+
+  defp reject_all_attach_trigger!(_field, _compiled, _attach_trigger_keys), do: :ok
 
   defp run_handler!(field, handler, value) when is_function(handler, 1) do
     case handler.(value) do

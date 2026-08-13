@@ -35,6 +35,84 @@ defmodule Hawk.Reader.ResourceTest.Reader do
   end
 end
 
+defmodule Hawk.Reader.ResourceTest.PreservingReader do
+  @moduledoc false
+
+  use Hawk.Reader.Resource,
+    repo: Videdal.Repo,
+    schema: Videdal.Student,
+    policy: Hawk.Reader.ResourceTest.Policy
+
+  filter :student_id do
+    fn {:eq, student_id} ->
+      dynamic([root: student], student.id == ^student_id)
+    end
+  end
+
+  attach :school, when_filter: [:school_name], preserves_roots: true do
+    join(query, :left, [root: student], school in assoc(student, :school), as: :school)
+  end
+
+  filter :school_name do
+    fn {:eq, school_name} ->
+      dynamic([school: school], school.name == ^school_name)
+    end
+  end
+end
+
+defmodule Hawk.Reader.ResourceTest.SchoolPolicy do
+  @moduledoc false
+
+  def read_filter(_authority), do: %{school_name: "Videdal School"}
+end
+
+defmodule Hawk.Reader.ResourceTest.PolicySchoolReader do
+  @moduledoc false
+
+  use Hawk.Reader.Resource,
+    repo: Videdal.Repo,
+    schema: Videdal.Student,
+    policy: Hawk.Reader.ResourceTest.SchoolPolicy
+
+  filter :student_id do
+    fn {:eq, student_id} -> dynamic([root: student], student.id == ^student_id) end
+  end
+
+  attach :school, when_filter: [:school_name] do
+    join(query, :inner, [root: student], school in assoc(student, :school), as: :school)
+  end
+
+  filter :school_name do
+    fn {:eq, school_name} -> dynamic([school: school], school.name == ^school_name) end
+  end
+end
+
+defmodule Hawk.Reader.ResourceTest.ForcedSchoolReader do
+  @moduledoc false
+
+  use Hawk.Reader.Resource,
+    repo: Videdal.Repo,
+    schema: Videdal.Student,
+    policy: Hawk.Reader.ResourceTest.Policy,
+    forced_filter: %{school_name: "Videdal School"}
+
+  filter :student_id do
+    fn {:eq, student_id} ->
+      dynamic([root: student], student.id == ^student_id)
+    end
+  end
+
+  attach :school, when_filter: [:school_name] do
+    join(query, :inner, [root: student], school in assoc(student, :school), as: :school)
+  end
+
+  filter :school_name do
+    fn {:eq, school_name} ->
+      dynamic([school: school], school.name == ^school_name)
+    end
+  end
+end
+
 defmodule Hawk.Reader.ResourceTest.CountReader do
   @moduledoc false
 
@@ -74,6 +152,9 @@ defmodule Hawk.Reader.ResourceTest do
 
   alias Hawk.Authority
   alias Hawk.Reader.ResourceTest.CountReader
+  alias Hawk.Reader.ResourceTest.ForcedSchoolReader
+  alias Hawk.Reader.ResourceTest.PolicySchoolReader
+  alias Hawk.Reader.ResourceTest.PreservingReader
   alias Hawk.Reader.ResourceTest.Reader
   alias Hawk.Reader.ResourceTest.ScopedReader
 
@@ -82,7 +163,16 @@ defmodule Hawk.Reader.ResourceTest do
              MapSet.new([:id, :school_id, :active, :student_id, :school_name])
 
     assert Map.has_key?(Reader.filter_handlers(), :student_id)
-    assert [%{name: :school, when_filter: when_filter, when_sort: when_sort}] = Reader.join_plan()
+
+    assert [
+             %{
+               name: :school,
+               when_filter: when_filter,
+               when_sort: when_sort,
+               preserves_roots: false
+             }
+           ] = Reader.join_plan()
+
     assert when_filter == MapSet.new([:school_name])
     assert when_sort == MapSet.new([:school_name])
     assert Reader.preload_keys() == MapSet.new([:school])
@@ -110,6 +200,72 @@ defmodule Hawk.Reader.ResourceTest do
     assert result.id == student.id
   end
 
+  test "rejects a non-preserving attach when an OR path does not require it" do
+    assert_raise ArgumentError, ~r/unsafe reader attach :school/, fn ->
+      Reader.all(
+        authority: Authority.system(),
+        filter: {:or, %{school_name: "Videdal School"}, %{student_id: Ecto.UUID.generate()}}
+      )
+    end
+  end
+
+  test "allows a non-preserving attach when every OR path requires it" do
+    school_a = insert(:school, name: "School A")
+    school_b = insert(:school, name: "School B")
+    student_a = insert(:student, school_id: school_a.id)
+    student_b = insert(:student, school_id: school_b.id)
+
+    results =
+      Reader.all(
+        authority: Authority.system(),
+        filter: {:or, %{school_name: "School A"}, %{school_name: "School B"}}
+      )
+
+    assert MapSet.new(results, & &1.id) == MapSet.new([student_a.id, student_b.id])
+  end
+
+  test "allows a non-preserving attach required by an enclosing AND" do
+    school = insert(:school, name: "Videdal School")
+    student = insert(:student, school_id: school.id)
+
+    filter =
+      {:and, %{school_name: "Videdal School"}, {:or, %{school_name: "Other School"}, %{student_id: student.id}}}
+
+    assert [found] = Reader.all(authority: Authority.system(), filter: filter)
+    assert found.id == student.id
+  end
+
+  test "allows a non-preserving attach required by a forced filter" do
+    school = insert(:school, name: "Videdal School")
+    student = insert(:student, school_id: school.id)
+
+    filter = {:or, %{school_name: "Other School"}, %{student_id: student.id}}
+
+    assert [found] = ForcedSchoolReader.all(authority: Authority.system(), filter: filter)
+    assert found.id == student.id
+  end
+
+  test "allows a non-preserving attach required by a policy filter" do
+    school = insert(:school, name: "Videdal School")
+    student = insert(:student, school_id: school.id)
+
+    filter = {:or, %{school_name: "Other School"}, %{student_id: student.id}}
+
+    assert [found] = PolicySchoolReader.all(authority: Authority.system(), filter: filter)
+    assert found.id == student.id
+  end
+
+  test "allows a root-preserving attach when only one OR path requires it" do
+    matching_school = insert(:school, name: "Videdal School")
+    school_match = insert(:student, school_id: matching_school.id)
+    identity_match = insert(:student, school_id: nil)
+
+    filter = {:or, %{school_name: "Videdal School"}, %{student_id: identity_match.id}}
+    results = PreservingReader.all(authority: Authority.system(), filter: filter)
+
+    assert MapSet.new(results, & &1.id) == MapSet.new([school_match.id, identity_match.id])
+  end
+
   test "count/1 ignores joins triggered only by sort" do
     school = insert(:school)
     student = insert(:student, school_id: school.id)
@@ -131,6 +287,44 @@ defmodule Hawk.Reader.ResourceTest do
     })
 
     assert CountReader.count(authority: Authority.system(), sort: [asc: :parent_student_id]) == 1
+  end
+
+  test "rejects invalid attach safety options" do
+    module_suffix = System.unique_integer([:positive])
+
+    assert_raise ArgumentError, ~r/preserves_roots.*boolean/, fn ->
+      Code.compile_string("""
+      defmodule Hawk.Reader.ResourceTest.InvalidAttach#{module_suffix} do
+        use Hawk.Reader.Resource,
+          repo: Videdal.Repo,
+          schema: Videdal.Student,
+          policy: Hawk.Reader.ResourceTest.Policy
+
+        attach :school, when_filter: [:school_name], preserves_roots: :yes do
+          query
+        end
+      end
+      """)
+    end
+  end
+
+  test "rejects malformed attach trigger keys" do
+    module_suffix = System.unique_integer([:positive])
+
+    assert_raise ArgumentError, ~r/when_filter.*list of atoms/, fn ->
+      Code.compile_string("""
+      defmodule Hawk.Reader.ResourceTest.InvalidAttachKeys#{module_suffix} do
+        use Hawk.Reader.Resource,
+          repo: Videdal.Repo,
+          schema: Videdal.Student,
+          policy: Hawk.Reader.ResourceTest.Policy
+
+        attach :school, when_filter: :school_name do
+          query
+        end
+      end
+      """)
+    end
   end
 
   test "applies reader scope to root reads and preload queries" do

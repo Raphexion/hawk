@@ -116,6 +116,29 @@ defmodule Hawk.Reader.FilterCompilerTest do
       assert_query(query, "s0.active == ^true")
     end
 
+    test "rejects an attach-triggering handler that expands to all" do
+      handlers = %{school_name: fn _value -> :all end}
+
+      assert_raise ArgumentError, ~r/attach trigger filter :school_name returned :all/, fn ->
+        FilterCompiler.compile(
+          Student,
+          Student,
+          %{school_name: "A"},
+          handlers,
+          %{},
+          MapSet.new([:school_name])
+        )
+      end
+    end
+
+    test "allows a non-triggering handler to expand to all" do
+      handlers = %{noop: fn _value -> :all end}
+
+      query = FilterCompiler.compile(Student, Student, %{noop: true}, handlers)
+
+      assert query.wheres == []
+    end
+
     test "raises when a handler returns an unsupported value" do
       handlers = %{student_id: fn _value -> :bad end}
 

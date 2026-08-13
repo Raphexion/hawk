@@ -158,13 +158,17 @@ defmodule Hawk.Reader do
 
     Filter.validate_keys!(filter, config.filter_keys)
 
+    rules = Map.get(config, :join_plan, [])
+    handlers = Map.get(config, :filter_handlers, %{})
+
     query
-    |> JoinPlan.apply(Map.get(config, :join_plan, []), filter, sort_key)
+    |> JoinPlan.apply(rules, filter, sort_key)
     |> FilterCompiler.compile(
       config.schema,
       filter,
-      Map.get(config, :filter_handlers, %{}),
-      Map.get(config, :coordinate_filters, %{})
+      handlers,
+      Map.get(config, :coordinate_filters, %{}),
+      JoinPlan.trigger_keys(rules)
     )
   end
 

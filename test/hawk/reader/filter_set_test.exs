@@ -29,7 +29,7 @@ defmodule Hawk.Reader.FilterSetTest.StudentSchoolFilters do
 
   use Hawk.Reader.FilterSet, schema: Videdal.Student
 
-  attach :school, when_filter: [:school_name] do
+  attach :school, when_filter: [:school_name], preserves_roots: true do
     join(query, :left, [root: student], school in assoc(student, :school), as: :school)
   end
 
@@ -144,7 +144,7 @@ defmodule Hawk.Reader.FilterSetTest do
     assert Reader.filter_keys() == MapSet.new([:active, :school_name, :student_id])
     assert Map.has_key?(Reader.filter_handlers(), :school_name)
     assert Map.has_key?(Reader.filter_handlers(), :student_id)
-    assert [%{name: :school}] = Reader.join_plan()
+    assert [%{name: :school, preserves_roots: true}] = Reader.join_plan()
   end
 
   test "preserves a cross-set OR when attach rules retain unmatched roots" do
@@ -162,6 +162,34 @@ defmodule Hawk.Reader.FilterSetTest do
     assert MapSet.new(results, & &1.id) == MapSet.new([school_match.id, identity_match.id])
   end
 
+  test "rejects an unsafe OR when applying a filter set independently" do
+    module_suffix = System.unique_integer([:positive])
+    filter_set = Module.concat(Hawk.Reader.FilterSetTest, "UnsafeFilters#{module_suffix}")
+
+    Code.compile_string("""
+    defmodule #{inspect(filter_set)} do
+      use Hawk.Reader.FilterSet, schema: Videdal.Student
+
+      filter(:active)
+
+      attach :school, when_filter: [:school_name] do
+        join(query, :inner, [root: student], school in assoc(student, :school), as: :school)
+      end
+
+      filter :school_name do
+        fn {:eq, school_name} -> dynamic([school: school], school.name == ^school_name) end
+      end
+    end
+    """)
+
+    filter = {:or, %{school_name: "Videdal School"}, %{active: true}}
+
+    assert_raise ArgumentError, ~r/unsafe reader attach :school/, fn ->
+      query = from(Videdal.Student, as: :root)
+      Kernel.apply(filter_set, :apply_to, [query, filter])
+    end
+  end
+
   test "composes imported filters with resource-local filters" do
     school = insert(:school, name: "Videdal School")
     active_student = insert(:student, school_id: school.id, active: true)
@@ -174,6 +202,22 @@ defmodule Hawk.Reader.FilterSetTest do
       )
 
     assert Enum.map(results, & &1.id) == [active_student.id]
+  end
+
+  test "rejects invalid filter set attach options" do
+    module_suffix = System.unique_integer([:positive])
+
+    assert_raise ArgumentError, ~r/unknown filter set attach option :preserve_roots/, fn ->
+      Code.compile_string("""
+      defmodule Hawk.Reader.FilterSetTest.InvalidAttach#{module_suffix} do
+        use Hawk.Reader.FilterSet, schema: Videdal.Student
+
+        attach :school, when_filter: [:school_name], preserve_roots: true do
+          query
+        end
+      end
+      """)
+    end
   end
 
   test "rejects sort-triggered attach rules because sorting belongs to the reader" do
