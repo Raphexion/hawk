@@ -273,8 +273,14 @@ defmodule Hawk.OpenApi do
     [
       include_parameter(resource),
       sort_parameter(resource),
-      %{name: "page[size]", in: "query", schema: %{type: "integer", minimum: 0}},
+      %{name: "page[size]", in: "query", schema: %{type: "integer", minimum: 1}},
       %{name: "page[number]", in: "query", schema: %{type: "integer", minimum: 1}},
+      %{
+        name: "page[after]",
+        in: "query",
+        schema: %{type: "string"},
+        description: "Opaque forward cursor. Cannot be combined with page[number]."
+      },
       %{
         name: "page[total]",
         in: "query",
@@ -900,7 +906,10 @@ defmodule Hawk.OpenApi do
           properties: %{
             size: %{anyOf: [%{type: "integer"}, %{type: "null"}]},
             number: %{type: "integer"},
-            count: %{type: "integer"}
+            count: %{type: "integer"},
+            has_more: %{type: "boolean"},
+            next_cursor: %{type: "string"},
+            total_count: %{type: "integer"}
           }
         }
       }

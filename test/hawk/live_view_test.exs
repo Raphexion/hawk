@@ -263,6 +263,7 @@ defmodule Hawk.LiveViewTest do
     assert socket.assigns.hawk_index_meta == %{
              count: 1,
              has_more?: true,
+             next_cursor: socket.assigns.hawk_index_meta.next_cursor,
              page: %{size: 1},
              resource: :course,
              plural_resource: :courses

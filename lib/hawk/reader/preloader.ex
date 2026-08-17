@@ -22,18 +22,18 @@ defmodule Hawk.Reader.Preloader do
     raise ArgumentError, "preloads must be a list, got: #{inspect(requested)}"
   end
 
-  @spec preload([struct()], module(), [preload()], Enumerable.t(), term(), map()) :: [struct()]
-  def preload(results, _repo, [], _allowed_keys, _authority, _policies), do: results
+  @spec preload([struct()], module(), [preload()], Enumerable.t(), term(), map(), map(), map()) :: [struct()]
+  def preload(results, _repo, [], _allowed_keys, _authority, _policies, _options, _fields), do: results
 
-  def preload(results, repo, requested, allowed_keys, authority, policies)
+  def preload(results, repo, requested, allowed_keys, authority, policies, options, fields)
       when is_list(requested) do
     validate_preloads!(requested, allowed_keys)
 
-    requested = apply_preload_policies(results, requested, authority, policies)
+    requested = apply_preload_policies(results, requested, authority, policies, options, fields, repo)
     repo.preload(results, requested)
   end
 
-  def preload(_results, _repo, requested, _allowed_keys, _authority, _policies) do
+  def preload(_results, _repo, requested, _allowed_keys, _authority, _policies, _options, _fields) do
     raise ArgumentError, "preloads must be a list, got: #{inspect(requested)}"
   end
 
@@ -93,39 +93,49 @@ defmodule Hawk.Reader.Preloader do
     raise ArgumentError, "preloads must be a list, got: #{inspect(requested)}"
   end
 
-  defp apply_preload_policies([], requested, _authority, _policies), do: requested
+  defp apply_preload_policies([], requested, _authority, _policies, _options, _fields, _repo),
+    do: requested
 
-  defp apply_preload_policies([first | _rest], requested, authority, policies)
+  defp apply_preload_policies([first | _rest], requested, authority, policies, options, fields, repo)
        when is_struct(first) do
     Enum.map(requested, fn preload ->
-      apply_preload_policy(first.__struct__, preload, authority, policies)
+      apply_preload_policy(first.__struct__, preload, authority, policies, options, fields, repo)
     end)
   end
 
-  defp apply_preload_policy(root_schema, key, authority, readers) when is_atom(key) do
+  defp apply_preload_policy(root_schema, key, authority, readers, options, fields, repo)
+       when is_atom(key) do
     reader = fetch_reader!(root_schema, key, readers)
-    {key, association_query(root_schema, key, reader, authority)}
+
+    preload =
+      association_preload(root_schema, key, reader, authority, Map.get(options, key, %{}), fields, repo)
+
+    {key, preload}
   end
 
-  defp apply_preload_policy(root_schema, {key, nested}, authority, readers)
+  defp apply_preload_policy(root_schema, {key, nested}, authority, readers, options, fields, repo)
        when is_atom(key) and is_list(nested) do
     reader = fetch_reader!(root_schema, key, readers)
     association = root_schema.__schema__(:association, key)
-    nested = apply_nested_preload_policies(association.related, nested, authority, reader)
+    nested = apply_nested_preload_policies(association.related, nested, authority, reader, fields, repo)
 
-    {key, {association_query(root_schema, key, reader, authority), nested}}
+    preload =
+      association_preload(root_schema, key, reader, authority, Map.get(options, key, %{}), fields, repo)
+
+    {key, {preload, nested}}
   end
 
-  defp apply_nested_preload_policies(_root_schema, [], _authority, _reader), do: []
+  defp apply_nested_preload_policies(_root_schema, [], _authority, _reader, _fields, _repo), do: []
 
-  defp apply_nested_preload_policies(root_schema, nested, authority, reader) do
+  defp apply_nested_preload_policies(root_schema, nested, authority, reader, fields, repo) do
     allowed_keys = reader_preload_keys!(reader)
     readers = reader_preload_readers(reader)
+    options = reader_preload_options(reader)
 
     validate_preloads!(nested, allowed_keys)
 
     Enum.map(nested, fn preload ->
-      apply_preload_policy(root_schema, preload, authority, readers)
+      apply_preload_policy(root_schema, preload, authority, readers, options, fields, repo)
     end)
   end
 
@@ -141,6 +151,14 @@ defmodule Hawk.Reader.Preloader do
   defp reader_preload_readers(reader) do
     if Code.ensure_loaded?(reader) and function_exported?(reader, :preload_readers, 0) do
       reader.preload_readers()
+    else
+      %{}
+    end
+  end
+
+  defp reader_preload_options(reader) do
+    if Code.ensure_loaded?(reader) and function_exported?(reader, :preload_options, 0) do
+      reader.preload_options()
     else
       %{}
     end
@@ -195,17 +213,91 @@ defmodule Hawk.Reader.Preloader do
     end
   end
 
-  defp association_query(root_schema, key, reader, authority) when is_atom(reader) do
+  defp association_preload(root_schema, key, reader, authority, %{limit: limit}, fields, repo) do
+    association = root_schema.__schema__(:association, key)
+
+    unless match?(%Ecto.Association.Has{cardinality: :many}, association) do
+      raise ArgumentError,
+            "bounded reader preload #{inspect(key)} must be a direct has_many association"
+    end
+
+    query = association_query(root_schema, key, reader, authority, %{})
+
+    fn parent_ids ->
+      ranking_query =
+        query
+        |> select([root: row], %{
+          identity: field(row, ^Hawk.JsonApi.Schema.identity(association.related)),
+          row_number:
+            over(row_number(),
+              partition_by: field(row, ^association.related_key),
+              order_by: [asc: field(row, ^Hawk.JsonApi.Schema.identity(association.related))]
+            )
+        })
+
+      identity = Hawk.JsonApi.Schema.identity(association.related)
+
+      result_query =
+        association.related
+        |> from(as: :root)
+        |> join(:inner, [root: row], ranking in subquery(ranking_query),
+          on: field(row, ^identity) == ranking.identity and ranking.row_number <= ^limit
+        )
+        |> where([root: row], field(row, ^association.related_key) in ^parent_ids)
+
+      result_query =
+        case json_api_select_fields(association.related, authority, fields) do
+          nil ->
+            result_query
+
+          selected ->
+            required = association_required_fields(association)
+            select(result_query, [root: row], struct(row, ^Enum.uniq(selected ++ required)))
+        end
+
+      repo.all(result_query)
+    end
+  end
+
+  defp association_preload(root_schema, key, reader, authority, _options, fields, _repo),
+    do: association_query(root_schema, key, reader, authority, fields)
+
+  defp association_query(root_schema, key, reader, authority, fields) when is_atom(reader) do
     unless Code.ensure_loaded?(reader) and function_exported?(reader, :preload_query, 2) do
       raise ArgumentError,
             "reader preload #{inspect(key)} reader #{inspect(reader)} must define preload_query/2"
     end
 
     association = root_schema.__schema__(:association, key)
-    query = from(association.related, as: :root)
 
-    reader.preload_query(query, authority)
+    query =
+      association.related
+      |> from(as: :root)
+      |> reader.preload_query(authority)
+
+    case json_api_select_fields(association.related, authority, fields) do
+      nil ->
+        query
+
+      selected ->
+        required = association_required_fields(association)
+        select(query, [root: row], struct(row, ^Enum.uniq(selected ++ required)))
+    end
   end
+
+  defp association_required_fields(%{related_key: related_key}), do: [related_key]
+  defp association_required_fields(_association), do: []
+
+  defp json_api_select_fields(model, authority, fields) when map_size(fields) > 0 do
+    resource = Hawk.Resource.Convention.resource_module(model)
+    Code.ensure_compiled(resource)
+
+    if function_exported?(resource, :json_api_select_fields, 2) do
+      resource.json_api_select_fields(authority, fields)
+    end
+  end
+
+  defp json_api_select_fields(_model, _authority, _fields), do: nil
 
   defp top_level_keys(requested) do
     Enum.map(requested, fn

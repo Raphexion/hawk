@@ -122,7 +122,7 @@ defmodule Hawk.Reader.FilterSet do
   defmacro attach(name, opts, do: block) when is_atom(name) and is_list(opts) do
     handler_name = :"__hawk_join_#{name}__"
 
-    {when_filter, when_sort, preserves_roots} =
+    {when_filter, when_sort, preserves_roots, multiplies_roots} =
       Hawk.Reader.Resource.__attach_options__(name, opts, __CALLER__, :filter_set)
 
     query_var = Macro.var(:query, __MODULE__)
@@ -130,7 +130,7 @@ defmodule Hawk.Reader.FilterSet do
 
     quote do
       @hawk_reader_join_rules {unquote(name), unquote(when_filter), unquote(when_sort), unquote(preserves_roots),
-                               unquote(handler_name)}
+                               unquote(multiplies_roots), unquote(handler_name)}
 
       @doc false
       def unquote(handler_name)(unquote(query_var)) do
@@ -165,13 +165,14 @@ defmodule Hawk.Reader.FilterSet do
       end)
 
     join_entries =
-      Enum.map(join_rules, fn {name, when_filter, when_sort, preserves_roots, handler_name} ->
+      Enum.map(join_rules, fn {name, when_filter, when_sort, preserves_roots, multiplies_roots, handler_name} ->
         quote do
           %{
             name: unquote(name),
             when_filter: MapSet.new(unquote(when_filter)),
             when_sort: MapSet.new(unquote(when_sort)),
             preserves_roots: unquote(preserves_roots),
+            multiplies_roots: unquote(multiplies_roots),
             apply: Function.capture(__MODULE__, unquote(handler_name), 1)
           }
         end

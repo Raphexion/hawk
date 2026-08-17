@@ -185,6 +185,25 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest do
     assert many_course_query_count == one_course_query_count
   end
 
+  test "sparse included fieldsets narrow preload projections" do
+    seed_courses_with_grades(1)
+
+    {conn, grade_selects} =
+      capture_queries(fn ->
+        CoursesController.index(conn(Authority.system()), %{
+          "include" => "grades",
+          "fields" => %{"grades" => "score"}
+        })
+      end)
+
+    assert conn.status == 200
+    grade_select = Enum.find(grade_selects, &String.contains?(&1, ~s(FROM "grades")))
+    assert grade_select =~ ~s(g0."id")
+    assert grade_select =~ ~s(g0."score")
+    refute grade_select =~ ~s(g0."school_id")
+    refute grade_select =~ ~s(g0."student_id")
+  end
+
   test "controller case helper asserts bounded index query growth" do
     results =
       Hawk.JsonApiControllerCase.assert_index_query_growth(

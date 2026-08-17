@@ -221,6 +221,44 @@ defmodule Hawk.Resource do
   end
 
   @doc false
+  def call_reader_page(reader, opts) when is_atom(reader) do
+    if Code.ensure_loaded?(reader) and function_exported?(reader, :page, 1) do
+      reader.page(opts)
+    else
+      call_reader_offset_page(reader, opts)
+    end
+  end
+
+  defp call_reader_offset_page(reader, opts) do
+    page = opts |> Keyword.get(:page, %{}) |> Map.new()
+    size = Map.get(page, :size)
+    results = reader.all(offset_page_read_opts(opts, size))
+
+    %Hawk.Reader.Page{
+      entries: page_entries(results, size),
+      has_more?: is_integer(size) and length(results) > size,
+      next_cursor: nil,
+      page: page
+    }
+  end
+
+  defp offset_page_read_opts(opts, size) do
+    opts
+    |> Keyword.delete(:fields)
+    |> Keyword.update(:page, %{}, &offset_page_read_opts_page(&1, size))
+  end
+
+  defp offset_page_read_opts_page(page, size) when is_integer(size) do
+    page
+    |> Map.new()
+    |> Map.put(:size, size + 1)
+  end
+
+  defp offset_page_read_opts_page(page, _size), do: page
+
+  defp page_entries(results, size) when is_integer(size), do: Enum.take(results, size)
+  defp page_entries(results, _size), do: results
+
   def call_reader_count(reader, opts) when is_atom(reader) do
     if Code.ensure_loaded?(reader) and function_exported?(reader, :count, 1) do
       reader.count(opts)
@@ -303,6 +341,7 @@ defmodule Hawk.Resource do
     quote do
       def one(opts), do: unquote(reader).one(opts)
       def all(opts), do: unquote(reader).all(opts)
+      def page(opts), do: Hawk.Resource.call_reader_page(unquote(reader), opts)
       def count(opts), do: Hawk.Resource.call_reader_count(unquote(reader), opts)
     end
   end

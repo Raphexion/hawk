@@ -41,6 +41,22 @@ defmodule Hawk.ReaderTest do
     assert inspected =~ "order_by: [asc: s0.id]"
   end
 
+  test "build_query appends identity as a deterministic tie-breaker" do
+    config = %{
+      repo: Repo,
+      schema: Student,
+      filter_keys: Students.Reader.filter_keys(),
+      sort_keys: MapSet.new([:name]),
+      read_filter: fn _authority -> :all end
+    }
+
+    query = Reader.build_query(config, authority: Authority.system(), sort: [desc: :name])
+    inspected = inspect(query)
+
+    assert inspected =~ "order_by: [desc: s0.name]"
+    assert inspected =~ "order_by: [desc: s0.id]"
+  end
+
   test "requires authority" do
     config = %{
       repo: Repo,

@@ -129,6 +129,23 @@ defmodule Hawk.Reader.ResourceTest.CountReader do
   end
 end
 
+defmodule Hawk.Reader.ResourceTest.MultiplyingCountReader do
+  @moduledoc false
+
+  use Hawk.Reader.Resource,
+    repo: Videdal.Repo,
+    schema: Videdal.Student,
+    policy: Hawk.Reader.ResourceTest.Policy
+
+  filter :parent_id do
+    fn {:eq, parent_id} -> dynamic([parent_student: link], link.parent_id == ^parent_id) end
+  end
+
+  attach :parent_students, when_filter: [:parent_id], multiplies_roots: true do
+    join(query, :inner, [root: student], link in assoc(student, :parent_students), as: :parent_student)
+  end
+end
+
 defmodule Hawk.Reader.ResourceTest.ScopedReader do
   @moduledoc false
 
@@ -153,6 +170,7 @@ defmodule Hawk.Reader.ResourceTest do
   alias Hawk.Authority
   alias Hawk.Reader.ResourceTest.CountReader
   alias Hawk.Reader.ResourceTest.ForcedSchoolReader
+  alias Hawk.Reader.ResourceTest.MultiplyingCountReader
   alias Hawk.Reader.ResourceTest.PolicySchoolReader
   alias Hawk.Reader.ResourceTest.PreservingReader
   alias Hawk.Reader.ResourceTest.Reader
@@ -169,7 +187,8 @@ defmodule Hawk.Reader.ResourceTest do
                name: :school,
                when_filter: when_filter,
                when_sort: when_sort,
-               preserves_roots: false
+               preserves_roots: false,
+               multiplies_roots: false
              }
            ] = Reader.join_plan()
 
@@ -266,6 +285,23 @@ defmodule Hawk.Reader.ResourceTest do
     assert MapSet.new(results, & &1.id) == MapSet.new([school_match.id, identity_match.id])
   end
 
+  test "count/1 counts distinct roots across multiplicative joins" do
+    school = insert(:school)
+    student = insert(:student, school_id: school.id)
+    parent = insert(:parent, school_id: school.id)
+
+    for _index <- 1..2 do
+      Repo.insert!(%Videdal.ParentStudent{
+        id: Ecto.UUID.generate(),
+        school_id: school.id,
+        student_id: student.id,
+        parent_id: parent.id
+      })
+    end
+
+    assert MultiplyingCountReader.count(authority: Authority.system(), filter: %{parent_id: parent.id}) == 1
+  end
+
   test "count/1 ignores joins triggered only by sort" do
     school = insert(:school)
     student = insert(:student, school_id: school.id)
@@ -287,6 +323,25 @@ defmodule Hawk.Reader.ResourceTest do
     })
 
     assert CountReader.count(authority: Authority.system(), sort: [asc: :parent_student_id]) == 1
+  end
+
+  test "rejects invalid attach multiplicity options" do
+    module_suffix = System.unique_integer([:positive])
+
+    assert_raise ArgumentError, ~r/multiplies_roots.*boolean/, fn ->
+      Code.compile_string("""
+      defmodule Hawk.Reader.ResourceTest.InvalidMultiplicity#{module_suffix} do
+        use Hawk.Reader.Resource,
+          repo: Videdal.Repo,
+          schema: Videdal.Student,
+          policy: Hawk.Reader.ResourceTest.Policy
+
+        attach :parents, when_filter: [:parent_id], multiplies_roots: :sometimes do
+          query
+        end
+      end
+      """)
+    end
   end
 
   test "rejects invalid attach safety options" do

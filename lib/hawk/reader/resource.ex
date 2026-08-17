@@ -38,7 +38,8 @@ defmodule Hawk.Reader.Resource do
     * `sort/1` — declare a sortable column.
     * `preload/1` — declare a preloadable association (resolved through the
       associated resource's reader and policy).
-    * `preload/2` — declare a preload pointing at a specific reader module.
+    * `preload/2` — declare a preload pointing at a specific reader module or
+      add an explicit per-parent `:limit` for a direct `has_many` association.
     * `attach/3` — declare a custom join rule used when filtering/sorting
       across an association.
 
@@ -62,7 +63,8 @@ defmodule Hawk.Reader.Resource do
 
   ## Generated functions
 
-    * `one/1`, `all/1` — read a member or collection, scoped by policy.
+    * `one/1`, `all/1`, `page/1` — read a member, collection, or bounded
+      collection with continuation metadata, scoped by policy.
     * `preload_query/2` — an authorized preload query for an association.
     * `filter_keys/0`, `coordinate_filters/0`, `sort_keys/0`, `preload_keys/0`,
       `preload_readers/0`, `filter_handlers/0`, `join_plan/0` — the declared
@@ -117,6 +119,7 @@ defmodule Hawk.Reader.Resource do
       Module.register_attribute(__MODULE__, :hawk_reader_filter_sets, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_preload_keys, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_preload_readers, accumulate: true)
+      Module.register_attribute(__MODULE__, :hawk_reader_preload_options, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_sort_keys, accumulate: true)
 
       @before_compile Hawk.Reader.Resource
@@ -221,11 +224,23 @@ defmodule Hawk.Reader.Resource do
   """
   defmacro preload(key, opts) when is_atom(key) and is_list(opts) do
     reader = opts |> Keyword.get(:reader) |> Macro.expand(__CALLER__)
-    validate_preload_reader!(key, reader)
+    limit = opts |> Keyword.get(:limit) |> Macro.expand(__CALLER__)
+    unknown_options = Keyword.keys(opts) -- [:reader, :limit]
+
+    if unknown_options != [] do
+      raise ArgumentError, "unknown reader preload option #{inspect(hd(unknown_options))} for #{inspect(key)}"
+    end
+
+    if reader != nil, do: validate_preload_reader!(key, reader)
+
+    unless is_nil(limit) or (is_integer(limit) and limit > 0) do
+      raise ArgumentError, "reader preload #{inspect(key)} :limit must be a positive integer"
+    end
 
     quote do
       @hawk_reader_preload_keys unquote(key)
-      @hawk_reader_preload_readers {unquote(key), unquote(reader)}
+      unquote(if reader != nil, do: quote(do: @hawk_reader_preload_readers({unquote(key), unquote(reader)})))
+      unquote(if limit != nil, do: quote(do: @hawk_reader_preload_options({unquote(key), %{limit: unquote(limit)}})))
     end
   end
 
@@ -240,6 +255,9 @@ defmodule Hawk.Reader.Resource do
     * `:preserves_roots` — whether the attachment keeps every root row available
       to the query (default `false`). Set this only for transformations such as a
       left join that cannot remove roots needed by another `OR` path.
+    * `:multiplies_roots` — whether one root may become multiple SQL rows
+      (default `false`). This metadata documents cardinality for pagination and
+      diagnostics; root counts are always distinct for correctness.
 
   A triggering filter must semantically require the attachment whenever it can
   match. The block receives the query variable and must return an Ecto query.
@@ -247,7 +265,7 @@ defmodule Hawk.Reader.Resource do
   defmacro attach(name, opts, do: block) when is_atom(name) and is_list(opts) do
     handler_name = :"__hawk_join_#{name}__"
 
-    {when_filter, when_sort, preserves_roots} =
+    {when_filter, when_sort, preserves_roots, multiplies_roots} =
       __attach_options__(name, opts, __CALLER__, :reader)
 
     query_var = Macro.var(:query, __MODULE__)
@@ -255,7 +273,7 @@ defmodule Hawk.Reader.Resource do
 
     quote do
       @hawk_reader_join_rules {unquote(name), unquote(when_filter), unquote(when_sort), unquote(preserves_roots),
-                               unquote(handler_name)}
+                               unquote(multiplies_roots), unquote(handler_name)}
 
       defp unquote(handler_name)(unquote(query_var)) do
         unquote(rewritten_block)
@@ -299,6 +317,7 @@ defmodule Hawk.Reader.Resource do
       filter_sets: reversed_attribute(module, :hawk_reader_filter_sets),
       preload_keys: reversed_attribute(module, :hawk_reader_preload_keys),
       preload_readers: reversed_attribute(module, :hawk_reader_preload_readers),
+      preload_options: reversed_attribute(module, :hawk_reader_preload_options),
       sort_keys: reversed_attribute(module, :hawk_reader_sort_keys)
     }
   end
@@ -355,10 +374,12 @@ defmodule Hawk.Reader.Resource do
 
   defp quote_reader_metadata_functions(declarations) do
     preload_reader_entries = quote_preload_readers(declarations.preload_readers)
+    preload_option_entries = quote_preload_options(declarations.preload_options)
 
     quote do
       def preload_keys, do: MapSet.new(unquote(declarations.preload_keys))
       def preload_readers, do: Map.new([unquote_splicing(preload_reader_entries)])
+      def preload_options, do: Map.new([unquote_splicing(preload_option_entries)])
       def sort_keys, do: MapSet.new(unquote(declarations.sort_keys))
       def read_filter(authority), do: @hawk_reader_policy.read_filter(authority)
     end
@@ -368,6 +389,7 @@ defmodule Hawk.Reader.Resource do
     quote do
       def one(opts), do: Hawk.Reader.one(config(), opts)
       def all(opts), do: Hawk.Reader.all(config(), opts)
+      def page(opts), do: Hawk.Reader.page(config(), opts)
       def count(opts), do: Hawk.Reader.count(config(), opts)
 
       def preload_query(query, authority) do
@@ -395,6 +417,7 @@ defmodule Hawk.Reader.Resource do
         %{
           repo: @hawk_reader_repo,
           schema: @hawk_reader_schema,
+          identity: Hawk.JsonApi.Schema.identity(@hawk_reader_schema),
           filter_keys: filter_declarations.filter_keys,
           filter_handlers: filter_declarations.filter_handlers,
           coordinate_filters: filter_declarations.coordinate_filters,
@@ -404,6 +427,7 @@ defmodule Hawk.Reader.Resource do
           default_sort: @hawk_reader_default_sort,
           preload_keys: preload_keys(),
           preload_readers: preload_readers(),
+          preload_options: preload_options(),
           scope: &__MODULE__.scope/3,
           sort_keys: sort_keys(),
           default_page_size: @hawk_reader_default_page_size,
@@ -434,15 +458,24 @@ defmodule Hawk.Reader.Resource do
   end
 
   defp quote_join_rules(join_rules) do
-    Enum.map(join_rules, fn {name, when_filter, when_sort, preserves_roots, handler_name} ->
+    Enum.map(join_rules, fn {name, when_filter, when_sort, preserves_roots, multiplies_roots, handler_name} ->
       quote do
         %{
           name: unquote(name),
           when_filter: MapSet.new(unquote(when_filter)),
           when_sort: MapSet.new(unquote(when_sort)),
           preserves_roots: unquote(preserves_roots),
+          multiplies_roots: unquote(multiplies_roots),
           apply: fn query -> unquote(handler_name)(query) end
         }
+      end
+    end)
+  end
+
+  defp quote_preload_options(preload_options) do
+    Enum.map(preload_options, fn {key, options} ->
+      quote do
+        {unquote(key), unquote(Macro.escape(options))}
       end
     end)
   end
@@ -482,7 +515,9 @@ defmodule Hawk.Reader.Resource do
     end
 
     allowed_options =
-      if owner == :filter_set, do: [:when_filter, :preserves_roots], else: [:when_filter, :when_sort, :preserves_roots]
+      if owner == :filter_set,
+        do: [:when_filter, :preserves_roots, :multiplies_roots],
+        else: [:when_filter, :when_sort, :preserves_roots, :multiplies_roots]
 
     unknown_options = Keyword.keys(opts) -- allowed_options
 
@@ -494,16 +529,21 @@ defmodule Hawk.Reader.Resource do
     when_filter = opts |> Keyword.get(:when_filter, []) |> Macro.expand(caller)
     when_sort = opts |> Keyword.get(:when_sort, []) |> Macro.expand(caller)
     preserves_roots = opts |> Keyword.get(:preserves_roots, false) |> Macro.expand(caller)
+    multiplies_roots = opts |> Keyword.get(:multiplies_roots, false) |> Macro.expand(caller)
 
     validate_attach_keys!(label, name, :when_filter, when_filter)
     validate_attach_keys!(label, name, :when_sort, when_sort)
 
-    unless preserves_roots in [true, false] do
-      raise ArgumentError,
-            "#{label} #{inspect(name)} :preserves_roots must be a boolean"
-    end
+    validate_attach_boolean!(label, name, :preserves_roots, preserves_roots)
+    validate_attach_boolean!(label, name, :multiplies_roots, multiplies_roots)
 
-    {when_filter, when_sort, preserves_roots}
+    {when_filter, when_sort, preserves_roots, multiplies_roots}
+  end
+
+  defp validate_attach_boolean!(_label, _name, _option, value) when value in [true, false], do: :ok
+
+  defp validate_attach_boolean!(label, name, option, _value) do
+    raise ArgumentError, "#{label} #{inspect(name)} #{inspect(option)} must be a boolean"
   end
 
   defp validate_attach_keys!(label, name, option, keys) when is_list(keys) do
@@ -573,8 +613,6 @@ defmodule Hawk.Reader.Resource do
       end
     end)
   end
-
-  defp validate_preload_reader!(_key, nil), do: :ok
 
   defp validate_preload_reader!(_key, reader) when is_atom(reader), do: :ok
 

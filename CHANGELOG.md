@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Efficient Reader continuation metadata.** Reader pages and JSON:API
+  collections fetch one look-ahead row and expose `has_more` plus an opaque
+  forward `page[after]` cursor without requiring an exact count. Effective sorts
+  append the resource identity as a deterministic tie-breaker.
+- **Bounded and sparse relationship preloads.** Direct `has_many` declarations
+  accept an explicit per-parent `limit:` implemented with a partitioned window,
+  while JSON:API sparse fieldsets narrow included-resource preload projections.
 - **Composable Reader filter sets.** Resource-specific `Hawk.Reader.FilterSet`
   modules group filters with their attach rules and helpers, compose dynamically
   through `import_filters/1`, and expose `apply_to/2` for focused query tests.
@@ -18,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Root-correct Reader counts.** Counts operate on distinct declared resource
+  identities, so filter/scope joins cannot inflate `page[total]`; attachments
+  can declare `multiplies_roots: true` as explicit cardinality metadata.
 - **OR-safe Reader attachments.** Reader and filter-set `attach` declarations
   now default to non-root-preserving and reject boolean filters where applying
   an attachment before the predicate could silently remove results from another

@@ -372,6 +372,7 @@ defmodule Hawk.JsonApi.Request do
         %{}
         |> put_page_value(:size, Map.get(page, "size") || Map.get(params, "page_size"))
         |> put_page_value(:number, Map.get(page, "number") || Map.get(params, "page_number"))
+        |> put_page_after(Map.get(page, "after"))
         |> put_page_total(Map.get(page, "total"))
 
       _page ->
@@ -387,6 +388,10 @@ defmodule Hawk.JsonApi.Request do
 
   defp put_page_value(_page, key, _value),
     do: raise(ArgumentError, "page[#{key}] must be an integer")
+
+  defp put_page_after(page, nil), do: page
+  defp put_page_after(page, value) when is_binary(value), do: Map.put(page, :after, value)
+  defp put_page_after(_page, _value), do: raise(ArgumentError, "page[after] must be a string")
 
   defp put_page_total(page, nil), do: page
   defp put_page_total(page, true), do: Map.put(page, :total, true)

@@ -177,10 +177,12 @@ defmodule Hawk.JsonApi.Controller do
         |> Request.request_options(reader: reader, model: model, authority: authority)
         |> Keyword.put(:authority, authority)
         |> Keyword.put(:context, request_context(conn))
+        |> Keyword.put(:fields, fields)
         |> Keyword.put(:select, select)
 
-      models = resource.all(opts)
-      page = Keyword.get(opts, :page)
+      result = resource.page(opts)
+      models = result.entries
+      page = result.page
 
       document_opts =
         [
@@ -188,7 +190,9 @@ defmodule Hawk.JsonApi.Controller do
           preloads: Keyword.get(opts, :preloads, []),
           context: Keyword.get(opts, :context, %{}),
           page: page,
-          fields: fields
+          fields: fields,
+          has_more: result.has_more?,
+          next_cursor: result.next_cursor
         ]
         |> maybe_put_total_count(resource, opts, page)
 

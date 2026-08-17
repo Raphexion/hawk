@@ -45,6 +45,30 @@ defmodule Videdal.DatabaseCase do
     end
   end
 
+  def capture_queries(fun) when is_function(fun, 0) do
+    test_pid = self()
+    ref = make_ref()
+    handler_id = {__MODULE__, self(), ref}
+
+    :telemetry.attach(
+      handler_id,
+      [:videdal, :repo, :query],
+      &__MODULE__.handle_capture_query_event/4,
+      %{test_pid: test_pid, ref: ref}
+    )
+
+    try do
+      result = fun.()
+      {result, drain_queries(ref, [])}
+    after
+      :telemetry.detach(handler_id)
+    end
+  end
+
+  def handle_capture_query_event(_event, _measurements, metadata, %{test_pid: test_pid, ref: ref}) do
+    send(test_pid, {ref, metadata.query})
+  end
+
   def handle_query_event(_event, _measurements, metadata, %{
         test_pid: test_pid,
         ref: ref,
@@ -52,6 +76,14 @@ defmodule Videdal.DatabaseCase do
       }) do
     unless metadata[:source] in ignored_sources do
       send(test_pid, {ref, :query})
+    end
+  end
+
+  defp drain_queries(ref, queries) do
+    receive do
+      {^ref, query} -> drain_queries(ref, [query | queries])
+    after
+      0 -> Enum.reverse(queries)
     end
   end
 

@@ -71,6 +71,50 @@ defmodule Hawk.PaginationTest do
     end
   end
 
+  test "reader pages overfetch one row and expose an exact continuation cursor" do
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+
+    for title <- ["Same", "Same", "Zebra"] do
+      insert(:course, title: title, school_id: school.id, teacher_id: teacher.id)
+    end
+
+    first = Courses.page(authority: Authority.system(), sort: [asc: :title], page: %{size: 2})
+
+    assert length(first.entries) == 2
+    assert first.has_more?
+    assert is_binary(first.next_cursor)
+
+    assert_raise ArgumentError, ~r/invalid or stale/, fn ->
+      Courses.page(
+        authority: Authority.system(),
+        sort: [asc: :title],
+        page: %{size: 2, after: first.next_cursor <> "tampered"}
+      )
+    end
+
+    second =
+      Courses.page(
+        authority: Authority.system(),
+        sort: [asc: :title],
+        page: %{size: 2, after: first.next_cursor}
+      )
+
+    assert Enum.map(first.entries, & &1.id) -- Enum.map(second.entries, & &1.id) == Enum.map(first.entries, & &1.id)
+    assert Enum.map(second.entries, & &1.title) == ["Zebra"]
+    refute second.has_more?
+    assert second.next_cursor == nil
+  end
+
+  test "reader page reports no continuation at an exact page boundary" do
+    insert_list(2, :course)
+
+    result = Courses.page(authority: Authority.system(), page: %{size: 2})
+
+    assert length(result.entries) == 2
+    refute result.has_more?
+  end
+
   test "JSON:API request options parse page and sort parameters" do
     assert Hawk.JsonApi.Request.request_options(%{
              "sort" => "-title",
@@ -81,6 +125,17 @@ defmodule Hawk.PaginationTest do
              preloads: [:teacher, :grades],
              page: %{number: 2, size: 25, total: true}
            ]
+  end
+
+  test "JSON:API request options parse a forward cursor" do
+    assert Hawk.JsonApi.Request.request_options(%{"page" => %{"after" => "opaque", "size" => "2"}}) ==
+             [page: %{after: "opaque", size: 2}]
+  end
+
+  test "reader rejects mixing offset and cursor pagination" do
+    assert_raise ArgumentError, ~r/cannot be combined/, fn ->
+      Courses.page(authority: Authority.system(), page: %{number: 2, size: 2, after: "opaque"})
+    end
   end
 
   test "JSON:API request options reject invalid page total values" do

@@ -310,19 +310,21 @@ defmodule Hawk.JsonApi.Document do
         document
 
       page ->
-        page_meta = %{
-          size: Map.get(page, :size),
-          number: Map.get(page, :number, 1),
-          count: length(models)
-        }
-
         page_meta =
-          case Keyword.fetch(opts, :total_count) do
-            {:ok, total_count} -> Map.put(page_meta, :total_count, total_count)
-            :error -> page_meta
-          end
+          %{
+            size: Map.get(page, :size),
+            number: Map.get(page, :number) || 1,
+            count: length(models)
+          }
+          |> put_optional_meta(:has_more, Keyword.fetch(opts, :has_more))
+          |> put_optional_meta(:next_cursor, Keyword.fetch(opts, :next_cursor))
+          |> put_optional_meta(:total_count, Keyword.fetch(opts, :total_count))
 
         Map.put(document, :meta, %{page: page_meta})
     end
   end
+
+  defp put_optional_meta(meta, _key, :error), do: meta
+  defp put_optional_meta(meta, _key, {:ok, nil}), do: meta
+  defp put_optional_meta(meta, key, {:ok, value}), do: Map.put(meta, key, value)
 end

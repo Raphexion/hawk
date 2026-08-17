@@ -310,7 +310,9 @@ end
 ```
 
 Root preservation concerns inclusion, not uniqueness: a to-many left join may
-still duplicate roots. A key declared in `when_filter` must semantically require
+still duplicate roots. Declare that fact with `multiplies_roots: true`; Hawk
+always counts distinct root identities and exposes the metadata for pagination
+diagnostics. A key declared in `when_filter` must semantically require
 its attachment whenever that filter can match; custom handlers must not return
 `:all` for such a value. If every satisfiable path requires the same attachment,
 including through an enclosing policy or forced `AND` filter, a non-preserving
@@ -356,19 +358,38 @@ de-duplicate included resources and omit any resource already present in primary
 Every reader `preload/1` must be a relationship exposed by the resource's
 JSON:API adapter — `mix hawk.validate` rejects a preload with no matching
 relationship. A reader cannot preload an association it does not expose, so the
-reader and the external surface stay a single set of relationships.
+reader and the external surface stay a single set of relationships. Sparse
+fieldsets are propagated into included-resource preload projections. Direct
+`has_many` relationships can also opt into a per-parent bound:
+
+```elixir
+preload(:images, limit: 50)
+```
+
+The bound uses a partitioned window query, so it applies to every parent rather
+than to the preload batch as a whole. It is intentionally limited to direct
+`has_many` associations; many-to-many and through associations must use a
+purpose-built relationship endpoint.
 
 Readers apply `default_page_size` when the caller does not request a page size
 and reject requests above `max_page_size`. Both default to `100` and can be
 overridden per resource. Collection JSON:API responses include `meta.page` with
-`size`, `number`, and returned `count`. Hawk accepts `page[size]` / `page[number]`
-and the shorthand `page_size` / `page_number` query parameters. Direct
+`size`, `number`, returned `count`, and `has_more`. Hawk fetches one internal
+look-ahead row, trims it from the response, and emits `next_cursor` when another
+page exists. Cursors are enabled and signed when
+`config :hawk, :cursor_secret, ...` is set; use a stable application secret in
+every environment. Without it, `has_more` still works and no cursor is emitted,
+which keeps existing applications compatible. `page[after]` consumes that
+opaque forward cursor and cannot be
+combined with `page[number]`; page-number and shorthand `page_size` /
+`page_number` parameters remain supported. All sorts gain the resource identity
+as a deterministic tie-breaker. Direct
 `has_many` related-resource and relationship-linkage endpoints use the related
 reader's pagination settings too, so `GET /courses/:id/grades` and
 `GET /courses/:id/relationships/grades` do not preload an unbounded child
 collection. When a client passes `page[total]=true`, JSON:API controllers also
-run the same authorized, unpaginated reader query as a count and include
-`meta.page.total_count`.
+run the same authorized, unpaginated reader query as a distinct-root count and
+include `meta.page.total_count`.
 
 ### Writer
 

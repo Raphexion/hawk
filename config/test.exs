@@ -1,6 +1,7 @@
 import Config
 
 config :hawk, ecto_repos: [Videdal.Repo]
+config :hawk, :cursor_secret, String.duplicate("hawk-test-secret-", 4)
 
 repo_config =
   case System.get_env("HAWK_DATABASE_URL") do

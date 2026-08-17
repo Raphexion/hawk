@@ -77,7 +77,7 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
                  "Allowed fields: id, title."
            } in parameters
 
-    assert %{name: "page[size]", in: "query", schema: %{type: "integer", minimum: 0}} in parameters
+    assert %{name: "page[size]", in: "query", schema: %{type: "integer", minimum: 1}} in parameters
 
     assert %{name: "page[number]", in: "query", schema: %{type: "integer", minimum: 1}} in parameters
 

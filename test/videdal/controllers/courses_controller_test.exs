@@ -43,7 +43,7 @@ defmodule Videdal.Controllers.CoursesControllerTest do
                  }
                }
              ],
-             meta: %{page: %{number: 1, size: 10, count: 1}}
+             meta: %{page: %{number: 1, size: 10, count: 1, has_more: false}}
            }
   end
 

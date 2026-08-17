@@ -13,11 +13,27 @@ defmodule Videdal.Integration.CourseGradesPreloadTest.Reader do
   preload(:grades)
 end
 
+defmodule Videdal.Integration.CourseGradesPreloadTest.BoundedReader do
+  @moduledoc false
+
+  use Hawk.Reader.Resource,
+    repo: Videdal.Repo,
+    schema: Videdal.Course,
+    policy: Videdal.Courses.Policy
+
+  filter(:id)
+  filter(:school_id)
+  filter(:teacher_id)
+
+  preload(:grades, limit: 1)
+end
+
 defmodule Videdal.Integration.CourseGradesPreloadTest do
   use Videdal.DatabaseCase, async: false
 
   alias Hawk.Authority
   alias Videdal.{Course, Grade, Repo, School, Student, Teacher}
+  alias Videdal.Integration.CourseGradesPreloadTest.BoundedReader
   alias Videdal.Integration.CourseGradesPreloadTest.Reader
 
   setup do
@@ -43,6 +59,32 @@ defmodule Videdal.Integration.CourseGradesPreloadTest do
            ] = courses
 
     assert query_count == 2
+  end
+
+  test "bounded has_many preloads apply the limit per parent", _data do
+    authority = Authority.system()
+
+    courses =
+      BoundedReader.all(authority: authority, preloads: [:grades])
+      |> Enum.sort_by(& &1.title)
+
+    assert Enum.map(courses, fn course -> {course.title, length(course.grades)} end) == [
+             {"Math", 1},
+             {"Physics", 1}
+           ]
+  end
+
+  test "bounded has_many preloads keep sparse fields and the parent association key", _data do
+    [course | _rest] =
+      BoundedReader.all(
+        authority: Authority.system(),
+        preloads: [:grades],
+        fields: %{"grades" => MapSet.new(["score"])}
+      )
+
+    assert [%Grade{score: score, course_id: course_id, student_id: nil}] = course.grades
+    assert is_integer(score)
+    assert course_id == course.id
   end
 
   test "teacher course preloads include all grades for that teacher's courses", data do

@@ -14,6 +14,7 @@ defmodule Hawk.Reader.JoinPlan do
           required(:when_filter) => MapSet.t(atom()),
           required(:when_sort) => MapSet.t(atom()),
           required(:preserves_roots) => boolean(),
+          required(:multiplies_roots) => boolean(),
           required(:apply) => (Ecto.Query.t() -> Ecto.Query.t())
         }
 

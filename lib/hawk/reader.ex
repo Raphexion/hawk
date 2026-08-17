@@ -10,11 +10,13 @@ defmodule Hawk.Reader do
   import Ecto.Query
 
   alias Hawk.Filter
+  alias Hawk.Reader.Cursor
   alias Hawk.Reader.FilterCompiler
   alias Hawk.Reader.JoinPlan
+  alias Hawk.Reader.Page
   alias Hawk.Reader.Preloader
 
-  @allowed_options MapSet.new([:authority, :context, :filter, :page, :preloads, :select, :sort])
+  @allowed_options MapSet.new([:authority, :context, :fields, :filter, :page, :preloads, :select, :sort])
   @sort_dirs [:asc, :desc, :asc_nulls_first, :asc_nulls_last, :desc_nulls_first, :desc_nulls_last]
 
   @type config :: %{
@@ -28,6 +30,7 @@ defmodule Hawk.Reader do
           optional(:forced_filter) => Filter.t(),
           optional(:preload_keys) => Enumerable.t(),
           optional(:preload_readers) => %{optional(atom()) => module()},
+          optional(:preload_options) => %{optional(atom()) => map()},
           optional(:scope) => (Ecto.Query.t(), map(), map() -> Ecto.Query.t()),
           optional(:sort_keys) => Enumerable.t(),
           optional(:default_sort) => keyword(atom()),
@@ -57,8 +60,53 @@ defmodule Hawk.Reader do
       opts.preloads,
       Map.get(config, :preload_keys, []),
       opts.authority,
-      Map.get(config, :preload_readers, %{})
+      Map.get(config, :preload_readers, %{}),
+      Map.get(config, :preload_options, %{}),
+      opts.fields
     )
+  end
+
+  @doc """
+  Fetches a bounded page and one internal look-ahead row.
+
+  The look-ahead row is removed from `entries` and represented by `has_more?`
+  and an opaque forward `next_cursor`.
+  """
+  @spec page(config(), keyword() | map()) :: Page.t()
+  def page(config, opts) do
+    opts = normalize_options(opts)
+    page = normalized_page(config, opts.page)
+    size = Map.get(page, :size)
+    sort = effective_sort(config, opts.sort)
+    validate_sort_keys!(config, opts.sort)
+
+    results =
+      config
+      |> build_query_from_normalized(%{opts | page: lookahead_page(page)}, sort)
+      |> config.repo.all()
+
+    {entries, has_more?} = trim_lookahead(results, size)
+
+    entries =
+      Preloader.preload(
+        entries,
+        config.repo,
+        opts.preloads,
+        Map.get(config, :preload_keys, []),
+        opts.authority,
+        Map.get(config, :preload_readers, %{}),
+        Map.get(config, :preload_options, %{}),
+        opts.fields
+      )
+
+    next_cursor = next_cursor(entries, has_more?, sort)
+
+    %Page{
+      entries: entries,
+      has_more?: has_more?,
+      next_cursor: next_cursor,
+      page: if(has_more? and is_nil(next_cursor), do: Map.put(page, :cursor_unavailable, true), else: page)
+    }
   end
 
   @doc """
@@ -88,7 +136,9 @@ defmodule Hawk.Reader do
           opts.preloads,
           Map.get(config, :preload_keys, []),
           opts.authority,
-          Map.get(config, :preload_readers, %{})
+          Map.get(config, :preload_readers, %{}),
+          Map.get(config, :preload_options, %{}),
+          opts.fields
         )
         |> List.first()
         |> then(&{:ok, &1})
@@ -109,15 +159,15 @@ defmodule Hawk.Reader do
     opts = normalize_options(opts)
     authority = Map.fetch!(opts, :authority)
     caller_filter = Map.fetch!(opts, :filter)
-    sort = sort_order(config, Map.get(opts, :sort, []))
-    validate_sort_keys!(config, sort)
+    validate_sort_keys!(config, Map.get(opts, :sort, []))
 
-    config.schema
-    |> from(as: :root)
-    |> apply_authorized_filter(config, authority, caller_filter, [])
-    |> apply_scope(config, opts, %{authority: authority})
-    |> exclude(:order_by)
-    |> config.repo.aggregate(:count, :id)
+    query =
+      config.schema
+      |> from(as: :root)
+      |> apply_authorized_filter(config, authority, caller_filter, [])
+      |> apply_scope(config, opts, %{authority: authority})
+
+    distinct_root_count(query, config.repo, identity(config))
   end
 
   @doc """
@@ -126,23 +176,12 @@ defmodule Hawk.Reader do
   @spec build_query(config(), keyword() | map()) :: Ecto.Query.t()
   def build_query(config, opts) do
     opts = normalize_options(opts)
-    authority = Map.fetch!(opts, :authority)
-    caller_filter = Map.fetch!(opts, :filter)
-    page = Map.fetch!(opts, :page)
-    page = apply_default_page_size(page, Map.get(config, :default_page_size, 100))
-    page = enforce_max_page_size!(page, Map.get(config, :max_page_size, 100))
+    page = normalized_page(config, Map.fetch!(opts, :page))
+    requested_sort = Map.get(opts, :sort, [])
+    validate_sort_keys!(config, requested_sort)
+    sort = effective_sort(config, requested_sort)
 
-    sort = sort_order(config, Map.get(opts, :sort, []))
-    validate_sort_keys!(config, sort)
-
-    config.schema
-    |> from(as: :root)
-    |> apply_authorized_filter(config, authority, caller_filter, sort_columns(sort))
-    |> apply_scope(config, opts, %{authority: authority})
-    |> apply_select(Map.get(opts, :select))
-    |> apply_sort(sort)
-    |> apply_offset(page)
-    |> apply_limit(page)
+    build_query_from_normalized(config, %{opts | page: page}, sort)
   end
 
   @doc """
@@ -186,6 +225,20 @@ defmodule Hawk.Reader do
     end
   end
 
+  @doc false
+  def distinct_root_count(query, repo, identity) when is_atom(repo) and is_atom(identity) do
+    query
+    |> exclude(:order_by)
+    |> exclude(:select)
+    |> select([root: row], field(row, ^identity))
+    |> distinct(true)
+    |> subquery()
+    |> repo.aggregate(:count)
+  end
+
+  @doc false
+  def identity(config), do: Map.get_lazy(config, :identity, fn -> Hawk.JsonApi.Schema.identity(config.schema) end)
+
   defp authorized_filter(config, authority, caller_filter) do
     caller_filter
     |> Filter.and(config.read_filter.(authority))
@@ -214,6 +267,7 @@ defmodule Hawk.Reader do
     %{
       authority: Map.fetch!(opts, :authority),
       context: Map.get(opts, :context, %{}),
+      fields: normalize_fields(Map.get(opts, :fields, %{})),
       filter: Map.get(opts, :filter, :all),
       page: normalize_page(Map.get(opts, :page, %{})),
       preloads: Map.get(opts, :preloads, []),
@@ -221,6 +275,9 @@ defmodule Hawk.Reader do
       sort: normalize_sort(Map.get(opts, :sort, []))
     }
   end
+
+  defp normalize_fields(fields) when is_map(fields), do: fields
+  defp normalize_fields(fields), do: raise(ArgumentError, "fields must be a map, got: #{inspect(fields)}")
 
   defp normalize_select(nil), do: nil
 
@@ -237,12 +294,7 @@ defmodule Hawk.Reader do
 
   defp normalize_page(page) when is_map(page) do
     reject_smuggled_sort_keys!(page)
-
-    %{
-      size: Map.get(page, :size),
-      number: Map.get(page, :number),
-      total: Map.get(page, :total)
-    }
+    Map.take(page, [:size, :number, :total, :after])
   end
 
   # Sorting used to ride inside :page as column/dir. It is now a first-class
@@ -313,9 +365,27 @@ defmodule Hawk.Reader do
   defp sort_order(_config, [{_dir, column} | _] = sort) when is_atom(column), do: sort
 
   defp sort_order(config, []) do
-    case Map.get(config, :default_sort, asc: :id) do
-      [] -> [asc: :id]
+    case Map.get(config, :default_sort, asc: identity(config)) do
+      [] -> [asc: identity(config)]
       sort -> sort
+    end
+  end
+
+  defp effective_sort(config, requested_sort) do
+    sort = sort_order(config, requested_sort)
+    identity = identity(config)
+
+    if identity in Keyword.values(sort) do
+      sort
+    else
+      sort ++ [{tie_break_direction(sort), identity}]
+    end
+  end
+
+  defp tie_break_direction(sort) do
+    case List.last(sort) do
+      {direction, _field} when direction in [:desc, :desc_nulls_first, :desc_nulls_last] -> :desc
+      _other -> :asc
     end
   end
 
@@ -327,12 +397,129 @@ defmodule Hawk.Reader do
     select(query, [root: row], struct(row, ^fields))
   end
 
+  defp build_query_from_normalized(config, opts, sort) do
+    authority = Map.fetch!(opts, :authority)
+    caller_filter = Map.fetch!(opts, :filter)
+    page = Map.fetch!(opts, :page)
+
+    config.schema
+    |> from(as: :root)
+    |> apply_authorized_filter(config, authority, caller_filter, sort_columns(sort))
+    |> apply_scope(config, opts, %{authority: authority})
+    |> maybe_deduplicate_roots(config, authority, caller_filter)
+    |> apply_select(cursor_select(Map.get(opts, :select), sort))
+    |> apply_cursor(page, sort, config.schema)
+    |> apply_sort(sort)
+    |> apply_offset(page)
+    |> apply_limit(page)
+  end
+
+  defp maybe_deduplicate_roots(query, config, authority, caller_filter) do
+    filter_keys =
+      config
+      |> authorized_filter(authority, caller_filter)
+      |> Filter.normalize()
+      |> Filter.keys()
+
+    multiplying_filter? =
+      config
+      |> Map.get(:join_plan, [])
+      |> Enum.any?(fn rule ->
+        rule.multiplies_roots and not MapSet.disjoint?(rule.when_filter, filter_keys)
+      end)
+
+    if multiplying_filter?, do: distinct(query, true), else: query
+  end
+
+  defp cursor_select(nil, _sort), do: nil
+
+  defp cursor_select(select, sort) do
+    Enum.uniq(select ++ Keyword.values(sort))
+  end
+
+  defp normalized_page(config, page) do
+    page
+    |> apply_default_page_size(Map.get(config, :default_page_size, 100))
+    |> enforce_max_page_size!(Map.get(config, :max_page_size, 100))
+    |> validate_page_mode!()
+  end
+
+  defp validate_page_mode!(%{after: after_cursor, number: number})
+       when not is_nil(after_cursor) and not is_nil(number) do
+    raise ArgumentError, "page[after] cannot be combined with page[number]"
+  end
+
+  defp validate_page_mode!(%{size: 0}) do
+    raise ArgumentError, "page size must be positive for paged reads"
+  end
+
+  defp validate_page_mode!(page), do: page
+
+  defp cursor_supported?(model, sort) do
+    Cursor.configured?() and
+      Enum.all?(sort, fn {direction, field} ->
+        direction in [:asc, :desc] and not is_nil(Map.get(model, field))
+      end)
+  end
+
+  defp lookahead_page(%{size: size} = page) when is_integer(size), do: %{page | size: size + 1}
+  defp lookahead_page(page), do: page
+
+  defp trim_lookahead(results, size) when is_integer(size),
+    do: {Enum.take(results, size), length(results) > size}
+
+  defp trim_lookahead(results, _size), do: {results, false}
+
+  defp next_cursor([], _has_more?, _sort), do: nil
+  defp next_cursor(_entries, false, _sort), do: nil
+
+  defp next_cursor(entries, true, sort) do
+    model = List.last(entries)
+
+    if cursor_supported?(model, sort) do
+      Cursor.encode(sort, model)
+    end
+  end
+
+  defp apply_cursor(query, page, _sort, _schema) when not is_map_key(page, :after), do: query
+  defp apply_cursor(query, %{after: nil}, _sort, _schema), do: query
+
+  defp apply_cursor(query, %{after: cursor}, sort, schema) when is_binary(cursor) do
+    values = Cursor.decode!(cursor, sort, schema)
+    where(query, ^cursor_dynamic(sort, values))
+  end
+
+  defp cursor_dynamic(sort, values) do
+    sort
+    |> Enum.zip(values)
+    |> cursor_dynamic(dynamic(false), dynamic(true))
+  end
+
+  defp cursor_dynamic([], result, _equal), do: result
+
+  defp cursor_dynamic([{{direction, field}, value} | rest], result, equal) do
+    if is_nil(value) or direction in [:asc_nulls_first, :asc_nulls_last, :desc_nulls_first, :desc_nulls_last] do
+      raise ArgumentError, "page[after] does not support nullable sort values or explicit null ordering"
+    end
+
+    comparison =
+      if direction == :desc,
+        do: dynamic([root: row], field(row, ^field) < ^value),
+        else: dynamic([root: row], field(row, ^field) > ^value)
+
+    result = dynamic(^result or (^equal and ^comparison))
+    equal = dynamic([root: row], ^equal and field(row, ^field) == ^value)
+    cursor_dynamic(rest, result, equal)
+  end
+
   defp apply_sort(query, sort) do
     Enum.reduce(sort, query, fn {dir, column}, query ->
       order_by(query, [root: row], [{^dir, field(row, ^column)}])
     end)
   end
 
+  defp apply_offset(query, %{after: after_cursor}) when not is_nil(after_cursor), do: query
+  defp apply_offset(query, page) when not is_map_key(page, :number), do: query
   defp apply_offset(query, %{number: nil}), do: query
   defp apply_offset(query, %{number: 1}), do: query
 
