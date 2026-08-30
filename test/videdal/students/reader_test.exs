@@ -28,6 +28,30 @@ defmodule Videdal.Students.ReaderTest do
     assert result.id == student.id
   end
 
+  test "all/1 preserves overlapping caller and policy root filters that can intersect" do
+    school = insert(:school)
+    active_student = insert(:student, school_id: school.id, active: true)
+    insert(:student, school_id: school.id, active: false)
+    insert(:student, active: true)
+
+    authority = Authority.new(:student, 1, scopes: %{school_id: school.id, student_id: active_student.id})
+
+    [result] = Students.all(authority: authority, filter: %{school_id: school.id})
+
+    assert result.id == active_student.id
+  end
+
+  test "all/1 still applies joined filters when overlapping root filters are preserved" do
+    school = insert(:school, name: "Root School")
+    student = insert(:student, school_id: school.id, active: true)
+    insert(:student, active: true)
+    authority = Authority.new(:school_admin, 1, scopes: %{school_id: school.id})
+
+    [result] = Students.all(authority: authority, filter: %{school_id: school.id, school_name: "Root School"})
+
+    assert result.id == student.id
+  end
+
   test "all/1 applies the student_id custom filter handler" do
     insert(:student)
     student = insert(:student)

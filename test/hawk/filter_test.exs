@@ -57,8 +57,14 @@ defmodule Hawk.FilterTest do
              }
     end
 
-    test "returns none when map filters have conflicting overlapping keys" do
-      assert Filter.and(%{school_id: 1}, %{school_id: 2}) == :none
+    test "preserves overlapping map filters that may still intersect" do
+      assert Filter.and(%{country: {:in, ["DK", "NO"]}}, %{country: "DK"}) ==
+               {:and, %{country: {:in, ["DK", "NO"]}}, %{country: {:eq, "DK"}}}
+    end
+
+    test "preserves conflicting overlapping map filters for query compilation" do
+      assert Filter.and(%{school_id: 1}, %{school_id: 2}) ==
+               {:and, %{school_id: {:eq, 1}}, %{school_id: {:eq, 2}}}
     end
 
     test "preserves non-map boolean structure" do

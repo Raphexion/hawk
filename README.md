@@ -323,6 +323,15 @@ transformation still runs before the `OR` predicate and may remove roots. See
 beginner-oriented explanation, SQL examples, edge cases, and a testing
 checklist.
 
+When Hawk combines policy, forced, and caller filters, overlapping root-field
+keys are preserved as boolean `AND` predicates unless the values are identical.
+For example, a policy filter `%{country: {:in, ["DK", "NO"]}}` combined with a
+caller filter `%{country: "DK"}` compiles as both predicates on the `:root`
+binding instead of collapsing to `:none`. This matters for policy narrowing and
+for joined filters: preserving the boolean shape keeps `Filter.keys/1` visible to
+join planning while still letting the final compiler apply every predicate after
+attachments have been selected.
+
 Filter sets are composed dynamically from one metadata snapshot per set. In a
 Phoenix development server, changing only a filter-set module is therefore
 visible to the next Reader call without caching stale declarations in the

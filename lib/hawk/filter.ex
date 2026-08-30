@@ -146,7 +146,7 @@ defmodule Hawk.Filter do
   defp merge_maps(left, right) do
     Enum.reduce_while(right, left, fn {key, right_value}, acc ->
       case Map.fetch(acc, key) do
-        {:ok, left_value} when left_value != right_value -> {:halt, :none}
+        {:ok, left_value} when left_value != right_value -> {:halt, {:and, left, right}}
         {:ok, _left_value} -> {:cont, acc}
         :error -> {:cont, Map.put(acc, key, right_value)}
       end
