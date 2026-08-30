@@ -1,7 +1,7 @@
 defmodule Hawk.MixProject do
   use Mix.Project
 
-  @version "0.7.0"
+  @version "0.8.0"
   @source_url "https://github.com/Raphexion/hawk"
   @description "Opinionated Phoenix foundation for policy-safe resources across LiveView and JSON:API"
 

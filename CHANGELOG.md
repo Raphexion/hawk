@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-30
+
 ### Added
 
 - **Efficient Reader continuation metadata.** Reader pages and JSON:API
@@ -38,6 +40,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **GitHub-first installation guidance.** The README now documents installing
   Hawk from the tagged GitHub dependency while the package remains unpublished
   on Hex.
+
+### Fixed
+
+- **Overlapping policy and caller filters.** Combining filters preserves
+  differing predicates for the same root field as an explicit boolean `AND`
+  instead of collapsing them to `:none`. This keeps valid policy narrowing such
+  as `country in ["DK", "NO"]` plus caller `country == "DK"` satisfiable, while
+  still letting the query compiler and database evaluate genuinely impossible
+  combinations.
+- **Macro-generated reader Dialyzer noise.** Generated Reader and Resource
+  facade delegates suppress false-positive Dialyzer warnings caused by dynamic
+  resource config maps, restoring a green CI signal without changing runtime
+  behavior.
 
 ## [0.7.0] - 2026-08-09
 
