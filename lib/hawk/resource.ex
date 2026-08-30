@@ -339,6 +339,8 @@ defmodule Hawk.Resource do
 
   defp quote_reader_delegates(reader) do
     quote do
+      @dialyzer {:nowarn_function, one: 1, all: 1, page: 1, count: 1}
+
       def one(opts), do: unquote(reader).one(opts)
       def all(opts), do: unquote(reader).all(opts)
       def page(opts), do: Hawk.Resource.call_reader_page(unquote(reader), opts)

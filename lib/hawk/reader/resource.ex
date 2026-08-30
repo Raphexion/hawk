@@ -387,6 +387,8 @@ defmodule Hawk.Reader.Resource do
 
   defp quote_public_reader_functions do
     quote do
+      @dialyzer {:nowarn_function, one: 1, all: 1, page: 1, count: 1, preload_query: 2}
+
       def one(opts), do: Hawk.Reader.one(config(), opts)
       def all(opts), do: Hawk.Reader.all(config(), opts)
       def page(opts), do: Hawk.Reader.page(config(), opts)
