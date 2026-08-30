@@ -140,6 +140,23 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
            }
   end
 
+  test "filter parameters document object-valued custom filters" do
+    spec = OpenApiController.spec()
+
+    filter =
+      spec.paths["/api/v1/grades"].get.parameters
+      |> Enum.find(&(&1.name == "filter"))
+
+    assert filter.schema.properties.score_range == %{
+             type: "object",
+             additionalProperties: true
+           }
+
+    assert String.contains?(filter.description, "Object-valued custom filters (score_range)")
+    assert String.contains?(filter.description, "passed to the custom handler")
+    assert String.contains?(filter.description, "For ordinary filters")
+  end
+
   test "filter parameters document the integer operator contract" do
     spec = OpenApiController.spec()
 

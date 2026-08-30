@@ -11,7 +11,10 @@ defmodule Hawk.JsonApi.Request do
   read-only short-id prefixes) also lives here. Include paths resolve external
   JSON:API relationship names to internal Reader preload keys at every path
   segment. Coordinate `near` filters preserve their nested parameter object for
-  the declared Reader coordinate handler to validate and compile.
+  the declared Reader coordinate handler to validate and compile. Custom Reader
+  filters declared with `value: :object` preserve their structured object for
+  application-owned validation; nested keys remain strings and the custom
+  handler receives the object as `{:eq, object}` after filter normalization.
 
   The external shape used for validation is resolved through
   `Hawk.JsonApi.Schema.metadata/1`.
@@ -433,9 +436,10 @@ defmodule Hawk.JsonApi.Request do
   defp parse_filter(filter, _reader) when filter == %{}, do: :all
 
   defp parse_filter(filter, reader) when is_map(filter) do
-    Map.new(filter, fn {key, value} ->
-      key = parse_filter_key!(key, reader)
-      value = parse_filter_value!(value)
+    Map.new(filter, fn {raw_key, raw_value} ->
+      key = parse_filter_key!(raw_key, reader)
+      value_type = declared_filter_value_type(reader, key)
+      value = parse_filter_value!(raw_value, value_type, key)
       validate_declared_near!(key, value, reader)
       {key, value}
     end)
@@ -461,22 +465,51 @@ defmodule Hawk.JsonApi.Request do
 
   defp validate_declared_near!(_key, _value, _reader), do: :ok
 
-  defp parse_filter_key!(key, _reader) when is_atom(key), do: key
+  defp parse_filter_key!(key, nil) when is_atom(key), do: key
+
+  defp parse_filter_key!(key, reader) when is_atom(key) do
+    declared_reader_key!(reader, :filter_keys, Atom.to_string(key), "filter key")
+  end
 
   defp parse_filter_key!(key, reader) when is_binary(key) do
     declared_reader_key!(reader, :filter_keys, key, "filter key")
   end
 
-  defp parse_filter_value!(%{} = value) when map_size(value) == 1 do
+  defp declared_filter_value_type(nil, _key), do: nil
+
+  defp declared_filter_value_type(reader, key) do
+    if Code.ensure_loaded?(reader) and function_exported?(reader, :filter_value_types, 0) do
+      Map.get(reader.filter_value_types(), key)
+    end
+  end
+
+  defp parse_filter_value!(value, :object, _key) when is_map(value),
+    do: preserve_object_value(value)
+
+  defp parse_filter_value!(_value, :object, key),
+    do: raise(ArgumentError, "filter #{inspect(key)} requires an object value")
+
+  defp parse_filter_value!(%{} = value, nil, _key) when map_size(value) == 1 do
     [{operator, operand}] = Map.to_list(value)
     operator = parse_filter_operator!(operator)
     {operator, parse_filter_operand!(operator, operand)}
   end
 
-  defp parse_filter_value!(value) when is_list(value) or is_map(value),
+  defp parse_filter_value!(value, nil, _key) when is_list(value) or is_map(value),
     do: raise(ArgumentError, "filter value must be a scalar")
 
-  defp parse_filter_value!(value), do: parse_filter_scalar(value)
+  defp parse_filter_value!(value, nil, _key), do: parse_filter_scalar(value)
+
+  defp preserve_object_value(value) when is_map(value) do
+    Map.new(value, fn {key, nested_value} ->
+      {key, preserve_object_value(nested_value)}
+    end)
+  end
+
+  defp preserve_object_value(value) when is_list(value),
+    do: Enum.map(value, &preserve_object_value/1)
+
+  defp preserve_object_value(value), do: parse_filter_scalar(value)
 
   defp parse_filter_operand!(:near, operand) when is_map(operand), do: operand
 

@@ -18,6 +18,14 @@ defmodule Hawk.FilterTest do
              }
     end
 
+    test "normalizes structured custom filter values as equality operands" do
+      object = %{"minimum" => "7", "maximum" => "12"}
+
+      assert Filter.normalize(%{score_range: object}) == %{
+               score_range: {:eq, object}
+             }
+    end
+
     test "keeps explicit operator tuples" do
       filter = %{
         id: {:in, [1, 2]},

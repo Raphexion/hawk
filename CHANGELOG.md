@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added explicit object-valued custom Reader filters. `filter ..., value: :object`
+  preserves declared structured JSON:API filter values for application-owned
+  validation while ordinary scalar/operator filters retain their strict parsing
+  behavior.
+
 ## [0.8.0] - 2026-08-30
 
 ### Added

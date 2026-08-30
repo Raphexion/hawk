@@ -31,6 +31,9 @@ defmodule Hawk.Reader.Resource do
     * `filter/1` — declare a filterable column (compiled by
       `Hawk.Reader.FilterCompiler`).
     * `filter/2` with a block — declare a filter with a custom handler.
+    * `filter/3` with `value: :object` and a block — declare a custom filter
+      that receives a structured object as `{:eq, object}`. Nested object keys
+      remain strings.
     * `filter/2` with `type: :coordinates` — declare an indexed PostGIS
       coordinate filter with a required `:max_radius_meters`.
     * `import_filters/1` — compose a resource-specific
@@ -66,8 +69,9 @@ defmodule Hawk.Reader.Resource do
     * `one/1`, `all/1`, `page/1` — read a member, collection, or bounded
       collection with continuation metadata, scoped by policy.
     * `preload_query/2` — an authorized preload query for an association.
-    * `filter_keys/0`, `coordinate_filters/0`, `sort_keys/0`, `preload_keys/0`,
-      `preload_readers/0`, `filter_handlers/0`, `join_plan/0` — the declared
+    * `filter_keys/0`, `filter_value_types/0`, `coordinate_filters/0`,
+      `sort_keys/0`, `preload_keys/0`, `preload_readers/0`,
+      `filter_handlers/0`, `join_plan/0` — the declared
       metadata.
     * `read_filter/1` — delegates to the policy.
     * `repo/0` — the configured repo.
@@ -102,7 +106,7 @@ defmodule Hawk.Reader.Resource do
       import Ecto.Query, except: [preload: 2]
 
       import Hawk.Reader.Resource,
-        only: [attach: 3, filter: 1, filter: 2, import_filters: 1, preload: 1, preload: 2, sort: 1]
+        only: [attach: 3, filter: 1, filter: 2, filter: 3, import_filters: 1, preload: 1, preload: 2, sort: 1]
 
       @hawk_reader_repo unquote(repo)
       @hawk_reader_schema unquote(schema)
@@ -114,6 +118,7 @@ defmodule Hawk.Reader.Resource do
 
       Module.register_attribute(__MODULE__, :hawk_reader_filter_keys, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_filter_handlers, accumulate: true)
+      Module.register_attribute(__MODULE__, :hawk_reader_filter_value_types, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_coordinate_filters, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_join_rules, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_filter_sets, accumulate: true)
@@ -168,11 +173,48 @@ defmodule Hawk.Reader.Resource do
   end
 
   defmacro filter(key, opts) when is_atom(key) and is_list(opts) do
+    if Keyword.has_key?(opts, :value) do
+      __object_filter_value_type__(key, opts, __CALLER__)
+
+      raise ArgumentError,
+            "object-valued filter #{inspect(key)} requires a custom handler block"
+    end
+
     metadata = __coordinate_filter_metadata__(key, opts, __CALLER__)
 
     quote do
       @hawk_reader_filter_keys unquote(key)
       @hawk_reader_coordinate_filters {unquote(key), unquote(Macro.escape(metadata))}
+    end
+  end
+
+  @doc """
+  Declares an object-valued custom filter.
+
+  The outer value must be an object. Hawk preserves its nested maps, lists, and
+  scalar leaves, then normalizes it to `{:eq, object}` before invoking the
+  handler. Nested keys remain strings and application code owns validation of
+  the object's members and semantics.
+
+      filter :score_range, value: :object do
+        fn {:eq, %{"minimum" => minimum, "maximum" => maximum}} ->
+          dynamic([root: row], row.score >= ^minimum and row.score <= ^maximum)
+        end
+      end
+  """
+  defmacro filter(key, opts, do: block) when is_atom(key) and is_list(opts) do
+    value_type = __object_filter_value_type__(key, opts, __CALLER__)
+    handler_name = :"__hawk_filter_#{key}__"
+
+    quote do
+      @hawk_reader_filter_keys unquote(key)
+      @hawk_reader_filter_handlers {unquote(key), unquote(handler_name)}
+      @hawk_reader_filter_value_types {unquote(key), unquote(value_type)}
+
+      defp unquote(handler_name)(value) do
+        handler = unquote(block)
+        handler.(value)
+      end
     end
   end
 
@@ -312,6 +354,7 @@ defmodule Hawk.Reader.Resource do
     %{
       filter_keys: reversed_attribute(module, :hawk_reader_filter_keys),
       filter_handlers: reversed_attribute(module, :hawk_reader_filter_handlers),
+      filter_value_types: reversed_attribute(module, :hawk_reader_filter_value_types),
       coordinate_filters: reversed_attribute(module, :hawk_reader_coordinate_filters),
       join_rules: reversed_attribute(module, :hawk_reader_join_rules),
       filter_sets: reversed_attribute(module, :hawk_reader_filter_sets),
@@ -339,6 +382,7 @@ defmodule Hawk.Reader.Resource do
 
   defp quote_filter_metadata_functions(declarations, schema) do
     handler_entries = quote_filter_handlers(declarations.filter_handlers)
+    filter_value_type_entries = quote_filter_value_types(declarations.filter_value_types)
     coordinate_filter_entries = quote_coordinate_filters(declarations.coordinate_filters)
     join_rule_entries = quote_join_rules(declarations.join_rules)
 
@@ -350,6 +394,7 @@ defmodule Hawk.Reader.Resource do
             schema: unquote(schema),
             filter_keys: MapSet.new(unquote(declarations.filter_keys)),
             filter_handlers: Map.new([unquote_splicing(handler_entries)]),
+            filter_value_types: Map.new([unquote_splicing(filter_value_type_entries)]),
             coordinate_filters: Map.new([unquote_splicing(coordinate_filter_entries)]),
             join_plan: [unquote_splicing(join_rule_entries)]
           }
@@ -366,6 +411,7 @@ defmodule Hawk.Reader.Resource do
 
         def filter_keys, do: filter_declarations().filter_keys
         def filter_handlers, do: filter_declarations().filter_handlers
+        def filter_value_types, do: filter_declarations().filter_value_types
         def coordinate_filters, do: filter_declarations().coordinate_filters
         def join_plan, do: filter_declarations().join_plan
       end
@@ -422,6 +468,7 @@ defmodule Hawk.Reader.Resource do
           identity: Hawk.JsonApi.Schema.identity(@hawk_reader_schema),
           filter_keys: filter_declarations.filter_keys,
           filter_handlers: filter_declarations.filter_handlers,
+          filter_value_types: filter_declarations.filter_value_types,
           coordinate_filters: filter_declarations.coordinate_filters,
           join_plan: filter_declarations.join_plan,
           read_filter: &read_filter/1,
@@ -447,6 +494,14 @@ defmodule Hawk.Reader.Resource do
     Enum.map(filter_handlers, fn {key, handler_name} ->
       quote do
         {unquote(key), fn value -> unquote(handler_name)(value) end}
+      end
+    end)
+  end
+
+  defp quote_filter_value_types(filter_value_types) do
+    Enum.map(filter_value_types, fn {key, value_type} ->
+      quote do
+        {unquote(key), unquote(value_type)}
       end
     end)
   end
@@ -558,6 +613,41 @@ defmodule Hawk.Reader.Resource do
   defp validate_attach_keys!(label, name, option, keys) do
     raise ArgumentError,
           "#{label} #{inspect(name)} #{inspect(option)} must be a list of atoms, got: #{inspect(keys)}"
+  end
+
+  @doc false
+  def __object_filter_value_type__(key, opts, caller) do
+    unless Keyword.keyword?(opts) do
+      raise ArgumentError, "custom filter #{inspect(key)} options must be a keyword list"
+    end
+
+    duplicate_options =
+      opts
+      |> Keyword.keys()
+      |> Enum.frequencies()
+      |> Enum.filter(fn {_option, count} -> count > 1 end)
+      |> Enum.map(&elem(&1, 0))
+      |> Enum.sort()
+
+    if duplicate_options != [] do
+      raise ArgumentError,
+            "duplicate custom filter options #{inspect(duplicate_options)} for #{inspect(key)}"
+    end
+
+    unknown_options = Keyword.keys(opts) -- [:value]
+
+    if unknown_options != [] do
+      raise ArgumentError,
+            "unknown custom filter options #{inspect(Enum.uniq(unknown_options))} for #{inspect(key)}"
+    end
+
+    value_type = opts |> Keyword.get(:value) |> Macro.expand(caller)
+
+    unless value_type == :object do
+      raise ArgumentError, "custom filter #{inspect(key)} value must be :object"
+    end
+
+    value_type
   end
 
   @doc false

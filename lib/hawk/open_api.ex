@@ -318,22 +318,25 @@ defmodule Hawk.OpenApi do
   # arbitrary Ecto fragments from the parsed value. The description names the
   # declared keys and calls out typed integer and coordinate contracts without
   # pretending generic custom handlers have schema-derived semantics. Declared
-  # coordinate fields get a concrete nested schema; other fields remain open.
+  # coordinate and explicitly object-valued fields get concrete outer schemas;
+  # other fields remain open.
   defp filter_parameter(resource) do
     keys = filter_key_names(resource)
     ops = Enum.join(filter_operators(resource), ", ")
     keys_desc = if keys == [], do: "none", else: Enum.join(keys, ", ")
     integer_desc = integer_filter_description(resource)
     coordinate_desc = coordinate_filter_description(resource)
+    object_desc = object_filter_description(resource)
 
     %{
       name: "filter",
       in: "query",
       description:
         "JSON:API-style filters over declared reader columns (`filter[key]=value` or " <>
-          "`filter[key][op]=value`). Keys: #{keys_desc}. A bare value is an equality " <>
-          "filter; a nested object uses one operator. Available operator names: #{ops}." <>
-          integer_desc <> coordinate_desc,
+          "`filter[key][op]=value`). Keys: #{keys_desc}. For ordinary filters, a bare " <>
+          "value is equality and a nested object contains exactly one operator. " <>
+          "Available operator names: #{ops}." <>
+          integer_desc <> coordinate_desc <> object_desc,
       schema: filter_schema(resource)
     }
   end
@@ -391,12 +394,39 @@ defmodule Hawk.OpenApi do
          }}
       end)
 
+    object_properties =
+      Map.new(reader_filter_value_types(resource.reader), fn {key, :object} ->
+        {key, %{type: "object", additionalProperties: true}}
+      end)
+
+    properties = Map.merge(coordinate_properties, object_properties)
+
     %{type: "object", additionalProperties: true}
-    |> maybe_put_filter_properties(coordinate_properties)
+    |> maybe_put_filter_properties(properties)
   end
 
   defp maybe_put_filter_properties(schema, properties) when properties == %{}, do: schema
   defp maybe_put_filter_properties(schema, properties), do: Map.put(schema, :properties, properties)
+
+  defp object_filter_description(resource) do
+    keys =
+      resource.reader
+      |> reader_filter_value_types()
+      |> Enum.filter(fn {_key, value_type} -> value_type == :object end)
+      |> Enum.map(&elem(&1, 0))
+      |> Enum.sort()
+
+    case keys do
+      [] ->
+        ""
+
+      keys ->
+        names = Enum.map_join(keys, ", ", &to_string/1)
+
+        " Object-valued custom filters (#{names}) accept a structured object " <>
+          "that is passed to the custom handler for member-level validation."
+    end
+  end
 
   defp coordinate_filter_description(resource) do
     coordinate_filters = reader_coordinate_filters(resource.reader)
@@ -431,6 +461,14 @@ defmodule Hawk.OpenApi do
   defp reader_coordinate_filters(reader) do
     if Code.ensure_loaded?(reader) and function_exported?(reader, :coordinate_filters, 0) do
       reader.coordinate_filters()
+    else
+      %{}
+    end
+  end
+
+  defp reader_filter_value_types(reader) do
+    if Code.ensure_loaded?(reader) and function_exported?(reader, :filter_value_types, 0) do
+      reader.filter_value_types()
     else
       %{}
     end

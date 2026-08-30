@@ -115,6 +115,42 @@ defmodule Videdal.Integration.GradesReaderTest do
     end
   end
 
+  test "JSON:API applies declared structured score range filters" do
+    request =
+      Plug.Test.conn(
+        :get,
+        "/?filter%5Bscore_range%5D%5Bminimum%5D=7&filter%5Bscore_range%5D%5Bmaximum%5D=10"
+      )
+      |> Plug.Conn.fetch_query_params()
+      |> Plug.Conn.assign(:hawk_authority, Authority.system())
+
+    response = Controller.index(request, request.query_params)
+
+    assert response.status == 200
+
+    scores =
+      response
+      |> resp()
+      |> Map.fetch!(:data)
+      |> Enum.map(& &1.attributes.score)
+      |> Enum.sort()
+
+    assert scores == [7, 10]
+  end
+
+  test "JSON:API rejects malformed structured score range filters" do
+    request =
+      Plug.Test.conn(:get, "/?filter%5Bscore_range%5D=7")
+      |> Plug.Conn.fetch_query_params()
+      |> Plug.Conn.assign(:hawk_authority, Authority.system())
+
+    response = Controller.index(request, request.query_params)
+
+    assert response.status == 400
+    assert [error] = resp(response).errors
+    assert error.detail == "filter :score_range requires an object value"
+  end
+
   test "JSON:API rejects invalid integer operands and operators with a bad request" do
     for {query, detail} <- [
           {"filter%5Bscore%5D%5Bgt%5D=many", ~s(invalid integer filter value "many" for field :score)},

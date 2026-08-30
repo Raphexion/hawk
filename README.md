@@ -830,6 +830,36 @@ semantics. The same nested query shape applies to other declared filters:
 /api/v1/courses?filter[school_id]=school-1&filter[active][eq]=true&filter[name][ilike]=%25math%25
 ```
 
+#### Structured custom filter values
+
+Custom Reader filters can explicitly opt into structured JSON:API objects:
+
+```elixir
+filter :score_range, value: :object do
+  fn {:eq, %{"minimum" => minimum, "maximum" => maximum}} ->
+    minimum = String.to_integer(minimum)
+    maximum = String.to_integer(maximum)
+
+    dynamic(
+      [root: grade],
+      grade.score >= ^minimum and grade.score <= ^maximum
+    )
+  end
+end
+```
+
+```text
+/grades?filter[score_range][minimum]=7&filter[score_range][maximum]=12
+```
+
+The opt-in is available only to custom filters with a handler block. Hawk
+requires the outer value to be an object, recursively preserves nested maps,
+lists, and scalar leaves, and keeps caller-controlled nested keys as strings.
+After normal filter normalization, the handler receives `{:eq, object}` exactly
+as shown above. The application remains responsible for required members, member
+value types, and domain semantics. Filters without `value: :object` retain the
+strict scalar-or-single-operator contract.
+
 #### Coordinate near filters
 
 Coordinate filtering is an opt-in read capability over an indexed PostGIS

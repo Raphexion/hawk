@@ -16,6 +16,12 @@ defmodule Hawk.Reader.ResourceTest.Reader do
   filter(:school_id)
   filter(:active)
 
+  filter :activity, value: :object do
+    fn {:eq, %{"active" => active}} ->
+      dynamic([root: student], student.active == ^active)
+    end
+  end
+
   preload(:school)
 
   filter :student_id do
@@ -178,9 +184,11 @@ defmodule Hawk.Reader.ResourceTest do
 
   test "generates reader metadata functions" do
     assert Reader.filter_keys() ==
-             MapSet.new([:id, :school_id, :active, :student_id, :school_name])
+             MapSet.new([:id, :school_id, :active, :activity, :student_id, :school_name])
 
     assert Map.has_key?(Reader.filter_handlers(), :student_id)
+    assert Map.has_key?(Reader.filter_handlers(), :activity)
+    assert Reader.filter_value_types() == %{activity: :object}
 
     assert [
              %{
@@ -199,6 +207,50 @@ defmodule Hawk.Reader.ResourceTest do
     assert Reader.preload_readers() == %{}
 
     assert Reader.read_filter(Authority.system()) == :all
+  end
+
+  test "object-valued custom filters receive normalized objects" do
+    school = insert(:school)
+    active_student = insert(:student, school_id: school.id, active: true)
+    insert(:student, school_id: school.id, active: false)
+
+    assert [found] =
+             Reader.all(
+               authority: Authority.system(),
+               filter: %{activity: %{"active" => true}}
+             )
+
+    assert found.id == active_student.id
+  end
+
+  test "rejects invalid object-valued custom filter declarations" do
+    cases = [
+      {"filter :structured, value: :array do\n  fn value -> value end\nend", ~r/value must be :object/},
+      {"filter :structured, value: :object, unknown: true do\n  fn value -> value end\nend",
+       ~r/unknown custom filter options/},
+      {"filter :structured, value: :object, value: :object do\n  fn value -> value end\nend",
+       ~r/duplicate custom filter options/},
+      {"filter(:structured, value: :object)", ~r/requires a custom handler block/},
+      {"filter :structured, type: :coordinates, max_radius_meters: 100 do\n  fn value -> value end\nend",
+       ~r/unknown custom filter options/}
+    ]
+
+    for {declaration, message} <- cases do
+      module_suffix = System.unique_integer([:positive])
+
+      assert_raise ArgumentError, message, fn ->
+        Code.compile_string("""
+        defmodule Hawk.Reader.ResourceTest.InvalidObjectFilter#{module_suffix} do
+          use Hawk.Reader.Resource,
+            repo: Videdal.Repo,
+            schema: Videdal.Student,
+            policy: Hawk.Reader.ResourceTest.Policy
+
+          #{declaration}
+        end
+        """)
+      end
+    end
   end
 
   test "generates all/1 through the shared reader runtime" do

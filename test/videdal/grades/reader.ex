@@ -13,6 +13,18 @@ defmodule Videdal.Grades.Reader do
   filter(:course_id)
   filter(:score)
 
+  filter :score_range, value: :object do
+    fn {:eq, %{"minimum" => minimum, "maximum" => maximum}} ->
+      minimum = integer!(minimum)
+      maximum = integer!(maximum)
+
+      dynamic(
+        [root: grade],
+        grade.score >= ^minimum and grade.score <= ^maximum
+      )
+    end
+  end
+
   preload(:student)
   preload(:course)
 
@@ -51,4 +63,15 @@ defmodule Videdal.Grades.Reader do
       dynamic([course: course], course.teacher_id == ^teacher_id)
     end
   end
+
+  defp integer!(value) when is_integer(value), do: value
+
+  defp integer!(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {integer, ""} -> integer
+      _invalid -> raise ArgumentError, "score range bounds must be integers"
+    end
+  end
+
+  defp integer!(_value), do: raise(ArgumentError, "score range bounds must be integers")
 end

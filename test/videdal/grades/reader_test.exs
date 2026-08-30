@@ -14,12 +14,14 @@ defmodule Videdal.Grades.ReaderTest do
                :student_id,
                :course_id,
                :score,
+               :score_range,
                :student_name,
                :parent_id,
                :course_title,
                :teacher_id
              ])
 
+    assert Reader.filter_value_types() == %{score_range: :object}
     assert Reader.preload_keys() == MapSet.new([:student, :course])
 
     assert Reader.preload_readers() == %{}

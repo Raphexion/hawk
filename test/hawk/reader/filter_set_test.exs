@@ -16,6 +16,12 @@ defmodule Hawk.Reader.FilterSetTest.StudentIdentityFilters do
     end
   end
 
+  filter :activity, value: :object do
+    fn {:eq, %{"active" => active}} ->
+      dynamic([root: student], student.active == ^active)
+    end
+  end
+
   defp equality_operand!({:eq, value}, _filter), do: value
   defp equality_operand!(value, _filter) when is_binary(value), do: value
 
@@ -89,6 +95,21 @@ defmodule Hawk.Reader.FilterSetTest do
     assert Enum.map(results, & &1.id) == [matching_student.id]
   end
 
+  test "applies an object-valued filter set handler independently" do
+    school = insert(:school)
+    matching_student = insert(:student, school_id: school.id, active: true)
+    insert(:student, school_id: school.id, active: false)
+
+    results =
+      Videdal.Student
+      |> from(as: :root)
+      |> StudentIdentityFilters.apply_to(%{activity: %{"active" => true}})
+      |> Videdal.Repo.all()
+
+    assert Enum.map(results, & &1.id) == [matching_student.id]
+    assert StudentIdentityFilters.__hawk_filter_set__().filter_value_types == %{activity: :object}
+  end
+
   test "keeps custom filter helpers local to the filter set" do
     school = insert(:school)
     student = insert(:student, school_id: school.id)
@@ -121,14 +142,20 @@ defmodule Hawk.Reader.FilterSetTest do
     filter_set = Module.concat(Hawk.Reader.FilterSetTest, "ReloadFilters#{module_suffix}")
     reader = Module.concat(Hawk.Reader.FilterSetTest, "ReloadReader#{module_suffix}")
 
-    compile_reload_filter_set(filter_set, :id)
+    compile_reload_filter_set(filter_set, :id, [], true)
     compile_reload_reader(reader, filter_set)
 
     school = insert(:school)
     student = insert(:student, school_id: school.id)
 
     assert apply(reader, :filter_keys, []) == MapSet.new([:reload_lookup])
-    assert [found] = apply(reader, :all, [[authority: Authority.system(), filter: %{reload_lookup: student.id}]])
+    assert apply(reader, :filter_value_types, []) == %{reload_lookup: :object}
+
+    assert [found] =
+             apply(reader, :all, [
+               [authority: Authority.system(), filter: %{reload_lookup: %{"value" => student.id}}]
+             ])
+
     assert found.id == student.id
 
     ExUnit.CaptureIO.capture_io(:stderr, fn ->
@@ -136,14 +163,16 @@ defmodule Hawk.Reader.FilterSetTest do
     end)
 
     assert apply(reader, :filter_keys, []) == MapSet.new([:active, :reload_lookup])
+    assert apply(reader, :filter_value_types, []) == %{}
     assert [found] = apply(reader, :all, [[authority: Authority.system(), filter: %{reload_lookup: school.id}]])
     assert found.id == student.id
   end
 
   test "exposes imported filters through the reader metadata" do
-    assert Reader.filter_keys() == MapSet.new([:active, :school_name, :student_id])
+    assert Reader.filter_keys() == MapSet.new([:active, :activity, :school_name, :student_id])
     assert Map.has_key?(Reader.filter_handlers(), :school_name)
     assert Map.has_key?(Reader.filter_handlers(), :student_id)
+    assert Reader.filter_value_types() == %{activity: :object}
     assert [%{name: :school, preserves_roots: true}] = Reader.join_plan()
   end
 
@@ -281,16 +310,31 @@ defmodule Hawk.Reader.FilterSetTest do
     end
   end
 
-  defp compile_reload_filter_set(module, field, direct_filters \\ []) do
+  defp compile_reload_filter_set(module, field, direct_filters, object? \\ false) do
     declarations = Enum.map_join(direct_filters, "\n", &"filter(#{inspect(&1)})")
+
+    filter_declaration =
+      if object? do
+        """
+        filter :reload_lookup, value: :object do
+          fn {:eq, %{"value" => value}} ->
+            dynamic([root: student], field(student, #{inspect(field)}) == ^value)
+          end
+        end
+        """
+      else
+        """
+        filter :reload_lookup do
+          fn {:eq, value} -> dynamic([root: student], field(student, #{inspect(field)}) == ^value) end
+        end
+        """
+      end
 
     Code.compile_string("""
     defmodule #{inspect(module)} do
       use Hawk.Reader.FilterSet, schema: Videdal.Student
 
-      filter :reload_lookup do
-        fn {:eq, value} -> dynamic([root: student], field(student, #{inspect(field)}) == ^value) end
-      end
+      #{filter_declaration}
 
       #{declarations}
     end

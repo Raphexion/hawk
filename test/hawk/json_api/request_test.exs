@@ -27,6 +27,70 @@ defmodule Hawk.JsonApi.RequestTest do
            }
   end
 
+  test "request options preserve declared structured custom filter values" do
+    hostile_key = hostile_name("nested_filter")
+
+    object = %{
+      "minimum" => "7",
+      "maximum" => "12",
+      "enabled" => "true",
+      "nested" => %{
+        "eq" => "literal",
+        hostile_key => [%{"active" => "false"}, "true"]
+      }
+    }
+
+    assert Request.request_options(
+             %{"filter" => %{"score_range" => object}},
+             reader: Videdal.Grades.Reader
+           ) == [
+             filter: %{
+               score_range: %{
+                 "minimum" => "7",
+                 "maximum" => "12",
+                 "enabled" => true,
+                 "nested" => %{
+                   "eq" => "literal",
+                   hostile_key => [%{"active" => false}, true]
+                 }
+               }
+             }
+           ]
+
+    refute_existing_atom(hostile_key)
+  end
+
+  test "declared object filters treat one-key objects as values rather than operators" do
+    assert Request.request_options(
+             %{"filter" => %{"score_range" => %{"eq" => "literal"}}},
+             reader: Videdal.Grades.Reader
+           ) == [filter: %{score_range: %{"eq" => "literal"}}]
+  end
+
+  test "declared object filters require an object outer value" do
+    for value <- ["7", ["7", "12"]] do
+      assert_raise ArgumentError, "filter :score_range requires an object value", fn ->
+        Request.request_options(
+          %{"filter" => %{"score_range" => value}},
+          reader: Videdal.Grades.Reader
+        )
+      end
+    end
+  end
+
+  test "ordinary and readerless filters retain strict operator parsing" do
+    assert_raise ArgumentError, "filter value must be a scalar", fn ->
+      Request.request_options(
+        %{"filter" => %{"score" => %{"minimum" => "7", "maximum" => "12"}}},
+        reader: Videdal.Grades.Reader
+      )
+    end
+
+    assert_raise ArgumentError, ~r/unsupported filter operator "minimum"/, fn ->
+      Request.request_options(%{"filter" => %{"score_range" => %{"minimum" => "7"}}})
+    end
+  end
+
   test "request options preserve structured coordinate near filters" do
     assert Request.request_options(%{
              "filter" => %{
