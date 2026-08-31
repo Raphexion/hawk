@@ -80,10 +80,28 @@ defmodule Hawk.Reader do
     sort = effective_sort(config, opts.sort)
     validate_sort_keys!(config, opts.sort)
 
-    results =
-      config
-      |> build_query_from_normalized(%{opts | page: lookahead_page(page)}, sort)
-      |> config.repo.all()
+    {results, total_count} =
+      if page[:total] do
+        case build_counted_page_query(config, opts, sort, page) do
+          {:ok, counted_query} ->
+            run_counted_page_query(counted_query, config.repo, config.schema)
+
+          :fallback ->
+            results =
+              config
+              |> build_query_from_normalized(%{opts | page: lookahead_page(page)}, sort)
+              |> config.repo.all()
+
+            {results, count(config, opts)}
+        end
+      else
+        results =
+          config
+          |> build_query_from_normalized(%{opts | page: lookahead_page(page)}, sort)
+          |> config.repo.all()
+
+        {results, nil}
+      end
 
     {entries, has_more?} = trim_lookahead(results, size)
 
@@ -105,7 +123,8 @@ defmodule Hawk.Reader do
       entries: entries,
       has_more?: has_more?,
       next_cursor: next_cursor,
-      page: if(has_more? and is_nil(next_cursor), do: Map.put(page, :cursor_unavailable, true), else: page)
+      page: if(has_more? and is_nil(next_cursor), do: Map.put(page, :cursor_unavailable, true), else: page),
+      total_count: total_count
     }
   end
 
@@ -398,15 +417,10 @@ defmodule Hawk.Reader do
   end
 
   defp build_query_from_normalized(config, opts, sort) do
-    authority = Map.fetch!(opts, :authority)
-    caller_filter = Map.fetch!(opts, :filter)
     page = Map.fetch!(opts, :page)
 
-    config.schema
-    |> from(as: :root)
-    |> apply_authorized_filter(config, authority, caller_filter, sort_columns(sort))
-    |> apply_scope(config, opts, %{authority: authority})
-    |> maybe_deduplicate_roots(config, authority, caller_filter)
+    config
+    |> build_base_query_from_normalized(opts, sort)
     |> apply_select(cursor_select(Map.get(opts, :select), sort))
     |> apply_cursor(page, sort, config.schema)
     |> apply_sort(sort)
@@ -414,21 +428,100 @@ defmodule Hawk.Reader do
     |> apply_limit(page)
   end
 
-  defp maybe_deduplicate_roots(query, config, authority, caller_filter) do
+  defp build_counted_page_query(config, opts, sort, page) do
+    fields = cursor_select(Map.get(opts, :select), sort) || config.schema.__schema__(:fields)
+    lookahead = lookahead_page(page)
+    base_query = build_base_query_from_normalized(config, opts, sort)
+
+    if is_nil(base_query.select) do
+      counted =
+        base_query
+        |> apply_select(fields)
+        |> subquery()
+        |> then(
+          &from(row in &1,
+            select:
+              merge(map(row, ^fields), %{
+                __hawk_total_count__: over(count())
+              })
+          )
+        )
+
+      query =
+        from(row in subquery(counted),
+          as: :root,
+          select: %{
+            entry: map(row, ^fields),
+            total_count: field(row, :__hawk_total_count__)
+          }
+        )
+        |> apply_cursor(page, sort, config.schema)
+        |> apply_sort(sort)
+        |> apply_offset(lookahead)
+        |> apply_limit(lookahead)
+
+      {:ok, query}
+    else
+      :fallback
+    end
+  end
+
+  defp run_counted_page_query(query, repo, schema) do
+    case repo.all(query) do
+      [] ->
+        {[], nil}
+
+      rows ->
+        entries =
+          Enum.map(rows, &load_counted_entry(&1.entry, schema, repo.__adapter__(), query.prefix))
+
+        {entries, rows |> hd() |> Map.fetch!(:total_count)}
+    end
+  end
+
+  defp load_counted_entry(entry, schema, adapter, prefix) do
+    loaded =
+      Map.new(entry, fn {field, value} ->
+        type = schema.__schema__(:type, field)
+        {:ok, loaded_value} = Ecto.Type.adapter_load(adapter, type, value)
+        {field, loaded_value}
+      end)
+
+    schema
+    |> struct(loaded)
+    |> Ecto.put_meta(state: :loaded, source: schema.__schema__(:source), prefix: prefix)
+  end
+
+  defp build_base_query_from_normalized(config, opts, sort) do
+    authority = Map.fetch!(opts, :authority)
+    caller_filter = Map.fetch!(opts, :filter)
+
+    config.schema
+    |> from(as: :root)
+    |> apply_authorized_filter(config, authority, caller_filter, sort_columns(sort))
+    |> apply_scope(config, opts, %{authority: authority})
+    |> maybe_deduplicate_roots(config, authority, caller_filter, sort)
+  end
+
+  defp maybe_deduplicate_roots(query, config, authority, caller_filter, sort) do
     filter_keys =
       config
       |> authorized_filter(authority, caller_filter)
       |> Filter.normalize()
       |> Filter.keys()
 
-    multiplying_filter? =
+    sort_keys = MapSet.new(sort_columns(sort))
+
+    multiplying_join? =
       config
       |> Map.get(:join_plan, [])
       |> Enum.any?(fn rule ->
-        rule.multiplies_roots and not MapSet.disjoint?(rule.when_filter, filter_keys)
+        rule.multiplies_roots and
+          (not MapSet.disjoint?(rule.when_filter, filter_keys) or
+             not MapSet.disjoint?(rule.when_sort, sort_keys))
       end)
 
-    if multiplying_filter?, do: distinct(query, true), else: query
+    if multiplying_join?, do: distinct(query, true), else: query
   end
 
   defp cursor_select(nil, _sort), do: nil
@@ -462,7 +555,12 @@ defmodule Hawk.Reader do
       end)
   end
 
-  defp lookahead_page(%{size: size} = page) when is_integer(size), do: %{page | size: size + 1}
+  defp lookahead_page(%{size: size} = page) when is_integer(size) do
+    page
+    |> Map.put(:offset_size, size)
+    |> Map.put(:size, size + 1)
+  end
+
   defp lookahead_page(page), do: page
 
   defp trim_lookahead(results, size) when is_integer(size),
@@ -523,9 +621,10 @@ defmodule Hawk.Reader do
   defp apply_offset(query, %{number: nil}), do: query
   defp apply_offset(query, %{number: 1}), do: query
 
-  defp apply_offset(query, %{number: number, size: size})
+  defp apply_offset(query, %{number: number, size: size} = page)
        when is_integer(number) and number > 1 and is_integer(size) and size >= 0 do
-    offset(query, ^((number - 1) * size))
+    offset_size = Map.get(page, :offset_size, size)
+    offset(query, ^((number - 1) * offset_size))
   end
 
   defp apply_offset(_query, %{number: number}) do

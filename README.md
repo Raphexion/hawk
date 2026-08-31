@@ -391,14 +391,19 @@ every environment. Without it, `has_more` still works and no cursor is emitted,
 which keeps existing applications compatible. `page[after]` consumes that
 opaque forward cursor and cannot be
 combined with `page[number]`; page-number and shorthand `page_size` /
-`page_number` parameters remain supported. All sorts gain the resource identity
+`page_number` parameters remain supported. For Hawk Reader-backed resources,
+the internal look-ahead row changes only the SQL limit; numbered-page offsets
+continue to use the requested page size. All sorts gain the resource identity
 as a deterministic tie-breaker. Direct
 `has_many` related-resource and relationship-linkage endpoints use the related
 reader's pagination settings too, so `GET /courses/:id/grades` and
 `GET /courses/:id/relationships/grades` do not preload an unbounded child
-collection. When a client passes `page[total]=true`, JSON:API controllers also
-run the same authorized, unpaginated reader query as a distinct-root count and
-include `meta.page.total_count`.
+collection. When a client passes `page[total]=true`, Hawk Reader pages calculate
+the authorized, unpaginated distinct-root total with a window count in the same
+SQL query and include `meta.page.total_count`. An empty non-first page has no row
+to carry the window result and falls back to the separate count query.
+Hand-written readers that only implement `all/1` and `count/1` retain the same
+fallback.
 
 ### Writer
 

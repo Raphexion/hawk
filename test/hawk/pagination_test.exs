@@ -106,6 +106,43 @@ defmodule Hawk.PaginationTest do
     assert second.next_cursor == nil
   end
 
+  test "reader page returns total count with its bounded query" do
+    insert_list(3, :course)
+
+    result = Courses.page(authority: Authority.system(), page: %{size: 2, total: true})
+
+    assert [%Videdal.Course{}, %Videdal.Course{}] = result.entries
+    assert Enum.all?(result.entries, &(&1.__meta__.state == :loaded))
+    assert result.total_count == 3
+    assert result.has_more?
+  end
+
+  test "reader cursor page total counts the full filtered result set" do
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+
+    for title <- ["Alpha", "Beta", "Gamma"] do
+      insert(:course, title: title, school_id: school.id, teacher_id: teacher.id)
+    end
+
+    first =
+      Courses.page(
+        authority: Authority.system(),
+        sort: [asc: :title],
+        page: %{size: 2, total: true}
+      )
+
+    second =
+      Courses.page(
+        authority: Authority.system(),
+        sort: [asc: :title],
+        page: %{size: 2, total: true, after: first.next_cursor}
+      )
+
+    assert first.total_count == 3
+    assert second.total_count == 3
+  end
+
   test "reader page reports no continuation at an exact page boundary" do
     insert_list(2, :course)
 

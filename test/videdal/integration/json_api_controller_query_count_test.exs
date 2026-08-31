@@ -185,6 +185,94 @@ defmodule Videdal.Integration.JsonApiControllerQueryCountTest do
     assert many_course_query_count == one_course_query_count
   end
 
+  test "index reuses a complete first page as the requested total count" do
+    seed_courses_with_grades(4)
+
+    {conn, query_count} =
+      count_queries(fn ->
+        CoursesController.index(conn(Authority.system()), %{
+          "page" => %{"size" => "100", "total" => "true"}
+        })
+      end)
+
+    assert conn.status == 200
+    assert length(resp(conn).data) == 4
+
+    assert resp(conn).meta.page == %{
+             count: 4,
+             has_more: false,
+             number: 1,
+             size: 100,
+             total_count: 4
+           }
+
+    assert query_count == 1
+  end
+
+  test "index keeps requested includes while returning total count in one root query" do
+    seed_courses_with_grades(4)
+
+    {conn, query_count} =
+      count_queries(fn ->
+        CoursesController.index(conn(Authority.system()), %{
+          "include" => "grades.student",
+          "page" => %{"size" => "2", "total" => "true"}
+        })
+      end)
+
+    assert conn.status == 200
+    assert length(resp(conn).data) == 2
+    assert resp(conn).meta.page.total_count == 4
+    assert query_count == 3
+  end
+
+  test "index returns the requested total with the first page query" do
+    seed_courses_with_grades(4)
+
+    {conn, query_count} =
+      count_queries(fn ->
+        CoursesController.index(conn(Authority.system()), %{
+          "page" => %{"size" => "2", "total" => "true"}
+        })
+      end)
+
+    assert conn.status == 200
+    assert resp(conn).meta.page.total_count == 4
+    assert query_count == 1
+  end
+
+  test "index returns the requested total with a later page query" do
+    seed_courses_with_grades(4)
+
+    {conn, query_count} =
+      count_queries(fn ->
+        CoursesController.index(conn(Authority.system()), %{
+          "page" => %{"number" => "2", "size" => "3", "total" => "true"}
+        })
+      end)
+
+    assert conn.status == 200
+    assert length(resp(conn).data) == 1
+    assert resp(conn).meta.page.total_count == 4
+    assert query_count == 1
+  end
+
+  test "index falls back to count query for an empty later page" do
+    seed_courses_with_grades(4)
+
+    {conn, query_count} =
+      count_queries(fn ->
+        CoursesController.index(conn(Authority.system()), %{
+          "page" => %{"number" => "3", "size" => "2", "total" => "true"}
+        })
+      end)
+
+    assert conn.status == 200
+    assert resp(conn).data == []
+    assert resp(conn).meta.page.total_count == 4
+    assert query_count == 2
+  end
+
   test "sparse included fieldsets narrow preload projections" do
     seed_courses_with_grades(1)
 

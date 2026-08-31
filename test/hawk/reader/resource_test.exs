@@ -128,9 +128,9 @@ defmodule Hawk.Reader.ResourceTest.CountReader do
     policy: Hawk.Reader.ResourceTest.Policy
 
   filter(:id)
-  sort(:parent_student_id)
+  sort(:id)
 
-  attach :parent_students, when_sort: [:parent_student_id] do
+  attach :parent_students, when_sort: [:id], multiplies_roots: true do
     join(query, :inner, [root: student], parent_student in assoc(student, :parent_students), as: :parent_student)
   end
 end
@@ -149,6 +149,21 @@ defmodule Hawk.Reader.ResourceTest.MultiplyingCountReader do
 
   attach :parent_students, when_filter: [:parent_id], multiplies_roots: true do
     join(query, :inner, [root: student], link in assoc(student, :parent_students), as: :parent_student)
+  end
+end
+
+defmodule Hawk.Reader.ResourceTest.ProjectedReader do
+  @moduledoc false
+
+  use Hawk.Reader.Resource,
+    repo: Videdal.Repo,
+    schema: Videdal.Student,
+    policy: Hawk.Reader.ResourceTest.Policy
+
+  sort(:id)
+
+  def scope(query, _params, _opts) do
+    select(query, [root: student], struct(student, [:id, :name]))
   end
 end
 
@@ -179,6 +194,7 @@ defmodule Hawk.Reader.ResourceTest do
   alias Hawk.Reader.ResourceTest.MultiplyingCountReader
   alias Hawk.Reader.ResourceTest.PolicySchoolReader
   alias Hawk.Reader.ResourceTest.PreservingReader
+  alias Hawk.Reader.ResourceTest.ProjectedReader
   alias Hawk.Reader.ResourceTest.Reader
   alias Hawk.Reader.ResourceTest.ScopedReader
 
@@ -354,6 +370,32 @@ defmodule Hawk.Reader.ResourceTest do
     assert MultiplyingCountReader.count(authority: Authority.system(), filter: %{parent_id: parent.id}) == 1
   end
 
+  test "page/1 deduplicates joins triggered only by sort" do
+    school = insert(:school)
+    student = insert(:student, school_id: school.id)
+    parent_one = insert(:parent, school_id: school.id)
+    parent_two = insert(:parent, school_id: school.id)
+
+    for parent <- [parent_one, parent_two] do
+      Repo.insert!(%Videdal.ParentStudent{
+        id: Ecto.UUID.generate(),
+        school_id: school.id,
+        student_id: student.id,
+        parent_id: parent.id
+      })
+    end
+
+    page =
+      CountReader.page(
+        authority: Authority.system(),
+        sort: [asc: :id],
+        page: %{size: 10, total: true}
+      )
+
+    assert Enum.map(page.entries, & &1.id) == [student.id]
+    assert page.total_count == 1
+  end
+
   test "count/1 ignores joins triggered only by sort" do
     school = insert(:school)
     student = insert(:student, school_id: school.id)
@@ -374,7 +416,7 @@ defmodule Hawk.Reader.ResourceTest do
       parent_id: parent_two.id
     })
 
-    assert CountReader.count(authority: Authority.system(), sort: [asc: :parent_student_id]) == 1
+    assert CountReader.count(authority: Authority.system(), sort: [asc: :id]) == 1
   end
 
   test "rejects invalid attach multiplicity options" do
@@ -432,6 +474,28 @@ defmodule Hawk.Reader.ResourceTest do
       end
       """)
     end
+  end
+
+  test "page/1 preserves scope-owned projections when total is requested" do
+    school = insert(:school)
+    student = insert(:student, school_id: school.id, name: "Projected")
+
+    without_total =
+      ProjectedReader.page(
+        authority: Authority.system(),
+        page: %{size: 10}
+      )
+
+    with_total =
+      ProjectedReader.page(
+        authority: Authority.system(),
+        page: %{size: 10, total: true}
+      )
+
+    assert without_total.entries == with_total.entries
+    assert [%Videdal.Student{id: found_id, name: "Projected"}] = with_total.entries
+    assert found_id == student.id
+    assert with_total.total_count == 1
   end
 
   test "applies reader scope to root reads and preload queries" do

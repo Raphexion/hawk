@@ -194,7 +194,7 @@ defmodule Hawk.JsonApi.Controller do
           has_more: result.has_more?,
           next_cursor: result.next_cursor
         ]
-        |> maybe_put_total_count(resource, opts, page)
+        |> maybe_put_total_count(resource, opts, result)
 
       document = Document.document(models, document_opts)
 
@@ -769,11 +769,35 @@ defmodule Hawk.JsonApi.Controller do
     |> then(&Schema.select_fields(model, &1, authority, fields, Schema.identity_for_facade(resource)))
   end
 
-  defp maybe_put_total_count(document_opts, resource, opts, %{total: true}) do
+  defp maybe_put_total_count(document_opts, _resource, _opts, %{
+         page: %{total: true},
+         total_count: total_count
+       })
+       when is_integer(total_count) do
+    Keyword.put(document_opts, :total_count, total_count)
+  end
+
+  defp maybe_put_total_count(
+         document_opts,
+         resource,
+         opts,
+         %{entries: entries, has_more?: false, page: %{total: true} = page}
+       ) do
+    total_count =
+      if Map.get(page, :number, 1) == 1 and is_nil(Map.get(page, :after)) do
+        length(entries)
+      else
+        resource.count(opts)
+      end
+
+    Keyword.put(document_opts, :total_count, total_count)
+  end
+
+  defp maybe_put_total_count(document_opts, resource, opts, %{page: %{total: true}}) do
     Keyword.put(document_opts, :total_count, resource.count(opts))
   end
 
-  defp maybe_put_total_count(document_opts, _resource, _opts, _page), do: document_opts
+  defp maybe_put_total_count(document_opts, _resource, _opts, _result), do: document_opts
 
   defp respond_action(conn, resource, action_name, existing, params, authority) do
     if dry_run?(params) do
