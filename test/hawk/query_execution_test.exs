@@ -125,6 +125,22 @@ defmodule Hawk.QueryExecutionTest do
     assert Enum.map(query_page.entries, & &1.id) == [high_waitlist.id, low_waitlist.id]
   end
 
+  test "query-owned source rank scope can read cast query params" do
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    near = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Near", waitlist_count: 3)
+    far = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Far", waitlist_count: 10)
+
+    page =
+      Hawk.QueryTest.ParamRankedSimilarCourses.page(
+        authority: Authority.public(),
+        params: %{"target_waitlist_count" => "4"},
+        page: %{size: 10}
+      )
+
+    assert Enum.map(page.entries, & &1.id) == [near.id, far.id]
+  end
+
   test "query-owned source rank scope still uses deterministic identity tie breaker" do
     school = insert(:school)
     teacher = insert(:teacher, school_id: school.id)
@@ -266,6 +282,26 @@ defmodule Hawk.QueryTest.ParamSimilarCourses do
   filter(:title)
 
   rank(:title_similarity, sort: [asc: :title], tie_breaker: :id)
+end
+
+defmodule Hawk.QueryTest.ParamRankedSimilarCourses.Policy do
+  use Hawk.Policy
+
+  read(:all)
+end
+
+defmodule Hawk.QueryTest.ParamRankedSimilarCourses do
+  use Hawk.Query,
+    name: :param_ranked_similar_courses,
+    source: Videdal.Courses,
+    pagination: :offset
+
+  rank(:closest_waitlist, source_scope: :closest_waitlist, tie_breaker: :id)
+
+  @impl Hawk.Query
+  def cast_params(%{"target_waitlist_count" => target}) do
+    {:ok, %{target_waitlist_count: String.to_integer(target)}}
+  end
 end
 
 defmodule Hawk.QueryTest.RankedSimilarCourses.Policy do

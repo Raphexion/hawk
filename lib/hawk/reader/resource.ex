@@ -263,18 +263,27 @@ defmodule Hawk.Reader.Resource do
   Declares a named, internal ranking scope for source-backed queries.
 
   Rank scopes are not public caller sorts. They are selected by a `Hawk.Query`
-  rank declaration and receive the authorized, filtered source query before
-  pagination is applied.
+  rank declaration and receive the authorized, filtered source query plus reader
+  params/options before pagination is applied.
   """
   defmacro rank_scope(name, do: block) when is_atom(name) do
     handler_name = :"__hawk_rank_scope_#{name}__"
     query_var = Macro.var(:query, __MODULE__)
-    rewritten_block = rewrite_query_var(block, query_var)
+    params_var = Macro.var(:params, __MODULE__)
+    opts_var = Macro.var(:opts, __MODULE__)
+
+    rewritten_block =
+      block
+      |> rewrite_query_var(query_var)
+      |> rewrite_params_var(params_var)
+      |> rewrite_opts_var(opts_var)
 
     quote do
       @hawk_reader_rank_scopes {unquote(name), unquote(handler_name)}
 
-      defp unquote(handler_name)(unquote(query_var)) do
+      defp unquote(handler_name)(unquote(query_var), unquote(params_var), unquote(opts_var)) do
+        _ = unquote(params_var)
+        _ = unquote(opts_var)
         unquote(rewritten_block)
       end
     end
@@ -557,7 +566,7 @@ defmodule Hawk.Reader.Resource do
   defp quote_rank_scopes(rank_scopes) do
     Enum.map(rank_scopes, fn {key, handler_name} ->
       quote do
-        {unquote(key), fn query -> unquote(handler_name)(query) end}
+        {unquote(key), fn query, params, opts -> unquote(handler_name)(query, params, opts) end}
       end
     end)
   end
@@ -840,9 +849,21 @@ defmodule Hawk.Reader.Resource do
   end
 
   defp rewrite_query_var(ast, query_var) do
+    rewrite_var(ast, :query, query_var)
+  end
+
+  defp rewrite_params_var(ast, params_var) do
+    rewrite_var(ast, :params, params_var)
+  end
+
+  defp rewrite_opts_var(ast, opts_var) do
+    rewrite_var(ast, :opts, opts_var)
+  end
+
+  defp rewrite_var(ast, name, replacement_var) do
     Macro.prewalk(ast, fn
-      {:query, meta, context} when is_atom(context) ->
-        Macro.update_meta(query_var, fn query_meta -> Keyword.merge(query_meta, meta) end)
+      {^name, meta, context} when is_atom(context) ->
+        Macro.update_meta(replacement_var, fn replacement_meta -> Keyword.merge(replacement_meta, meta) end)
 
       other ->
         other

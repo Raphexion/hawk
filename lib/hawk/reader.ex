@@ -16,7 +16,18 @@ defmodule Hawk.Reader do
   alias Hawk.Reader.Page
   alias Hawk.Reader.Preloader
 
-  @allowed_options MapSet.new([:authority, :context, :fields, :filter, :page, :preloads, :rank_scope, :select, :sort])
+  @allowed_options MapSet.new([
+                     :authority,
+                     :context,
+                     :fields,
+                     :filter,
+                     :page,
+                     :params,
+                     :preloads,
+                     :rank_scope,
+                     :select,
+                     :sort
+                   ])
   @sort_dirs [:asc, :desc, :asc_nulls_first, :asc_nulls_last, :desc_nulls_first, :desc_nulls_last]
 
   @type config :: %{
@@ -292,6 +303,7 @@ defmodule Hawk.Reader do
       fields: normalize_fields(Map.get(opts, :fields, %{})),
       filter: Map.get(opts, :filter, :all),
       page: normalize_page(Map.get(opts, :page, %{})),
+      params: Map.get(opts, :params, %{}),
       preloads: Map.get(opts, :preloads, []),
       rank_scope: Map.get(opts, :rank_scope),
       select: normalize_select(Map.get(opts, :select)),
@@ -518,16 +530,16 @@ defmodule Hawk.Reader do
     |> from(as: :root)
     |> apply_authorized_filter(config, authority, caller_filter, sort_columns(sort))
     |> apply_scope(config, opts, %{authority: authority})
-    |> apply_rank_scope(config, opts.rank_scope)
+    |> apply_rank_scope(config, opts.rank_scope, opts.params, %{authority: authority})
     |> maybe_deduplicate_roots(config, authority, caller_filter, sort)
   end
 
-  defp apply_rank_scope(query, _config, nil), do: query
+  defp apply_rank_scope(query, _config, nil, _params, _opts), do: query
 
-  defp apply_rank_scope(query, config, rank_scope) do
+  defp apply_rank_scope(query, config, rank_scope, params, opts) do
     config.rank_scopes
     |> Map.fetch!(rank_scope)
-    |> then(& &1.(query))
+    |> then(& &1.(query, params, opts))
   end
 
   defp maybe_deduplicate_roots(query, config, authority, caller_filter, sort) do

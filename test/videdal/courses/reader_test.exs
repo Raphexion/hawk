@@ -10,7 +10,7 @@ defmodule Videdal.Courses.ReaderTest do
 
     assert Reader.preload_keys() == MapSet.new([:school, :teacher, :grades, :enrollments])
     assert Reader.preload_readers() == %{}
-    assert Reader.rank_scope_keys() == MapSet.new([:largest_waitlist])
+    assert Reader.rank_scope_keys() == MapSet.new([:largest_waitlist, :closest_waitlist])
   end
 
   test "delegates read policy to the resource policy module" do

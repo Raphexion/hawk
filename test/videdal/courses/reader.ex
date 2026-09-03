@@ -25,6 +25,10 @@ defmodule Videdal.Courses.Reader do
     order_by(query, [root: course], desc: course.waitlist_count)
   end
 
+  rank_scope :closest_waitlist do
+    order_by(query, [root: course], asc: fragment("abs(? - ?)", course.waitlist_count, ^params.target_waitlist_count))
+  end
+
   preload(:school)
   preload(:teacher)
   preload(:grades)

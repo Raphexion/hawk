@@ -81,7 +81,7 @@ defmodule Hawk.Query do
 
   defp source_opts(metadata, opts, source_filter) do
     opts
-    |> Map.take([:authority, :context, :fields, :page, :preloads, :select])
+    |> Map.take([:authority, :context, :fields, :page, :params, :preloads, :select])
     |> Map.put(:filter, source_filter)
     |> maybe_put_rank_sort(metadata.rank)
     |> Map.to_list()
