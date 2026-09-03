@@ -530,9 +530,11 @@ filters declared by the source Reader. `query_param/2` declares Query-owned
 inputs under `query[...]`; required params return a safe `400` when missing, and
 present params can be mapped directly into source Reader filters with
 `:source_filter` so the source Reader does not need a synthetic query-active
-filter or side channel. `cast_params/1` remains the Query-owned validation/cast
-hook before those params become source filters. A Query can declare one
-deterministic rank using source Reader sort keys plus an identity tie-breaker, or
+filter or side channel. Use `source_filter: false` for declared params that are
+only consumed by `cast_params/1`, `prepare/3`, or a source Reader rank scope.
+`cast_params/1` remains the Query-owned validation/cast hook before mapped params
+become source filters. A Query can declare one deterministic rank using source
+Reader sort keys plus an identity tie-breaker, or
 select a named source Reader rank scope for derived ordering that is not a public
 source sort. Reader rank scopes run after authorization/filtering and before
 pagination, receive the cast Query params and request opts, and ordinary source

@@ -110,11 +110,15 @@ defmodule Hawk.Query do
 
   defp query_params_source_filter(metadata, params) do
     metadata.query_params
-    |> Enum.reduce(%{}, fn {key, %{source_filter: source_filter}}, acc ->
-      case fetch_query_param(params, key) do
-        {:ok, value} -> Map.put(acc, source_filter, value)
-        :error -> acc
-      end
+    |> Enum.reduce(%{}, fn
+      {_key, %{source_filter: false}}, acc ->
+        acc
+
+      {key, %{source_filter: source_filter}}, acc ->
+        case fetch_query_param(params, key) do
+          {:ok, value} -> Map.put(acc, source_filter, value)
+          :error -> acc
+        end
     end)
     |> case do
       empty when map_size(empty) == 0 -> :all
@@ -235,7 +239,9 @@ defmodule Hawk.Query do
 
   Required query params are validated after `cast_params/1` and before source
   execution. Present params are added to the source reader filter under
-  `:source_filter`, which defaults to the same key as the query param.
+  `:source_filter`, which defaults to the same key as the query param. Pass
+  `source_filter: false` for params used only by `cast_params/1`, `prepare/3`,
+  or a source Reader rank scope.
   """
   defmacro query_param(key, opts \\ []) when is_atom(key) and is_list(opts) do
     required = Keyword.get(opts, :required, false)
@@ -245,8 +251,8 @@ defmodule Hawk.Query do
       raise ArgumentError, "Hawk query param #{inspect(key)} :required must be a boolean"
     end
 
-    unless is_atom(source_filter) do
-      raise ArgumentError, "Hawk query param #{inspect(key)} :source_filter must be an atom"
+    unless source_filter == false or is_atom(source_filter) do
+      raise ArgumentError, "Hawk query param #{inspect(key)} :source_filter must be an atom or false"
     end
 
     quote do

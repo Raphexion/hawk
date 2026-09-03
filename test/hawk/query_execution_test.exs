@@ -296,6 +296,8 @@ defmodule Hawk.QueryTest.ParamRankedSimilarCourses do
     source: Videdal.Courses,
     pagination: :offset
 
+  query_param(:target_waitlist_count, required: true, source_filter: false)
+
   rank(:closest_waitlist, source_scope: :closest_waitlist, tie_breaker: :id)
 
   @impl Hawk.Query

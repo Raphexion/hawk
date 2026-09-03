@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   without exposing that order as a public source sort or running it for ordinary
   source resource reads. Rank scopes receive the Query's cast params and request
   opts so parameter-backed ranking does not need transaction-local side channels.
+- **Unmapped Query params.** `query_param/2` accepts `source_filter: false` for
+  declared params that are required/cast by the Query and consumed by
+  `prepare/3` or a source rank scope without also becoming a source Reader
+  filter.
 - Reader pages requested with `page[total]=true` now return the exact distinct-root
   total through the same bounded SQL query instead of repeating the authorized
   filter as a second count query.

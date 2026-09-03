@@ -145,8 +145,9 @@ defmodule Hawk.Query.Validation do
 
     metadata
     |> Map.get(:query_params, %{})
-    |> Enum.reject(fn {_query_key, declaration} ->
-      MapSet.member?(source_filter_keys, declaration.source_filter)
+    |> Enum.reject(fn
+      {_query_key, %{source_filter: false}} -> true
+      {_query_key, declaration} -> MapSet.member?(source_filter_keys, declaration.source_filter)
     end)
     |> case do
       [] ->

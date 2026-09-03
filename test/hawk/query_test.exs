@@ -210,6 +210,28 @@ defmodule Hawk.QueryTest do
     end
   end
 
+  test "query params can opt out of source filter mapping" do
+    Code.compile_string("""
+    defmodule Hawk.QueryTest.UnmappedQueryParam.Policy do
+      use Hawk.Policy
+
+      read(:all)
+    end
+
+    defmodule Hawk.QueryTest.UnmappedQueryParam do
+      use Hawk.Query, name: :unmapped_query_param, source: Videdal.Courses
+
+      query_param(:target_waitlist_count, required: true, source_filter: false)
+    end
+    """)
+
+    assert Hawk.Query.validate!(Hawk.QueryTest.UnmappedQueryParam, :strict) == :ok
+
+    assert Hawk.QueryTest.UnmappedQueryParam.__hawk_query__(:query_params) == %{
+             target_waitlist_count: %{required: true, source_filter: false}
+           }
+  end
+
   test "rank requires a deterministic tie breaker" do
     assert_raise ArgumentError, ~r/Hawk query rank :similarity requires :tie_breaker/, fn ->
       Code.compile_string("""
