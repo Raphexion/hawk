@@ -3,8 +3,8 @@ defmodule Hawk do
   An opinionated Phoenix backend foundation for resource-heavy systems.
 
   Hawk resources describe their persistence schema, JSON:API surface,
-  authorization policy, reader behaviour, writer behaviour, and optional custom
-  actions in small sibling modules. Phoenix controllers, OpenAPI descriptions,
+  authorization policy, reader behaviour, writer behaviour, optional custom
+  actions, and source-backed queries in small sibling modules. Phoenix controllers, OpenAPI descriptions,
   LiveView helpers, and contract tests are generated from those declarations.
 
   Hawk does not define or supervise a concrete `Ecto.Repo`: host applications
@@ -29,6 +29,7 @@ defmodule Hawk do
     * `Hawk.Writer.Resource` — create/update/delete pipelines.
     * `Hawk.Policy` — read/write authorization.
     * `Hawk.Actions` — custom `/-actions/`.
+    * `Hawk.Query` — policy-safe read-side derivations from source resources.
     * `Hawk.JsonApi.Resource` / `Hawk.LiveView.Resource` — the adapters.
 
   ## Tooling

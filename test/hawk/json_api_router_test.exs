@@ -1,13 +1,19 @@
 defmodule Hawk.JsonApiRouterTest.FakeRouter do
   defmacro __using__(_opts) do
     quote do
-      import Hawk.JsonApiRouterTest.FakeRouter, only: [get: 3, post: 3, patch: 3, delete: 3]
+      import Hawk.JsonApiRouterTest.FakeRouter, only: [get: 3, get: 4, post: 3, patch: 3, delete: 3]
       Module.register_attribute(__MODULE__, :fake_routes, accumulate: true)
       @before_compile Hawk.JsonApiRouterTest.FakeRouter
     end
   end
 
   defmacro get(path, controller, action), do: route(:get, path, controller, action)
+
+  defmacro get(path, controller, action, opts) do
+    {opts, _binding} = Code.eval_quoted(opts, [], __CALLER__)
+    route(:get, path, controller, action, opts)
+  end
+
   defmacro post(path, controller, action), do: route(:post, path, controller, action)
   defmacro patch(path, controller, action), do: route(:patch, path, controller, action)
   defmacro delete(path, controller, action), do: route(:delete, path, controller, action)
@@ -18,9 +24,16 @@ defmodule Hawk.JsonApiRouterTest.FakeRouter do
     end
   end
 
-  defp route(method, path, controller, action) do
-    quote do
-      @fake_routes {unquote(method), unquote(path), unquote(controller), unquote(action)}
+  defp route(method, path, controller, action, opts \\ []) do
+    if opts == [] do
+      quote do
+        @fake_routes {unquote(method), unquote(path), unquote(controller), unquote(action)}
+      end
+    else
+      quote do
+        @fake_routes {unquote(method), unquote(path), unquote(controller), unquote(action),
+                      unquote(Macro.escape(opts))}
+      end
     end
   end
 end
@@ -39,6 +52,13 @@ defmodule Hawk.JsonApiRouterTest.ReadOnlyRouter do
   hawk_json_api(Videdal.CourseCatalog, Videdal.Controllers.CourseCatalogController, path_prefix: "/api/v1")
 end
 
+defmodule Hawk.JsonApiRouterTest.QueryRouter do
+  use Hawk.JsonApiRouterTest.FakeRouter
+  import Hawk.JsonApi.Router
+
+  hawk_query("/similar-courses", Videdal.SimilarCourses, public: true)
+end
+
 defmodule Hawk.JsonApiRouterTest.HiddenRouter do
   use Hawk.JsonApiRouterTest.FakeRouter
   import Hawk.JsonApi.Router
@@ -49,7 +69,7 @@ end
 defmodule Hawk.JsonApiRouterTest do
   use ExUnit.Case, async: true
 
-  alias Hawk.JsonApiRouterTest.{FullRouter, HiddenRouter, ReadOnlyRouter}
+  alias Hawk.JsonApiRouterTest.{FullRouter, HiddenRouter, QueryRouter, ReadOnlyRouter}
 
   test "router macro emits full resource routes" do
     assert FullRouter.__fake_routes__() == [
@@ -77,6 +97,13 @@ defmodule Hawk.JsonApiRouterTest do
              {:get, "/api/v1/course-catalog/:id/relationships/:relationship",
               Videdal.Controllers.CourseCatalogController, :relationship},
              {:get, "/api/v1/course-catalog/:id/:relationship", Videdal.Controllers.CourseCatalogController, :related}
+           ]
+  end
+
+  test "router macro emits generated query route without an application controller" do
+    assert QueryRouter.__fake_routes__() == [
+             {:get, "/similar-courses", Hawk.JsonApi.QueryController, :index,
+              [private: %{hawk_query: Videdal.SimilarCourses, hawk_public?: true}]}
            ]
   end
 

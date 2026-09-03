@@ -24,16 +24,24 @@ defmodule Mix.Tasks.Hawk.ValidateTest do
     end
   end
 
-  test "validates all discovered Hawk resources and passes" do
+  test "validates all discovered Hawk resources and queries and passes" do
     output = capture_shell(fn -> Mix.Tasks.Hawk.Validate.run([]) end)
 
     assert output =~ "Hawk validation passed"
+    assert output =~ "resource(s)"
+    assert output =~ "query(ies)"
   end
 
   test "validates explicit resources" do
     output = capture_shell(fn -> Mix.Tasks.Hawk.Validate.run(["Videdal.Courses"]) end)
 
-    assert output =~ "Hawk validation passed"
+    assert output =~ "Hawk validation passed for 1 resource(s) and 0 query(ies)."
+  end
+
+  test "validates explicit queries" do
+    output = capture_shell(fn -> Mix.Tasks.Hawk.Validate.run(["Videdal.SimilarCourses"]) end)
+
+    assert output =~ "Hawk validation passed for 0 resource(s) and 1 query(ies)."
   end
 
   test "fails for a non-Hawk module" do
@@ -45,7 +53,7 @@ defmodule Mix.Tasks.Hawk.ValidateTest do
   test "reports a clear error for a missing facade" do
     assert_raise Mix.Error, ~r/Hawk validation failed/, fn ->
       output = capture_shell(fn -> Mix.Tasks.Hawk.Validate.run(["NonExistent.Module"]) end)
-      assert output =~ "is not a Hawk.Resource facade"
+      assert output =~ "is not a Hawk.Resource facade or Hawk.Query declaration"
     end
   end
 end

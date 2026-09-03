@@ -476,6 +476,68 @@ end
 `kind` is one of `:unique`, `:foreign_key`, `:assoc`, `:check`, or `:exclusion`;
 `opts` are passed straight through to the Ecto constraint function.
 
+### Queries
+
+Queries are Hawk's read-side extension point for derived resource collections
+that are not honest CRUD filters. The current Query API declares a source
+resource, its own read policy, and the small filter surface it can expose. It
+can fetch an authorized page by intersecting the Query policy with the source
+resource Reader policy. A constrained rank can order that source-backed page
+using source Reader sort keys plus an identity tie-breaker. Query routes render
+that source resource collection through Hawk's normal JSON:API document path,
+without an application controller. Broader collection features are added by
+later Query phases after the authorized-root contract is stable.
+
+```elixir
+defmodule MyApp.SimilarCourses.Policy do
+  use Hawk.Policy
+
+  read do
+    role(:public, :all)
+    role(:school_admin, scopes: [:school_id])
+  end
+end
+
+defmodule MyApp.SimilarCourses do
+  use Hawk.Query,
+    name: :similar_courses,
+    source: MyApp.Courses,
+    transaction: true,
+    pagination: :offset
+
+  filter(:school_id)
+  rank(:title_similarity, sort: [asc: :title], tie_breaker: :id)
+
+  def cast_params(params), do: {:ok, params}
+
+  def prepare(repo, params, context) do
+    # Optional transaction-local setup when `transaction: true` is declared.
+    :ok
+  end
+end
+```
+
+The Query policy is separate from the source resource policy. It controls who
+may run the capability; the source resource policy still controls which rows of
+the source resource are visible. Query policy scopes, static filters, and caller
+filters must map to filters declared by the Query, and Query filters must map to
+filters declared by the source Reader. A Query can declare one deterministic
+rank using source Reader sort keys plus an identity tie-breaker. If
+`transaction: true` is declared, optional `prepare/3` runs inside the Hawk-owned
+transaction before the source page, count, and preload work. `mix hawk.validate`
+discovers both resources and queries and reports their counts separately.
+
+Expose a resource-result Query with Hawk's generated GET adapter. JSON:API
+collection parameters keep their normal names (`filter`, `include`, `fields`,
+`page`); Query-owned domain parameters live under `query[...]` and are passed to
+`cast_params/1`.
+
+```elixir
+import Hawk.JsonApi.Router
+
+hawk_query "/similar-courses", MyApp.SimilarCourses, public: true
+```
+
 ### Actions
 
 Optional imperative actions live beside `Reader` and `Writer` in `Actions.ex`.

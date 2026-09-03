@@ -786,8 +786,6 @@ defmodule Hawk.OpenApi do
     %{
       type: "object",
       required: [:type, :id],
-      description: Map.get(resource.json_api, :doc),
-      "x-resource-group": Map.get(resource.json_api, :group),
       "x-resource-type": resource.json_api.type,
       properties: %{
         type: %{type: "string", enum: [resource.json_api.type]},
@@ -797,6 +795,8 @@ defmodule Hawk.OpenApi do
         links: links_ref()
       }
     }
+    |> put_optional(:"x-resource-group", resource.json_api, :group)
+    |> put_optional(:description, resource.json_api, :doc)
   end
 
   defp attribute_properties(resource) do
@@ -1079,6 +1079,7 @@ defmodule Hawk.OpenApi do
 
   defp put_optional(target, key, source, source_key) do
     case Map.fetch(source, source_key) do
+      {:ok, nil} -> target
       {:ok, value} -> Map.put(target, key, value)
       :error -> target
     end

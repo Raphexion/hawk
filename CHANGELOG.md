@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Policy-safe resource Queries.** Applications can declare read-only
+  `Hawk.Query` modules backed by a source resource, with their own policy,
+  declared filter mapping, constrained rank ordering, generated JSON:API GET
+  routes via `hawk_query/3`, Query-owned `query[...]` parameters, and optional
+  transaction-local `prepare/3` setup before source page execution.
 - Reader pages requested with `page[total]=true` now return the exact distinct-root
   total through the same bounded SQL query instead of repeating the authorized
   filter as a second count query.

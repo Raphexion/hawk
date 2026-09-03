@@ -2,8 +2,8 @@ defmodule Mix.Tasks.Hawk.Validate do
   @shortdoc "Validates Hawk resource declarations and adapter contracts"
 
   @moduledoc """
-  Validates Hawk resource facade declarations against their sibling modules
-  and the underlying Ecto models.
+  Validates Hawk resource facade declarations and Hawk query declarations against
+  their sibling modules and the underlying Ecto models.
 
   This is the authoritative, order-independent gate that complements the
   compile-time warnings emitted by `use Hawk.Resource`. Compile-time validation
@@ -14,16 +14,18 @@ defmodule Mix.Tasks.Hawk.Validate do
 
   ## Usage
 
-      mix hawk.validate                  # discover and validate all Hawk resources
+      mix hawk.validate                  # discover and validate all Hawk resources and queries
       mix hawk.validate MyApp.Courses    # validate explicit resource(s)
+      mix hawk.validate MyApp.Query      # validate explicit query declarations
 
   Discovery loads every compiled `.beam` on the project code path and selects
-  modules that export `__hawk_resource__/1`, so it works without registration
-  and survives app restarts.
+  modules that export `__hawk_resource__/1` or `__hawk_query__/1`, so it works
+  without registration and survives app restarts.
   """
 
   use Mix.Task
 
+  alias Hawk.Query
   alias Hawk.Resource.Validation
 
   @impl true
@@ -31,33 +33,37 @@ defmodule Mix.Tasks.Hawk.Validate do
     # Ensure the project is compiled so beam-based discovery sees current code.
     Mix.Task.run("compile", [])
 
-    resources =
+    declarations =
       case parse_args(args) do
-        [] -> discover_resources()
+        [] -> discover_declarations()
         explicit -> explicit
       end
 
-    report(resources)
+    report(declarations)
   end
 
   defp report([]) do
-    Mix.shell().error("No Hawk resources found to validate.")
+    Mix.shell().error("No Hawk declarations found to validate.")
     :ok
   end
 
-  defp report(resources) do
-    errors = Enum.flat_map(resources, &validate_resource/1)
+  defp report(declarations) do
+    errors = Enum.flat_map(declarations, &validate_declaration/1)
 
     case errors do
       [] ->
-        Mix.shell().info("Hawk validation passed for #{length(resources)} resource(s).")
+        resource_count = Enum.count(declarations, &hawk_resource?/1)
+        query_count = Enum.count(declarations, &hawk_query?/1)
+
+        Mix.shell().info("Hawk validation passed for #{resource_count} resource(s) and #{query_count} query(ies).")
+
         :ok
 
       errors ->
         Mix.shell().error("\nHawk validation failed:\n")
 
-        Enum.each(errors, fn {resource, message} ->
-          Mix.shell().error("  * #{inspect(resource)}: #{message}")
+        Enum.each(errors, fn {declaration, message} ->
+          Mix.shell().error("  * #{inspect(declaration)}: #{message}")
         end)
 
         Mix.raise("Hawk validation failed with #{length(errors)} error(s)")
@@ -72,11 +78,24 @@ defmodule Mix.Tasks.Hawk.Validate do
     end)
   end
 
-  defp validate_resource(resource) do
-    unless hawk_resource?(resource) do
-      raise ArgumentError, "#{inspect(resource)} is not a Hawk.Resource facade (missing __hawk_resource__/1)"
-    end
+  defp validate_declaration(declaration) do
+    cond do
+      hawk_resource?(declaration) ->
+        validate_resource(declaration)
 
+      hawk_query?(declaration) ->
+        validate_query(declaration)
+
+      true ->
+        raise ArgumentError,
+              "#{inspect(declaration)} is not a Hawk.Resource facade or Hawk.Query declaration"
+    end
+  rescue
+    e in [ArgumentError, RuntimeError] ->
+      [{declaration, Exception.message(e)}]
+  end
+
+  defp validate_resource(resource) do
     modules = %{
       model: resource.__hawk_resource__(:model),
       reader: resource.__hawk_resource__(:reader),
@@ -92,19 +111,21 @@ defmodule Mix.Tasks.Hawk.Validate do
     Hawk.ResourceContract.validate!(resource, modules.model)
 
     []
-  rescue
-    e in [ArgumentError, RuntimeError] ->
-      [{resource, Exception.message(e)}]
   end
 
-  defp discover_resources do
+  defp validate_query(query) do
+    Query.validate!(query, :strict)
+    []
+  end
+
+  defp discover_declarations do
     compile_path = Mix.Project.compile_path()
 
     Path.wildcard(Path.join(compile_path, "*.beam"))
     |> Enum.reduce([], fn beam, acc ->
       module = beam |> Path.basename(".beam") |> String.to_atom()
 
-      if hawk_resource?(module) do
+      if hawk_resource?(module) or hawk_query?(module) do
         [module | acc]
       else
         acc
@@ -116,6 +137,13 @@ defmodule Mix.Tasks.Hawk.Validate do
   defp hawk_resource?(module) do
     Code.ensure_loaded(module) == {:module, module} and
       function_exported?(module, :__hawk_resource__, 1)
+  rescue
+    _ -> false
+  end
+
+  defp hawk_query?(module) do
+    Code.ensure_loaded(module) == {:module, module} and
+      function_exported?(module, :__hawk_query__, 1)
   rescue
     _ -> false
   end

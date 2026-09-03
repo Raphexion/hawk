@@ -50,6 +50,23 @@ defmodule Hawk.JsonApi.Router do
     end)
   end
 
+  @doc """
+  Emits a generated GET route for a Hawk query returning a resource collection.
+  """
+  defmacro hawk_query(path, query, opts \\ []) do
+    env = __CALLER__
+    query = Macro.expand(query, env)
+    opts = Macro.expand(opts, env)
+    public? = Keyword.get(opts, :public, false)
+    private = Macro.escape(%{hawk_query: query, hawk_public?: public?})
+
+    Hawk.Query.validate!(query, :strict)
+
+    quote do
+      get(unquote(path), Hawk.JsonApi.QueryController, :index, private: unquote(private))
+    end
+  end
+
   defp validate_controller!(controller, routes) do
     Code.ensure_compiled(controller)
 

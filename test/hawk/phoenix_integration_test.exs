@@ -20,6 +20,7 @@ defmodule Hawk.PhoenixIntegrationTest.Router do
   import Hawk.JsonApi.Router
 
   hawk_json_api(Videdal.Courses, Hawk.PhoenixIntegrationTest.CoursesController)
+  hawk_query("/similar-courses", Videdal.SimilarCourses, public: true)
   get("/openapi.json", Hawk.PhoenixIntegrationTest.OpenApiController, :show)
 end
 
@@ -47,6 +48,77 @@ defmodule Hawk.PhoenixIntegrationTest do
 
     assert %{"data" => [%{"type" => "courses", "id" => id}]} = Jason.decode!(conn.resp_body)
     assert id == course.id
+  end
+
+  test "JSON:API query route renders a source resource collection without an application controller" do
+    course_b = insert(:course, title: "B")
+    course_a = insert(:course, title: "A")
+
+    conn =
+      Plug.Test.conn(:get, "/similar-courses?page[size]=1&page[total]=true")
+      |> Plug.Conn.fetch_query_params()
+      |> Router.call(Router.init([]))
+
+    assert conn.status == 200
+    assert Plug.Conn.get_resp_header(conn, "content-type") == ["application/vnd.api+json"]
+
+    assert %{
+             "data" => [%{"type" => "courses", "id" => id}],
+             "meta" => %{"page" => %{"count" => 1, "has_more" => true, "total_count" => 2}}
+           } = Jason.decode!(conn.resp_body)
+
+    assert id == course_a.id
+    refute id == course_b.id
+  end
+
+  test "JSON:API query route applies sparse fields and includes through source resource rendering" do
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    course = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Math", seat_count: 42)
+
+    conn =
+      Plug.Test.conn(:get, "/similar-courses?fields[courses]=title,teacher&include=teacher")
+      |> Plug.Conn.fetch_query_params()
+      |> Plug.Conn.assign(:hawk_authority, Authority.public())
+      |> Router.call(Router.init([]))
+
+    assert conn.status == 200
+
+    assert %{
+             "data" => [
+               %{
+                 "id" => id,
+                 "attributes" => %{"title" => "Math"},
+                 "relationships" => %{"teacher" => %{"data" => %{"id" => teacher_id}}}
+               }
+             ]
+           } = Jason.decode!(conn.resp_body)
+
+    assert id == course.id
+    assert teacher_id == teacher.id
+  end
+
+  test "JSON:API query route passes query-owned params to cast_params" do
+    conn =
+      Plug.Test.conn(:get, "/similar-courses?query[invalid]=true")
+      |> Plug.Conn.fetch_query_params()
+      |> Router.call(Router.init([]))
+
+    assert conn.status == 400
+
+    assert %{"errors" => [%{"status" => "400", "detail" => "invalid similar course query"}]} =
+             Jason.decode!(conn.resp_body)
+  end
+
+  test "JSON:API query route uses media negotiation errors" do
+    conn =
+      Plug.Test.conn(:get, "/similar-courses")
+      |> Plug.Conn.fetch_query_params()
+      |> Plug.Conn.put_req_header("accept", "application/vnd.api+json; charset=utf-8")
+      |> Router.call(Router.init([]))
+
+    assert conn.status == 406
+    assert %{"errors" => [%{"status" => "406"}]} = Jason.decode!(conn.resp_body)
   end
 
   test "JSON:API controller reads the authority assigned by Hawk.Authority.Plug" do

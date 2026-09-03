@@ -52,6 +52,7 @@ defmodule Hawk.MixProject do
           Hawk.Writer.Resource,
           Hawk.Policy,
           Hawk.Actions,
+          Hawk.Query,
           Hawk.JsonApi.Resource,
           Hawk.LiveView.Resource
         ],
@@ -91,6 +92,7 @@ defmodule Hawk.MixProject do
         "Validation & contracts": [
           Hawk.Resource.Validation,
           Hawk.Resource.Convention,
+          Hawk.Query.Validation,
           Hawk.ResourceContract
         ],
         "Test helpers": [

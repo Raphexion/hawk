@@ -6,6 +6,14 @@ defmodule Hawk.OpenApiActionsTest do
   # the OpenAPI action-param → JSON schema mapping without a dedicated
   # reader-less test fixture.
 
+  test "OpenAPI omits nil resource descriptions" do
+    spec = Hawk.OpenApi.spec([Videdal.PreparedCourses], title: "Test API")
+    course = Map.fetch!(spec.components.schemas, :CourseResource)
+
+    refute Map.has_key?(course, :description)
+    refute Map.has_key?(course, :"x-resource-group")
+  end
+
   test "OpenAPI resolves to-one relationships to typed resource identifier schemas" do
     spec = Hawk.OpenApi.spec([Videdal.Courses], title: "Test API")
     course = Map.fetch!(spec.components.schemas, :CourseResource)

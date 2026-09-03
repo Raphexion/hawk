@@ -148,13 +148,16 @@ defmodule Hawk.JsonApi.Request do
   in that namespace raise; implementation-specific names containing a non-letter
   separator, including families such as `foo[bar]`, remain available to the host.
   """
-  def validate_query_parameter_names!(query_string) when is_binary(query_string) do
+  def validate_query_parameter_names!(query_string, extra_parameters \\ [])
+      when is_binary(query_string) and is_list(extra_parameters) do
+    allowed_parameters = @query_parameters ++ extra_parameters
+
     query_string
     |> String.split("&", trim: true)
     |> Enum.each(fn pair ->
       name = pair |> String.split("=", parts: 2) |> hd() |> URI.decode_www_form()
 
-      if reserved_query_parameter?(name) and name not in @query_parameters do
+      if reserved_query_parameter?(name) and name not in allowed_parameters do
         raise ArgumentError, "unknown JSON:API query parameter #{inspect(name)}"
       end
     end)
