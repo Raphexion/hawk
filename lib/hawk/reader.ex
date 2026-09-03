@@ -16,7 +16,7 @@ defmodule Hawk.Reader do
   alias Hawk.Reader.Page
   alias Hawk.Reader.Preloader
 
-  @allowed_options MapSet.new([:authority, :context, :fields, :filter, :page, :preloads, :select, :sort])
+  @allowed_options MapSet.new([:authority, :context, :fields, :filter, :page, :preloads, :rank_scope, :select, :sort])
   @sort_dirs [:asc, :desc, :asc_nulls_first, :asc_nulls_last, :desc_nulls_first, :desc_nulls_last]
 
   @type config :: %{
@@ -79,6 +79,7 @@ defmodule Hawk.Reader do
     size = Map.get(page, :size)
     sort = effective_sort(config, opts.sort)
     validate_sort_keys!(config, opts.sort)
+    validate_rank_scope!(config, opts.rank_scope)
 
     {results, total_count} =
       if page[:total] do
@@ -179,6 +180,7 @@ defmodule Hawk.Reader do
     authority = Map.fetch!(opts, :authority)
     caller_filter = Map.fetch!(opts, :filter)
     validate_sort_keys!(config, Map.get(opts, :sort, []))
+    validate_rank_scope!(config, opts.rank_scope)
 
     query =
       config.schema
@@ -198,6 +200,7 @@ defmodule Hawk.Reader do
     page = normalized_page(config, Map.fetch!(opts, :page))
     requested_sort = Map.get(opts, :sort, [])
     validate_sort_keys!(config, requested_sort)
+    validate_rank_scope!(config, opts.rank_scope)
     sort = effective_sort(config, requested_sort)
 
     build_query_from_normalized(config, %{opts | page: page}, sort)
@@ -290,6 +293,7 @@ defmodule Hawk.Reader do
       filter: Map.get(opts, :filter, :all),
       page: normalize_page(Map.get(opts, :page, %{})),
       preloads: Map.get(opts, :preloads, []),
+      rank_scope: Map.get(opts, :rank_scope),
       select: normalize_select(Map.get(opts, :select)),
       sort: normalize_sort(Map.get(opts, :sort, []))
     }
@@ -360,6 +364,20 @@ defmodule Hawk.Reader do
 
   defp enforce_max_page_size!(%{size: size}, max_page_size) do
     raise ArgumentError, "page size #{inspect(size)} exceeds maximum #{inspect(max_page_size)}"
+  end
+
+  defp validate_rank_scope!(_config, nil), do: :ok
+
+  defp validate_rank_scope!(config, rank_scope) when is_atom(rank_scope) do
+    rank_scopes = Map.get(config, :rank_scopes, %{})
+
+    unless Map.has_key?(rank_scopes, rank_scope) do
+      raise ArgumentError, "unknown reader rank scope #{inspect(rank_scope)}"
+    end
+  end
+
+  defp validate_rank_scope!(_config, rank_scope) do
+    raise ArgumentError, "reader rank_scope must be an atom, got: #{inspect(rank_scope)}"
   end
 
   defp validate_sort_keys!(config, sort) do
@@ -433,7 +451,7 @@ defmodule Hawk.Reader do
     lookahead = lookahead_page(page)
     base_query = build_base_query_from_normalized(config, opts, sort)
 
-    if is_nil(base_query.select) do
+    if is_nil(base_query.select) and is_nil(opts.rank_scope) do
       counted =
         base_query
         |> apply_select(fields)
@@ -500,7 +518,16 @@ defmodule Hawk.Reader do
     |> from(as: :root)
     |> apply_authorized_filter(config, authority, caller_filter, sort_columns(sort))
     |> apply_scope(config, opts, %{authority: authority})
+    |> apply_rank_scope(config, opts.rank_scope)
     |> maybe_deduplicate_roots(config, authority, caller_filter, sort)
+  end
+
+  defp apply_rank_scope(query, _config, nil), do: query
+
+  defp apply_rank_scope(query, config, rank_scope) do
+    config.rank_scopes
+    |> Map.fetch!(rank_scope)
+    |> then(& &1.(query))
   end
 
   defp maybe_deduplicate_roots(query, config, authority, caller_filter, sort) do

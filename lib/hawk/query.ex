@@ -88,6 +88,13 @@ defmodule Hawk.Query do
   end
 
   defp maybe_put_rank_sort(opts, nil), do: opts
+
+  defp maybe_put_rank_sort(opts, %{source_scope: source_scope} = rank) when not is_nil(source_scope) do
+    opts
+    |> Map.put(:rank_scope, source_scope)
+    |> Map.put(:sort, [{:asc, rank.tie_breaker}])
+  end
+
   defp maybe_put_rank_sort(opts, rank), do: Map.put(opts, :sort, rank.sort)
 
   defp validate_required_query_params(metadata, params) do
@@ -269,13 +276,13 @@ defmodule Hawk.Query do
   @doc """
   Declares the default deterministic ranking for a Query.
 
-  The current rank vocabulary is intentionally constrained to source Reader sort
-  keys. Hawk appends the tie breaker when it is not already present.
+  The default rank vocabulary is intentionally constrained to source Reader sort
+  keys. A Query may alternatively select a named source Reader rank scope with
+  `:source_scope`; Hawk still appends the tie breaker as a deterministic source
+  sort.
   """
   defmacro rank(name, opts) when is_atom(name) and is_list(opts) do
-    sort = Keyword.fetch!(opts, :sort)
-    tie_breaker = Keyword.get(opts, :tie_breaker)
-    rank = normalize_rank!(name, sort, tie_breaker)
+    rank = normalize_rank!(name, opts)
 
     quote do
       @hawk_query_ranks unquote(Macro.escape(rank))
@@ -374,16 +381,27 @@ defmodule Hawk.Query do
     |> Map.new()
   end
 
-  defp normalize_rank!(name, sort, tie_breaker) do
-    validate_rank_sort!(name, sort)
+  defp normalize_rank!(name, opts) do
+    sort = Keyword.get(opts, :sort)
+    source_scope = Keyword.get(opts, :source_scope)
+    tie_breaker = Keyword.get(opts, :tie_breaker)
 
     unless is_atom(tie_breaker) and not is_nil(tie_breaker) do
       raise ArgumentError, "Hawk query rank #{inspect(name)} requires :tie_breaker"
     end
 
-    sort = if tie_breaker in Keyword.values(sort), do: sort, else: sort ++ [asc: tie_breaker]
+    case {sort, source_scope} do
+      {sort, nil} when not is_nil(sort) ->
+        validate_rank_sort!(name, sort)
+        sort = if tie_breaker in Keyword.values(sort), do: sort, else: sort ++ [asc: tie_breaker]
+        %{name: name, sort: sort, source_scope: nil, tie_breaker: tie_breaker}
 
-    %{name: name, sort: sort, tie_breaker: tie_breaker}
+      {nil, source_scope} when is_atom(source_scope) and not is_nil(source_scope) ->
+        %{name: name, sort: [{:asc, tie_breaker}], source_scope: source_scope, tie_breaker: tie_breaker}
+
+      _other ->
+        raise ArgumentError, "Hawk query rank #{inspect(name)} must declare exactly one of :sort or :source_scope"
+    end
   end
 
   defp validate_rank_sort!(name, sort) when is_list(sort) do

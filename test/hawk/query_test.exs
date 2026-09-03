@@ -24,6 +24,7 @@ defmodule Hawk.QueryTest do
     assert Videdal.SimilarCourses.__hawk_query__(:rank) == %{
              name: :title_similarity,
              sort: [asc: :title, asc: :id],
+             source_scope: nil,
              tie_breaker: :id
            }
 
@@ -43,7 +44,7 @@ defmodule Hawk.QueryTest do
              filter_keys: filter_keys,
              source_filters: %{school_id: :school_id, title: :title},
              query_params: %{source_course_id: %{required: false, source_filter: :similar_to_course_id}},
-             rank: %{name: :title_similarity, sort: [asc: :title, asc: :id], tie_breaker: :id}
+             rank: %{name: :title_similarity, sort: [asc: :title, asc: :id], source_scope: nil, tie_breaker: :id}
            } = Hawk.Query.metadata(Videdal.SimilarCourses)
 
     assert filter_keys == MapSet.new([:school_id, :title])
@@ -279,6 +280,42 @@ defmodule Hawk.QueryTest do
                  fn ->
                    Hawk.Query.validate!(Hawk.QueryTest.NonIdentityTieBreaker, :strict)
                  end
+  end
+
+  test "rank source scope must be declared by source reader in strict mode" do
+    Code.compile_string("""
+    defmodule Hawk.QueryTest.UnknownRankSourceScope.Policy do
+      use Hawk.Policy
+      read(:all)
+    end
+
+    defmodule Hawk.QueryTest.UnknownRankSourceScope do
+      use Hawk.Query, name: :unknown_rank_source_scope, source: Videdal.Courses
+      rank(:similarity, source_scope: :missing_rank_scope, tie_breaker: :id)
+    end
+    """)
+
+    assert_raise ArgumentError,
+                 ~r/rank :similarity source scope :missing_rank_scope must be declared by source reader/,
+                 fn ->
+                   Hawk.Query.validate!(Hawk.QueryTest.UnknownRankSourceScope, :strict)
+                 end
+  end
+
+  test "rank must use either sort or source_scope" do
+    assert_raise ArgumentError, ~r/rank :similarity must declare exactly one of :sort or :source_scope/, fn ->
+      Code.compile_string("""
+      defmodule Hawk.QueryTest.MixedRank.Policy do
+        use Hawk.Policy
+        read(:all)
+      end
+
+      defmodule Hawk.QueryTest.MixedRank do
+        use Hawk.Query, name: :mixed_rank, source: Videdal.Courses
+        rank(:similarity, sort: [asc: :title], source_scope: :largest_waitlist, tie_breaker: :id)
+      end
+      """)
+    end
   end
 
   test "rank sort keys must be source reader sorts in strict mode" do

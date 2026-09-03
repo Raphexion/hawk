@@ -108,6 +108,34 @@ defmodule Hawk.QueryExecutionTest do
     assert Enum.map(page.entries, & &1.id) == [visible.id]
   end
 
+  test "query-owned source rank scope orders without changing ordinary source reads" do
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+
+    low_waitlist =
+      insert(:course, school_id: school.id, teacher_id: teacher.id, title: "A", waitlist_count: 1)
+
+    high_waitlist =
+      insert(:course, school_id: school.id, teacher_id: teacher.id, title: "B", waitlist_count: 5)
+
+    source_page = Videdal.Courses.page(authority: Authority.public(), sort: [asc: :title], page: %{size: 10})
+    query_page = Hawk.QueryTest.RankedSimilarCourses.page(authority: Authority.public(), page: %{size: 10})
+
+    assert Enum.map(source_page.entries, & &1.id) == [low_waitlist.id, high_waitlist.id]
+    assert Enum.map(query_page.entries, & &1.id) == [high_waitlist.id, low_waitlist.id]
+  end
+
+  test "query-owned source rank scope still uses deterministic identity tie breaker" do
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    first = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "A", waitlist_count: 5)
+    second = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "B", waitlist_count: 5)
+
+    page = Hawk.QueryTest.RankedSimilarCourses.page(authority: Authority.public(), page: %{size: 10})
+
+    assert Enum.map(page.entries, & &1.id) == Enum.sort([first.id, second.id])
+  end
+
   test "caller filters compose through declared query filters" do
     school = insert(:school)
     teacher = insert(:teacher, school_id: school.id)
@@ -238,6 +266,21 @@ defmodule Hawk.QueryTest.ParamSimilarCourses do
   filter(:title)
 
   rank(:title_similarity, sort: [asc: :title], tie_breaker: :id)
+end
+
+defmodule Hawk.QueryTest.RankedSimilarCourses.Policy do
+  use Hawk.Policy
+
+  read(:all)
+end
+
+defmodule Hawk.QueryTest.RankedSimilarCourses do
+  use Hawk.Query,
+    name: :ranked_similar_courses,
+    source: Videdal.Courses,
+    pagination: :offset
+
+  rank(:similarity, source_scope: :largest_waitlist, tie_breaker: :id)
 end
 
 defmodule Hawk.QueryTest.OpenSimilarCourses.Policy do

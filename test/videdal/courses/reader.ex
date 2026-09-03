@@ -21,6 +21,10 @@ defmodule Videdal.Courses.Reader do
   sort(:id)
   sort(:title)
 
+  rank_scope :largest_waitlist do
+    order_by(query, [root: course], desc: course.waitlist_count)
+  end
+
   preload(:school)
   preload(:teacher)
   preload(:grades)

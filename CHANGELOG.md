@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   source Reader glue. `hawk_query/3` also tolerates normal router/query compile
   order and leaves strict validation to runtime and `mix hawk.validate` when the
   Query module is not available yet.
+- **Query-owned source rank scopes.** `Hawk.Query.rank/2` can select a named
+  source Reader `rank_scope`, giving derived reads their own ordering contract
+  without exposing that order as a public source sort or running it for ordinary
+  source resource reads.
 - Reader pages requested with `page[total]=true` now return the exact distinct-root
   total through the same bounded SQL query instead of repeating the authorized
   filter as a second count query.

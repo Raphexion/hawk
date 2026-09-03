@@ -511,7 +511,7 @@ defmodule MyApp.SimilarCourses do
   )
 
   filter(:school_id)
-  rank(:title_similarity, sort: [asc: :title], tie_breaker: :id)
+  rank(:similarity, source_scope: :similarity_order, tie_breaker: :id)
 
   def cast_params(params), do: {:ok, params}
 
@@ -532,10 +532,14 @@ present params can be mapped directly into source Reader filters with
 `:source_filter` so the source Reader does not need a synthetic query-active
 filter or side channel. `cast_params/1` remains the Query-owned validation/cast
 hook before those params become source filters. A Query can declare one
-deterministic rank using source Reader sort keys plus an identity tie-breaker. If
-`transaction: true` is declared, optional `prepare/3` runs inside the Hawk-owned
-transaction before the source page, count, and preload work. `mix hawk.validate`
-discovers both resources and queries and reports their counts separately.
+deterministic rank using source Reader sort keys plus an identity tie-breaker, or
+select a named source Reader rank scope for derived ordering that is not a public
+source sort. Reader rank scopes run after authorization/filtering and before
+pagination, and ordinary source reads do not select them unless a Query asks for
+one. If `transaction: true` is declared, optional `prepare/3` runs inside the
+Hawk-owned transaction before the source page, count, and preload work. `mix
+hawk.validate` discovers both resources and queries and reports their counts
+separately.
 
 Expose a resource-result Query with Hawk's generated GET adapter. JSON:API
 collection parameters keep their normal names (`filter`, `include`, `fields`,

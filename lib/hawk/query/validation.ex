@@ -183,7 +183,6 @@ defmodule Hawk.Query.Validation do
   defp validate_rank!(%{rank: nil}), do: :ok
 
   defp validate_rank!(metadata) do
-    source_sort_keys = metadata.source.__hawk_resource__(:reader) |> reader_sort_keys()
     source_identity = metadata.source.__hawk_resource__(:identity)
     rank = metadata.rank
 
@@ -191,6 +190,25 @@ defmodule Hawk.Query.Validation do
       raise ArgumentError,
             "Hawk query rank #{inspect(rank.name)} tie breaker #{inspect(rank.tie_breaker)} must be the source resource identity #{inspect(source_identity)}"
     end
+
+    if rank.source_scope do
+      validate_rank_source_scope!(metadata, rank)
+    else
+      validate_rank_sort!(metadata, rank)
+    end
+  end
+
+  defp validate_rank_source_scope!(metadata, rank) do
+    source_rank_scope_keys = metadata.source.__hawk_resource__(:reader) |> reader_rank_scope_keys()
+
+    unless MapSet.member?(source_rank_scope_keys, rank.source_scope) do
+      raise ArgumentError,
+            "Hawk query rank #{inspect(rank.name)} source scope #{inspect(rank.source_scope)} must be declared by source reader"
+    end
+  end
+
+  defp validate_rank_sort!(metadata, rank) do
+    source_sort_keys = metadata.source.__hawk_resource__(:reader) |> reader_sort_keys()
 
     rank.sort
     |> Keyword.values()
@@ -205,6 +223,14 @@ defmodule Hawk.Query.Validation do
   defp reader_filter_keys(reader) do
     if Code.ensure_loaded?(reader) and function_exported?(reader, :filter_keys, 0) do
       MapSet.new(reader.filter_keys())
+    else
+      MapSet.new()
+    end
+  end
+
+  defp reader_rank_scope_keys(reader) do
+    if Code.ensure_loaded?(reader) and function_exported?(reader, :rank_scope_keys, 0) do
+      MapSet.new(reader.rank_scope_keys())
     else
       MapSet.new()
     end

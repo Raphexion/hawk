@@ -39,6 +39,8 @@ defmodule Hawk.Reader.Resource do
     * `import_filters/1` — compose a resource-specific
       `Hawk.Reader.FilterSet` into this reader.
     * `sort/1` — declare a sortable column.
+    * `rank_scope/2` — declare a named internal ordering hook selected by a
+      source-backed `Hawk.Query` rank.
     * `preload/1` — declare a preloadable association (resolved through the
       associated resource's reader and policy).
     * `preload/2` — declare a preload pointing at a specific reader module or
@@ -70,8 +72,8 @@ defmodule Hawk.Reader.Resource do
       collection with continuation metadata, scoped by policy.
     * `preload_query/2` — an authorized preload query for an association.
     * `filter_keys/0`, `filter_value_types/0`, `coordinate_filters/0`,
-      `sort_keys/0`, `preload_keys/0`, `preload_readers/0`,
-      `filter_handlers/0`, `join_plan/0` — the declared
+      `sort_keys/0`, `rank_scope_keys/0`, `rank_scopes/0`, `preload_keys/0`,
+      `preload_readers/0`, `filter_handlers/0`, `join_plan/0` — the declared
       metadata.
     * `read_filter/1` — delegates to the policy.
     * `repo/0` — the configured repo.
@@ -106,7 +108,17 @@ defmodule Hawk.Reader.Resource do
       import Ecto.Query, except: [preload: 2]
 
       import Hawk.Reader.Resource,
-        only: [attach: 3, filter: 1, filter: 2, filter: 3, import_filters: 1, preload: 1, preload: 2, sort: 1]
+        only: [
+          attach: 3,
+          filter: 1,
+          filter: 2,
+          filter: 3,
+          import_filters: 1,
+          preload: 1,
+          preload: 2,
+          rank_scope: 2,
+          sort: 1
+        ]
 
       @hawk_reader_repo unquote(repo)
       @hawk_reader_schema unquote(schema)
@@ -125,6 +137,7 @@ defmodule Hawk.Reader.Resource do
       Module.register_attribute(__MODULE__, :hawk_reader_preload_keys, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_preload_readers, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_preload_options, accumulate: true)
+      Module.register_attribute(__MODULE__, :hawk_reader_rank_scopes, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_sort_keys, accumulate: true)
 
       @before_compile Hawk.Reader.Resource
@@ -247,6 +260,27 @@ defmodule Hawk.Reader.Resource do
   end
 
   @doc """
+  Declares a named, internal ranking scope for source-backed queries.
+
+  Rank scopes are not public caller sorts. They are selected by a `Hawk.Query`
+  rank declaration and receive the authorized, filtered source query before
+  pagination is applied.
+  """
+  defmacro rank_scope(name, do: block) when is_atom(name) do
+    handler_name = :"__hawk_rank_scope_#{name}__"
+    query_var = Macro.var(:query, __MODULE__)
+    rewritten_block = rewrite_query_var(block, query_var)
+
+    quote do
+      @hawk_reader_rank_scopes {unquote(name), unquote(handler_name)}
+
+      defp unquote(handler_name)(unquote(query_var)) do
+        unquote(rewritten_block)
+      end
+    end
+  end
+
+  @doc """
   Declares a preloadable association. The association is loaded through the
   associated resource's own reader and policy (see `Hawk.Reader.Resource`).
   """
@@ -330,6 +364,7 @@ defmodule Hawk.Reader.Resource do
     validate_filter_keys!(declarations.filter_keys)
     validate_join_rules!(declarations.join_rules)
     validate_preload_keys!(declarations.preload_keys)
+    validate_rank_scopes!(declarations.rank_scopes)
 
     Hawk.Reader.FilterSet.validate_imports!(
       env.module,
@@ -361,6 +396,7 @@ defmodule Hawk.Reader.Resource do
       preload_keys: reversed_attribute(module, :hawk_reader_preload_keys),
       preload_readers: reversed_attribute(module, :hawk_reader_preload_readers),
       preload_options: reversed_attribute(module, :hawk_reader_preload_options),
+      rank_scopes: reversed_attribute(module, :hawk_reader_rank_scopes),
       sort_keys: reversed_attribute(module, :hawk_reader_sort_keys)
     }
   end
@@ -421,11 +457,14 @@ defmodule Hawk.Reader.Resource do
   defp quote_reader_metadata_functions(declarations) do
     preload_reader_entries = quote_preload_readers(declarations.preload_readers)
     preload_option_entries = quote_preload_options(declarations.preload_options)
+    rank_scope_entries = quote_rank_scopes(declarations.rank_scopes)
 
     quote do
       def preload_keys, do: MapSet.new(unquote(declarations.preload_keys))
       def preload_readers, do: Map.new([unquote_splicing(preload_reader_entries)])
       def preload_options, do: Map.new([unquote_splicing(preload_option_entries)])
+      def rank_scopes, do: Map.new([unquote_splicing(rank_scope_entries)])
+      def rank_scope_keys, do: rank_scopes() |> Map.keys() |> MapSet.new()
       def sort_keys, do: MapSet.new(unquote(declarations.sort_keys))
       def read_filter(authority), do: @hawk_reader_policy.read_filter(authority)
     end
@@ -477,6 +516,7 @@ defmodule Hawk.Reader.Resource do
           preload_keys: preload_keys(),
           preload_readers: preload_readers(),
           preload_options: preload_options(),
+          rank_scopes: rank_scopes(),
           scope: &__MODULE__.scope/3,
           sort_keys: sort_keys(),
           default_page_size: @hawk_reader_default_page_size,
@@ -510,6 +550,14 @@ defmodule Hawk.Reader.Resource do
     Enum.map(coordinate_filters, fn {key, metadata} ->
       quote do
         {unquote(key), unquote(Macro.escape(metadata))}
+      end
+    end)
+  end
+
+  defp quote_rank_scopes(rank_scopes) do
+    Enum.map(rank_scopes, fn {key, handler_name} ->
+      quote do
+        {unquote(key), fn query -> unquote(handler_name)(query) end}
       end
     end)
   end
@@ -749,6 +797,26 @@ defmodule Hawk.Reader.Resource do
 
       names ->
         raise ArgumentError, "duplicate reader join aliases #{inspect(names)}"
+    end
+  end
+
+  defp validate_rank_scopes!(rank_scopes) do
+    duplicate_keys =
+      rank_scopes
+      |> Enum.map(&elem(&1, 0))
+      |> Enum.frequencies()
+      |> Enum.filter(fn {_key, count} -> count > 1 end)
+      |> Enum.map(fn {key, _count} -> key end)
+
+    case duplicate_keys do
+      [] ->
+        :ok
+
+      [key] ->
+        raise ArgumentError, "duplicate reader rank scope #{inspect(key)}"
+
+      keys ->
+        raise ArgumentError, "duplicate reader rank scopes #{inspect(keys)}"
     end
   end
 
