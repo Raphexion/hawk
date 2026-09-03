@@ -60,10 +60,25 @@ defmodule Hawk.JsonApi.Router do
     public? = Keyword.get(opts, :public, false)
     private = Macro.escape(%{hawk_query: query, hawk_public?: public?})
 
-    Hawk.Query.validate!(query, :strict)
+    validate_query_route!(query)
 
     quote do
       get(unquote(path), Hawk.JsonApi.QueryController, :index, private: unquote(private))
+    end
+  end
+
+  defp validate_query_route!(query) do
+    case Code.ensure_compiled(query) do
+      {:module, ^query} ->
+        Hawk.Query.validate!(query, :strict)
+
+      _other ->
+        IO.warn(
+          "Hawk query module #{inspect(query)} is not available yet; " <>
+            "skipping router validation. Run `mix hawk.validate` to enforce."
+        )
+
+        :ok
     end
   end
 

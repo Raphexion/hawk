@@ -12,6 +12,12 @@ defmodule Videdal.Courses.Reader do
   filter(:teacher_id)
   filter(:title)
 
+  filter :similar_to_course_id do
+    fn {:eq, course_id} ->
+      dynamic([root: course], course.id != ^course_id)
+    end
+  end
+
   sort(:id)
   sort(:title)
 

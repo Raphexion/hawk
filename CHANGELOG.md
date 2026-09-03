@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   declared filter mapping, constrained rank ordering, generated JSON:API GET
   routes via `hawk_query/3`, Query-owned `query[...]` parameters, and optional
   transaction-local `prepare/3` setup before source page execution.
+- **Parameter-backed Query filters.** `Hawk.Query.query_param/2` can declare
+  required `query[...]` inputs and map present values directly into source
+  Reader filters, keeping derived-read parameters on the Query instead of in
+  source Reader glue. `hawk_query/3` also tolerates normal router/query compile
+  order and leaves strict validation to runtime and `mix hawk.validate` when the
+  Query module is not available yet.
 - Reader pages requested with `page[total]=true` now return the exact distinct-root
   total through the same bounded SQL query instead of repeating the authorized
   filter as a second count query.

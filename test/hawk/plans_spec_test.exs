@@ -21,7 +21,7 @@ defmodule Hawk.Plans.SpecTest do
       # :read lists the reader's filters and sorts so the AI can find records.
       # Courses declares filters (including custom handlers like :school_name) and sorts.
       assert MapSet.new(read.filters) ==
-               MapSet.new([:id, :school_id, :teacher_id, :title, :school_name, :teacher_name])
+               MapSet.new([:id, :school_id, :teacher_id, :title, :similar_to_course_id, :school_name, :teacher_name])
 
       assert MapSet.new(read.sorts) == MapSet.new([:id, :title])
 

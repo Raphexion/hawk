@@ -31,6 +31,7 @@ defmodule Hawk.Query.Validation do
 
       if mode == :strict do
         validate_filter_mappings!(metadata)
+        validate_query_param_mappings!(metadata)
         validate_policy_filters!(metadata.policy, metadata)
         validate_rank!(metadata)
       end
@@ -136,6 +137,24 @@ defmodule Hawk.Query.Validation do
       [{query_key, source_key} | _rest] ->
         raise ArgumentError,
               "Hawk query filter #{inspect(query_key)} maps to source filter #{inspect(source_key)}, which is not declared by #{inspect(metadata.source)}"
+    end
+  end
+
+  defp validate_query_param_mappings!(metadata) do
+    source_filter_keys = metadata.source.__hawk_resource__(:reader) |> reader_filter_keys()
+
+    metadata
+    |> Map.get(:query_params, %{})
+    |> Enum.reject(fn {_query_key, declaration} ->
+      MapSet.member?(source_filter_keys, declaration.source_filter)
+    end)
+    |> case do
+      [] ->
+        :ok
+
+      [{query_key, declaration} | _rest] ->
+        raise ArgumentError,
+              "Hawk query param #{inspect(query_key)} maps to source filter #{inspect(declaration.source_filter)}, which is not declared by #{inspect(metadata.source)}"
     end
   end
 

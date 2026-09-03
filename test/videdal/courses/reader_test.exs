@@ -6,7 +6,7 @@ defmodule Videdal.Courses.ReaderTest do
 
   test "declares the resource filter keys and preloads" do
     assert Reader.filter_keys() ==
-             MapSet.new([:id, :title, :school_id, :teacher_id, :school_name, :teacher_name])
+             MapSet.new([:id, :title, :school_id, :teacher_id, :similar_to_course_id, :school_name, :teacher_name])
 
     assert Reader.preload_keys() == MapSet.new([:school, :teacher, :grades, :enrollments])
     assert Reader.preload_readers() == %{}

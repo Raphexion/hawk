@@ -63,6 +63,51 @@ defmodule Hawk.QueryExecutionTest do
     assert Enum.map(page.entries, & &1.id) == [course_a.id, course_b.id]
   end
 
+  test "required query params map to source reader filters" do
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    source = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Source")
+    candidate = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Candidate")
+
+    page =
+      Hawk.QueryTest.ParamSimilarCourses.page(
+        authority: Authority.public(),
+        params: %{"source_course_id" => source.id},
+        page: %{size: 10}
+      )
+
+    assert Enum.map(page.entries, & &1.id) == [candidate.id]
+  end
+
+  test "missing required query params return a safe JSON:API error" do
+    assert {:error, error} =
+             Hawk.QueryTest.ParamSimilarCourses.page(
+               authority: Authority.public(),
+               page: %{size: 10}
+             )
+
+    assert error.status == 400
+    assert error.detail == "missing required query parameter source_course_id"
+  end
+
+  test "caller filters compose with parameter-derived source filters" do
+    school = insert(:school)
+    teacher = insert(:teacher, school_id: school.id)
+    source = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Source")
+    visible = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Visible")
+    _filtered = insert(:course, school_id: school.id, teacher_id: teacher.id, title: "Filtered")
+
+    page =
+      Hawk.QueryTest.ParamSimilarCourses.page(
+        authority: Authority.public(),
+        params: %{"source_course_id" => source.id},
+        filter: %{title: "Visible"},
+        page: %{size: 10}
+      )
+
+    assert Enum.map(page.entries, & &1.id) == [visible.id]
+  end
+
   test "caller filters compose through declared query filters" do
     school = insert(:school)
     teacher = insert(:teacher, school_id: school.id)
@@ -175,6 +220,24 @@ defmodule Hawk.QueryExecutionTest do
                    )
                  end
   end
+end
+
+defmodule Hawk.QueryTest.ParamSimilarCourses.Policy do
+  use Hawk.Policy
+
+  read(:all)
+end
+
+defmodule Hawk.QueryTest.ParamSimilarCourses do
+  use Hawk.Query,
+    name: :param_similar_courses,
+    source: Videdal.Courses,
+    pagination: :offset
+
+  query_param(:source_course_id, required: true, source_filter: :similar_to_course_id)
+  filter(:title)
+
+  rank(:title_similarity, sort: [asc: :title], tie_breaker: :id)
 end
 
 defmodule Hawk.QueryTest.OpenSimilarCourses.Policy do

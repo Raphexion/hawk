@@ -32,11 +32,13 @@ defmodule Hawk.Query do
         {:error, Hawk.Error.not_authorized("Query access denied")}
 
       query_policy_filter ->
-        with {:ok, params} <- cast_params(query, Map.fetch!(opts, :params)) do
+        with {:ok, params} <- cast_params(query, Map.fetch!(opts, :params)),
+             :ok <- validate_required_query_params(metadata, params) do
           source_filter =
             metadata
             |> map_query_filter!(query_policy_filter)
             |> Filter.and(map_query_filter!(metadata, Map.fetch!(opts, :filter)))
+            |> Filter.and(query_params_source_filter(metadata, params))
 
           do_execute(metadata, operation, %{opts | params: params}, source_filter)
         end
@@ -87,6 +89,41 @@ defmodule Hawk.Query do
 
   defp maybe_put_rank_sort(opts, nil), do: opts
   defp maybe_put_rank_sort(opts, rank), do: Map.put(opts, :sort, rank.sort)
+
+  defp validate_required_query_params(metadata, params) do
+    metadata.query_params
+    |> Enum.find(fn {key, declaration} ->
+      declaration.required and not query_param_present?(params, key)
+    end)
+    |> case do
+      nil -> :ok
+      {key, _declaration} -> {:error, Hawk.Error.bad_request("missing required query parameter #{key}")}
+    end
+  end
+
+  defp query_params_source_filter(metadata, params) do
+    metadata.query_params
+    |> Enum.reduce(%{}, fn {key, %{source_filter: source_filter}}, acc ->
+      case fetch_query_param(params, key) do
+        {:ok, value} -> Map.put(acc, source_filter, value)
+        :error -> acc
+      end
+    end)
+    |> case do
+      empty when map_size(empty) == 0 -> :all
+      source_filter -> source_filter
+    end
+  end
+
+  defp query_param_present?(params, key), do: match?({:ok, _value}, fetch_query_param(params, key))
+
+  defp fetch_query_param(params, key) when is_map(params) do
+    Map.fetch(params, Atom.to_string(key))
+    |> case do
+      {:ok, value} -> {:ok, value}
+      :error -> Map.fetch(params, key)
+    end
+  end
 
   defp cast_params(query, params) do
     if function_exported?(query, :cast_params, 1) do
@@ -181,8 +218,33 @@ defmodule Hawk.Query do
       pagination: query.__hawk_query__(:pagination),
       filter_keys: query.__hawk_query__(:filter_keys),
       source_filters: query.__hawk_query__(:source_filters),
-      rank: query.__hawk_query__(:rank)
+      rank: query.__hawk_query__(:rank),
+      query_params: query.__hawk_query__(:query_params)
     }
+  end
+
+  @doc """
+  Declares a query-owned parameter that maps to a source reader filter.
+
+  Required query params are validated after `cast_params/1` and before source
+  execution. Present params are added to the source reader filter under
+  `:source_filter`, which defaults to the same key as the query param.
+  """
+  defmacro query_param(key, opts \\ []) when is_atom(key) and is_list(opts) do
+    required = Keyword.get(opts, :required, false)
+    source_filter = Keyword.get(opts, :source_filter, key)
+
+    unless required in [true, false] do
+      raise ArgumentError, "Hawk query param #{inspect(key)} :required must be a boolean"
+    end
+
+    unless is_atom(source_filter) do
+      raise ArgumentError, "Hawk query param #{inspect(key)} :source_filter must be an atom"
+    end
+
+    quote do
+      @hawk_query_params {unquote(key), %{required: unquote(required), source_filter: unquote(source_filter)}}
+    end
   end
 
   @doc """
@@ -247,8 +309,9 @@ defmodule Hawk.Query do
     quote do
       @behaviour Hawk.Query
 
-      import Hawk.Query, only: [filter: 1, filter: 2, rank: 2]
+      import Hawk.Query, only: [filter: 1, filter: 2, query_param: 1, query_param: 2, rank: 2]
       Module.register_attribute(__MODULE__, :hawk_query_filters, accumulate: true)
+      Module.register_attribute(__MODULE__, :hawk_query_params, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_query_ranks, accumulate: true)
       @hawk_query_metadata unquote(Macro.escape(metadata))
       @before_compile Hawk.Query
@@ -260,6 +323,7 @@ defmodule Hawk.Query do
       def __hawk_query__(:pagination), do: unquote(pagination)
       def __hawk_query__(:filter_keys), do: Hawk.Query.filter_keys(__MODULE__)
       def __hawk_query__(:source_filters), do: Hawk.Query.source_filters(__MODULE__)
+      def __hawk_query__(:query_params), do: Hawk.Query.query_params(__MODULE__)
       def __hawk_query__(:metadata), do: Hawk.Query.metadata(__MODULE__)
 
       def page(opts), do: Hawk.Query.page(__MODULE__, opts)
@@ -268,21 +332,25 @@ defmodule Hawk.Query do
 
   defmacro __before_compile__(env) do
     filters = env.module |> Module.get_attribute(:hawk_query_filters) |> Enum.reverse()
+    query_params = env.module |> Module.get_attribute(:hawk_query_params) |> Enum.reverse()
     ranks = env.module |> Module.get_attribute(:hawk_query_ranks) |> Enum.reverse()
     rank = validate_rank_declarations!(ranks)
     validate_filter_declarations!(filters)
+    validate_query_param_declarations!(query_params)
 
     metadata =
       env.module
       |> Module.get_attribute(:hawk_query_metadata)
       |> Map.put(:filter_keys, filters |> Keyword.keys() |> MapSet.new())
       |> Map.put(:source_filters, Map.new(filters))
+      |> Map.put(:query_params, Map.new(query_params))
       |> Map.put(:rank, rank)
 
     Validation.validate!(metadata, :compile)
 
     quote do
       def __hawk_query__(:declared_filters), do: unquote(Macro.escape(filters))
+      def __hawk_query__(:declared_query_params), do: unquote(Macro.escape(query_params))
       def __hawk_query__(:rank), do: unquote(Macro.escape(rank))
     end
   end
@@ -297,6 +365,12 @@ defmodule Hawk.Query do
   def source_filters(query) when is_atom(query) do
     query
     |> declared_filters()
+    |> Map.new()
+  end
+
+  def query_params(query) when is_atom(query) do
+    query
+    |> declared_query_params()
     |> Map.new()
   end
 
@@ -346,9 +420,35 @@ defmodule Hawk.Query do
     end
   end
 
+  defp validate_query_param_declarations!(query_params) do
+    duplicate_keys =
+      query_params
+      |> Keyword.keys()
+      |> Enum.frequencies()
+      |> Enum.filter(fn {_key, count} -> count > 1 end)
+      |> Enum.map(&elem(&1, 0))
+      |> Enum.sort()
+
+    case duplicate_keys do
+      [] -> :ok
+      [key] -> raise ArgumentError, "duplicate Hawk query param #{inspect(key)}"
+      keys -> raise ArgumentError, "duplicate Hawk query params #{inspect(keys)}"
+    end
+  end
+
   defp declared_filters(query) do
     if Code.ensure_loaded?(query) and function_exported?(query, :__hawk_query__, 1) do
       query.__hawk_query__(:declared_filters)
+    else
+      []
+    end
+  rescue
+    FunctionClauseError -> []
+  end
+
+  defp declared_query_params(query) do
+    if Code.ensure_loaded?(query) and function_exported?(query, :__hawk_query__, 1) do
+      query.__hawk_query__(:declared_query_params)
     else
       []
     end

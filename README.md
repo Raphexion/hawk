@@ -505,6 +505,11 @@ defmodule MyApp.SimilarCourses do
     transaction: true,
     pagination: :offset
 
+  query_param(:source_course_id,
+    required: true,
+    source_filter: :similar_to_course_id
+  )
+
   filter(:school_id)
   rank(:title_similarity, sort: [asc: :title], tie_breaker: :id)
 
@@ -521,16 +526,23 @@ The Query policy is separate from the source resource policy. It controls who
 may run the capability; the source resource policy still controls which rows of
 the source resource are visible. Query policy scopes, static filters, and caller
 filters must map to filters declared by the Query, and Query filters must map to
-filters declared by the source Reader. A Query can declare one deterministic
-rank using source Reader sort keys plus an identity tie-breaker. If
+filters declared by the source Reader. `query_param/2` declares Query-owned
+inputs under `query[...]`; required params return a safe `400` when missing, and
+present params can be mapped directly into source Reader filters with
+`:source_filter` so the source Reader does not need a synthetic query-active
+filter or side channel. `cast_params/1` remains the Query-owned validation/cast
+hook before those params become source filters. A Query can declare one
+deterministic rank using source Reader sort keys plus an identity tie-breaker. If
 `transaction: true` is declared, optional `prepare/3` runs inside the Hawk-owned
 transaction before the source page, count, and preload work. `mix hawk.validate`
 discovers both resources and queries and reports their counts separately.
 
 Expose a resource-result Query with Hawk's generated GET adapter. JSON:API
 collection parameters keep their normal names (`filter`, `include`, `fields`,
-`page`); Query-owned domain parameters live under `query[...]` and are passed to
-`cast_params/1`.
+`page`); Query-owned domain parameters live under `query[...]`, are checked for
+required declarations, and are passed to `cast_params/1`. The router macro emits
+the route even if the Query module is not compiled yet; strict validation still
+runs when the Query executes and through `mix hawk.validate`.
 
 ```elixir
 import Hawk.JsonApi.Router

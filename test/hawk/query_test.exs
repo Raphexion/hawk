@@ -17,6 +17,10 @@ defmodule Hawk.QueryTest do
              title: :title
            }
 
+    assert Videdal.SimilarCourses.__hawk_query__(:query_params) == %{
+             source_course_id: %{required: false, source_filter: :similar_to_course_id}
+           }
+
     assert Videdal.SimilarCourses.__hawk_query__(:rank) == %{
              name: :title_similarity,
              sort: [asc: :title, asc: :id],
@@ -38,6 +42,7 @@ defmodule Hawk.QueryTest do
              pagination: :offset,
              filter_keys: filter_keys,
              source_filters: %{school_id: :school_id, title: :title},
+             query_params: %{source_course_id: %{required: false, source_filter: :similar_to_course_id}},
              rank: %{name: :title_similarity, sort: [asc: :title, asc: :id], tie_breaker: :id}
            } = Hawk.Query.metadata(Videdal.SimilarCourses)
 
@@ -161,6 +166,47 @@ defmodule Hawk.QueryTest do
                  fn ->
                    Hawk.Query.validate!(Hawk.QueryTest.StrictMissingPolicy, :strict)
                  end
+  end
+
+  test "query param mappings must be source reader filters in strict mode" do
+    Code.compile_string("""
+    defmodule Hawk.QueryTest.UnknownQueryParamSourceFilter.Policy do
+      use Hawk.Policy
+
+      read(:all)
+    end
+
+    defmodule Hawk.QueryTest.UnknownQueryParamSourceFilter do
+      use Hawk.Query, name: :unknown_query_param_source_filter, source: Videdal.Courses
+
+      query_param(:source_course_id, source_filter: :missing_source_filter)
+    end
+    """)
+
+    assert_raise ArgumentError,
+                 ~r/query param :source_course_id maps to source filter :missing_source_filter/,
+                 fn ->
+                   Hawk.Query.validate!(Hawk.QueryTest.UnknownQueryParamSourceFilter, :strict)
+                 end
+  end
+
+  test "duplicate query params are rejected" do
+    assert_raise ArgumentError, ~r/duplicate Hawk query param :source_course_id/, fn ->
+      Code.compile_string("""
+      defmodule Hawk.QueryTest.DuplicateQueryParam.Policy do
+        use Hawk.Policy
+
+        read(:all)
+      end
+
+      defmodule Hawk.QueryTest.DuplicateQueryParam do
+        use Hawk.Query, name: :duplicate_query_param, source: Videdal.Courses
+
+        query_param(:source_course_id)
+        query_param(:source_course_id)
+      end
+      """)
+    end
   end
 
   test "rank requires a deterministic tie breaker" do

@@ -9,6 +9,8 @@ defmodule Videdal.SimilarCourses do
     transaction: true,
     pagination: :offset
 
+  query_param(:source_course_id, source_filter: :similar_to_course_id)
+
   filter(:school_id)
   filter(:title)
 

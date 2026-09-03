@@ -107,6 +107,27 @@ defmodule Hawk.JsonApiRouterTest do
            ]
   end
 
+  test "router macro tolerates query modules that compile later" do
+    {[{router, _binary}], output} =
+      ExUnit.CaptureIO.with_io(:stderr, fn ->
+        Code.compile_string("""
+        defmodule Hawk.JsonApiRouterTest.FutureQueryRouter do
+          use Hawk.JsonApiRouterTest.FakeRouter
+          import Hawk.JsonApi.Router
+
+          hawk_query "/future-query", Hawk.JsonApiRouterTest.FutureQuery, public: true
+        end
+        """)
+      end)
+
+    assert output =~ "skipping router validation"
+
+    assert router.__fake_routes__() == [
+             {:get, "/future-query", Hawk.JsonApi.QueryController, :index,
+              [private: %{hawk_query: Hawk.JsonApiRouterTest.FutureQuery, hawk_public?: true}]}
+           ]
+  end
+
   test "router macro validates emitted controller actions" do
     assert_raise ArgumentError,
                  ~r/Hawk JSON:API router controller Hawk.JsonApiRouterTest.IncompleteController must define create\/2 for post \/course-catalog/,
