@@ -10,7 +10,7 @@ defmodule Hawk.MixProject do
       app: :hawk,
       version: @version,
       description: @description,
-      elixir: "~> 1.20",
+      elixir: "~> 1.19",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -185,10 +185,18 @@ defmodule Hawk.MixProject do
   defp dialyzer do
     [
       plt_add_apps: [:ex_unit, :mix],
-      ignore_warnings: "dialyzer_ignore.exs",
+      ignore_warnings: dialyzer_ignore_warnings(),
       list_unused_filters: true,
       plt_local_path: "priv/plts/project.plt",
       plt_core_path: "priv/plts/core.plt"
     ]
+  end
+
+  # OTP 28's MapSet types produce compatibility-only opaque warnings for code
+  # that passes MapSets between generated readers and Hawk's public APIs.
+  defp dialyzer_ignore_warnings do
+    if :erlang.system_info(:otp_release) |> List.to_integer() == 28 do
+      "dialyzer_ignore.exs"
+    end
   end
 end
