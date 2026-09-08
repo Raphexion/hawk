@@ -11,6 +11,7 @@ defmodule Videdal.Student do
   model "students" do
     field(:name, :string)
     field(:active, :boolean, default: true)
+    field(:deleted_at, :utc_datetime)
 
     belongs_to(:school, Videdal.School)
     has_many(:grades, Videdal.Grade)

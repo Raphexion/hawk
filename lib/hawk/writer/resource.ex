@@ -37,7 +37,9 @@ defmodule Hawk.Writer.Resource do
     * `validate_changeset(&fun/1)` — run a function receiving the changeset.
     * `constraint(kind, field, opts)` — declare a DB constraint (see `constraint/3`).
 
-  `delete(:default)` enables the standard delete through the policy.
+  `delete(:default)` enables the standard hard delete through the policy.
+  `soft_delete(:field)` instead generates reversible `delete/2`, `restore/2`,
+  and explicit `hard_delete/2` operations.
 
   ## Example
 
@@ -67,6 +69,7 @@ defmodule Hawk.Writer.Resource do
 
     * `change_create/2`, `change_update/3` — form changesets (no persistence).
     * `create/2`, `update/3`, `delete/2` — persist through the policy and repo.
+      A soft-delete writer also generates `restore/2` and `hard_delete/2`.
 
   ## See also
 
@@ -84,7 +87,7 @@ defmodule Hawk.Writer.Resource do
     topics = Keyword.get(opts, :topics)
 
     quote do
-      import Hawk.Writer.Resource, only: [constraint: 2, create: 1, delete: 1, update: 1]
+      import Hawk.Writer.Resource, only: [constraint: 2, create: 1, delete: 1, soft_delete: 1, update: 1]
 
       @hawk_writer_model unquote(model)
       @hawk_writer_repo unquote(repo)
@@ -123,6 +126,16 @@ defmodule Hawk.Writer.Resource do
   defmacro delete(:default) do
     quote do
       @hawk_writer_delete :default
+    end
+  end
+
+  @doc """
+  Makes ordinary deletion reversible through a nullable timestamp field and
+  generates explicit `restore/2` and `hard_delete/2` operations.
+  """
+  defmacro soft_delete(field) when is_atom(field) do
+    quote do
+      @hawk_writer_delete {:soft, unquote(field)}
     end
   end
 
@@ -179,6 +192,8 @@ defmodule Hawk.Writer.Resource do
     create_context = quote_context_pipeline(:create, create_block, model, policy)
     update_functions = quote_update_functions(update_block, repo, policy)
     delete_functions = quote_delete_functions(delete_mode, repo, policy)
+
+    validate_soft_delete!(model, delete_mode)
 
     quote do
       @doc false
@@ -239,6 +254,42 @@ defmodule Hawk.Writer.Resource do
         |> Hawk.MutationContext.validate_policy(&unquote(policy).delete?/1)
         |> Hawk.RepositoryBoundary.delete(unquote(repo), __hawk_writer_opts__())
       end
+    end
+  end
+
+  defp quote_delete_functions({:soft, field}, repo, policy) do
+    quote do
+      def delete(model, authority) do
+        model
+        |> Hawk.MutationContext.delete(authority, %{unquote(field) => DateTime.utc_now(:second)})
+        |> Hawk.Writer.cast([unquote(field)])
+        |> Hawk.MutationContext.validate_policy(&unquote(policy).delete?/1)
+        |> Hawk.RepositoryBoundary.update(unquote(repo), __hawk_writer_opts__())
+      end
+
+      def restore(model, authority) do
+        model
+        |> Hawk.MutationContext.restore(authority, %{unquote(field) => nil})
+        |> Hawk.Writer.cast([unquote(field)])
+        |> Hawk.MutationContext.validate_policy(&unquote(policy).restore?/1)
+        |> Hawk.RepositoryBoundary.update(unquote(repo), __hawk_writer_opts__())
+      end
+
+      def hard_delete(model, authority) do
+        model
+        |> Hawk.MutationContext.hard_delete(authority)
+        |> Hawk.MutationContext.validate_policy(&unquote(policy).hard_delete?/1)
+        |> Hawk.RepositoryBoundary.delete(unquote(repo), __hawk_writer_opts__())
+      end
+    end
+  end
+
+  defp validate_soft_delete!(_model, mode) when mode in [nil, :default], do: :ok
+
+  defp validate_soft_delete!(model, {:soft, field}) do
+    unless field in model.__schema__(:fields) do
+      raise ArgumentError,
+            "soft_delete field #{inspect(field)} is not a field on #{inspect(model)}"
     end
   end
 

@@ -2,7 +2,7 @@ defmodule Videdal.Students.WriterTest do
   use Videdal.DatabaseCase, async: true
 
   alias Hawk.Authority
-  alias Videdal.{Student, Students}
+  alias Videdal.{Repo, Student, Students}
 
   test "create runs through the resource writer pipeline" do
     school = insert(:school)
@@ -47,5 +47,21 @@ defmodule Videdal.Students.WriterTest do
       |> Authority.readonly()
 
     assert {:not_authorized, _context} = Students.delete(student, authority)
+  end
+
+  test "delete is soft, restore is reversible, and hard delete is explicit" do
+    student = insert(:student)
+    authority = Authority.system()
+
+    assert {:ok, %Student{deleted_at: %DateTime{}} = deleted} = Students.delete(student, authority)
+    assert %Student{} = Repo.get(Student, student.id)
+    assert :not_found = Students.one(authority: authority, filter: %{id: student.id})
+
+    assert {:ok, %Student{deleted_at: nil} = restored} = Students.restore(deleted, authority)
+    assert {:ok, found} = Students.one(authority: authority, filter: %{id: student.id})
+    assert found.id == restored.id
+
+    assert {:ok, %Student{}} = Students.hard_delete(restored, authority)
+    assert Repo.get(Student, student.id) == nil
   end
 end

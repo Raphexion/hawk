@@ -19,6 +19,7 @@ defmodule Hawk.Reader do
   @allowed_options MapSet.new([
                      :authority,
                      :context,
+                     :deleted,
                      :fields,
                      :filter,
                      :page,
@@ -39,6 +40,7 @@ defmodule Hawk.Reader do
           optional(:coordinate_filters) => %{optional(atom()) => Hawk.Reader.Coordinates.options()},
           optional(:join_plan) => [JoinPlan.rule()],
           optional(:forced_filter) => Filter.t(),
+          optional(:soft_delete) => %{field: atom(), expose: [atom()]},
           optional(:preload_keys) => Enumerable.t(),
           optional(:preload_readers) => %{optional(atom()) => module()},
           optional(:preload_options) => %{optional(atom()) => map()},
@@ -197,6 +199,7 @@ defmodule Hawk.Reader do
       config.schema
       |> from(as: :root)
       |> apply_authorized_filter(config, authority, caller_filter, [])
+      |> apply_lifecycle_filter(config, opts.deleted)
       |> apply_scope(config, opts, %{authority: authority})
 
     distinct_root_count(query, config.repo, identity(config))
@@ -242,6 +245,22 @@ defmodule Hawk.Reader do
       Map.get(config, :coordinate_filters, %{}),
       JoinPlan.trigger_keys(rules)
     )
+  end
+
+  @doc false
+  def apply_lifecycle_filter(query, config, mode) when mode in [:exclude, :include, :only] do
+    case {Map.get(config, :soft_delete), mode} do
+      {nil, :exclude} -> query
+      {nil, mode} -> raise ArgumentError, "reader does not support deleted mode #{inspect(mode)}"
+      {%{field: _field}, :include} -> query
+      {%{field: field}, :exclude} -> where(query, [root: row], is_nil(field(row, ^field)))
+      {%{field: field}, :only} -> where(query, [root: row], not is_nil(field(row, ^field)))
+    end
+  end
+
+  def apply_lifecycle_filter(_query, _config, mode) do
+    raise ArgumentError,
+          "invalid deleted mode #{inspect(mode)}; expected :exclude, :include, or :only"
   end
 
   @doc """
@@ -300,6 +319,7 @@ defmodule Hawk.Reader do
     %{
       authority: Map.fetch!(opts, :authority),
       context: Map.get(opts, :context, %{}),
+      deleted: Map.get(opts, :deleted, :exclude),
       fields: normalize_fields(Map.get(opts, :fields, %{})),
       filter: Map.get(opts, :filter, :all),
       page: normalize_page(Map.get(opts, :page, %{})),
@@ -529,6 +549,7 @@ defmodule Hawk.Reader do
     config.schema
     |> from(as: :root)
     |> apply_authorized_filter(config, authority, caller_filter, sort_columns(sort))
+    |> apply_lifecycle_filter(config, opts.deleted)
     |> apply_scope(config, opts, %{authority: authority})
     |> apply_rank_scope(config, opts.rank_scope, opts.params, %{authority: authority})
     |> maybe_deduplicate_roots(config, authority, caller_filter, sort)

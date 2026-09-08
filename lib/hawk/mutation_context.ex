@@ -18,7 +18,7 @@ defmodule Hawk.MutationContext do
           attrs: map(),
           authority: Authority.t(),
           changeset: Changeset.t(),
-          operation: :create | :update | :delete,
+          operation: :create | :update | :delete | :restore | :hard_delete,
           error: error(),
           policy_validated?: boolean(),
           meta: map()
@@ -59,6 +59,18 @@ defmodule Hawk.MutationContext do
   def delete(model, %Authority{} = authority, attrs \\ %{})
       when is_struct(model) and is_map(attrs) do
     build(model, attrs, authority, :delete)
+  end
+
+  @doc false
+  def restore(model, %Authority{} = authority, attrs \\ %{})
+      when is_struct(model) and is_map(attrs) do
+    build(model, attrs, authority, :restore)
+  end
+
+  @doc false
+  def hard_delete(model, %Authority{} = authority)
+      when is_struct(model) do
+    build(model, %{}, authority, :hard_delete)
   end
 
   @doc """

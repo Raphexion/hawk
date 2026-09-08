@@ -30,6 +30,8 @@ defmodule Hawk.Reader.Resource do
 
     * `filter/1` — declare a filterable column (compiled by
       `Hawk.Reader.FilterCompiler`).
+    * `soft_delete/2` — declare a nullable timestamp field used to exclude
+      deleted rows by default and optionally expose alternate modes over JSON:API.
     * `filter/2` with a block — declare a filter with a custom handler.
     * `filter/3` with `value: :object` and a block — declare a custom filter
       that receives a structured object as `{:eq, object}`. Nested object keys
@@ -73,7 +75,7 @@ defmodule Hawk.Reader.Resource do
     * `preload_query/2` — an authorized preload query for an association.
     * `filter_keys/0`, `filter_value_types/0`, `coordinate_filters/0`,
       `sort_keys/0`, `rank_scope_keys/0`, `rank_scopes/0`, `preload_keys/0`,
-      `preload_readers/0`, `filter_handlers/0`, `join_plan/0` — the declared
+      `preload_readers/0`, `filter_handlers/0`, `join_plan/0`, `soft_delete/0` — the declared
       metadata.
     * `read_filter/1` — delegates to the policy.
     * `repo/0` — the configured repo.
@@ -117,6 +119,8 @@ defmodule Hawk.Reader.Resource do
           preload: 1,
           preload: 2,
           rank_scope: 2,
+          soft_delete: 1,
+          soft_delete: 2,
           sort: 1
         ]
 
@@ -127,6 +131,7 @@ defmodule Hawk.Reader.Resource do
       @hawk_reader_default_sort unquote(default_sort)
       @hawk_reader_max_page_size unquote(max_page_size)
       @hawk_reader_default_page_size unquote(default_page_size)
+      @hawk_reader_soft_delete nil
 
       Module.register_attribute(__MODULE__, :hawk_reader_filter_keys, accumulate: true)
       Module.register_attribute(__MODULE__, :hawk_reader_filter_handlers, accumulate: true)
@@ -141,6 +146,28 @@ defmodule Hawk.Reader.Resource do
       Module.register_attribute(__MODULE__, :hawk_reader_sort_keys, accumulate: true)
 
       @before_compile Hawk.Reader.Resource
+    end
+  end
+
+  @doc """
+  Declares a nullable field that represents soft deletion.
+
+  Reads exclude rows where the field is set by default. Pass `deleted: :include`
+  or `deleted: :only` to the reader to select another lifecycle view. The
+  `:expose` option controls which alternate modes JSON:API clients may request.
+  """
+  defmacro soft_delete(field, opts \\ []) when is_atom(field) and is_list(opts) do
+    expose = Keyword.get(opts, :expose, [])
+    unknown = Keyword.keys(opts) -- [:expose]
+
+    if unknown != [], do: raise(ArgumentError, "unknown soft_delete option #{inspect(hd(unknown))}")
+
+    unless Enum.all?(expose, &(&1 in [:include, :only])) do
+      raise ArgumentError, "soft_delete :expose must contain only :include and :only"
+    end
+
+    quote do
+      @hawk_reader_soft_delete %{field: unquote(field), expose: unquote(expose)}
     end
   end
 
@@ -370,6 +397,8 @@ defmodule Hawk.Reader.Resource do
     declarations = reader_declarations(env.module)
     schema = Module.get_attribute(env.module, :hawk_reader_schema)
 
+    validate_soft_delete!(schema, declarations.soft_delete)
+
     validate_filter_keys!(declarations.filter_keys)
     validate_join_rules!(declarations.join_rules)
     validate_preload_keys!(declarations.preload_keys)
@@ -406,7 +435,8 @@ defmodule Hawk.Reader.Resource do
       preload_readers: reversed_attribute(module, :hawk_reader_preload_readers),
       preload_options: reversed_attribute(module, :hawk_reader_preload_options),
       rank_scopes: reversed_attribute(module, :hawk_reader_rank_scopes),
-      sort_keys: reversed_attribute(module, :hawk_reader_sort_keys)
+      sort_keys: reversed_attribute(module, :hawk_reader_sort_keys),
+      soft_delete: Module.get_attribute(module, :hawk_reader_soft_delete)
     }
   end
 
@@ -475,6 +505,7 @@ defmodule Hawk.Reader.Resource do
       def rank_scopes, do: Map.new([unquote_splicing(rank_scope_entries)])
       def rank_scope_keys, do: rank_scopes() |> Map.keys() |> MapSet.new()
       def sort_keys, do: MapSet.new(unquote(declarations.sort_keys))
+      def soft_delete, do: unquote(Macro.escape(declarations.soft_delete))
       def read_filter(authority), do: @hawk_reader_policy.read_filter(authority)
     end
   end
@@ -491,6 +522,7 @@ defmodule Hawk.Reader.Resource do
       def preload_query(query, authority) do
         query
         |> Hawk.Reader.apply_authorized_filter(config(), authority)
+        |> Hawk.Reader.apply_lifecycle_filter(config(), :exclude)
         |> Hawk.Reader.apply_scope(config(), %{}, %{authority: authority})
       end
     end
@@ -521,6 +553,7 @@ defmodule Hawk.Reader.Resource do
           join_plan: filter_declarations.join_plan,
           read_filter: &read_filter/1,
           forced_filter: @hawk_reader_forced_filter,
+          soft_delete: soft_delete(),
           default_sort: @hawk_reader_default_sort,
           preload_keys: preload_keys(),
           preload_readers: preload_readers(),
@@ -536,6 +569,15 @@ defmodule Hawk.Reader.Resource do
       unless Module.defines?(__MODULE__, {:scope, 3}) do
         def scope(query, _params, _opts), do: query
       end
+    end
+  end
+
+  defp validate_soft_delete!(_schema, nil), do: :ok
+
+  defp validate_soft_delete!(schema, %{field: field}) do
+    unless field in schema.__schema__(:fields) do
+      raise ArgumentError,
+            "soft_delete field #{inspect(field)} is not a field on #{inspect(schema)}"
     end
   end
 

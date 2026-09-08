@@ -342,10 +342,16 @@ defmodule Hawk.OpenApi do
   end
 
   defp filter_key_names(resource) do
-    resource.reader
-    |> filter_keys()
+    (filter_keys(resource.reader) ++ soft_delete_filter_keys(resource.reader))
     |> Enum.sort()
     |> Enum.map(&to_string/1)
+  end
+
+  defp soft_delete_filter_keys(reader) do
+    case reader_soft_delete(reader) do
+      %{expose: expose} when expose != [] -> [:deleted]
+      _other -> []
+    end
   end
 
   defp filter_keys(reader) do
@@ -399,7 +405,10 @@ defmodule Hawk.OpenApi do
         {key, %{type: "object", additionalProperties: true}}
       end)
 
-    properties = Map.merge(coordinate_properties, object_properties)
+    properties =
+      coordinate_properties
+      |> Map.merge(object_properties)
+      |> Map.merge(soft_delete_filter_properties(resource.reader))
 
     %{type: "object", additionalProperties: true}
     |> maybe_put_filter_properties(properties)
@@ -407,6 +416,22 @@ defmodule Hawk.OpenApi do
 
   defp maybe_put_filter_properties(schema, properties) when properties == %{}, do: schema
   defp maybe_put_filter_properties(schema, properties), do: Map.put(schema, :properties, properties)
+
+  defp soft_delete_filter_properties(reader) do
+    case reader_soft_delete(reader) do
+      %{expose: expose} when expose != [] ->
+        %{deleted: %{type: "string", enum: Enum.map(expose, &to_string/1)}}
+
+      _other ->
+        %{}
+    end
+  end
+
+  defp reader_soft_delete(reader) do
+    if Code.ensure_loaded?(reader) and function_exported?(reader, :soft_delete, 0),
+      do: reader.soft_delete(),
+      else: nil
+  end
 
   defp object_filter_description(resource) do
     keys =

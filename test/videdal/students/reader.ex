@@ -7,6 +7,8 @@ defmodule Videdal.Students.Reader do
     repo: Videdal.Repo,
     schema: Videdal.Student
 
+  soft_delete(:deleted_at, expose: [:include, :only])
+
   filter(:id)
   filter(:school_id)
   filter(:active)

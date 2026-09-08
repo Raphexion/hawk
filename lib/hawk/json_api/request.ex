@@ -132,7 +132,8 @@ defmodule Hawk.JsonApi.Request do
     []
     |> put_request_option(:page, parse_page(params), %{})
     |> put_request_option(:preloads, parse_include(Map.get(params, "include"), reader, model, authority), [])
-    |> put_request_option(:filter, parse_filter(Map.get(params, "filter"), reader), :all)
+    |> put_request_option(:filter, parse_filter(ordinary_filter(params), reader), :all)
+    |> put_request_option(:deleted, parse_deleted_filter(params, reader), :exclude)
     |> put_sort(Map.get(params, "sort"), reader)
   end
 
@@ -449,6 +450,56 @@ defmodule Hawk.JsonApi.Request do
   end
 
   defp parse_filter(_filter, _reader), do: raise(ArgumentError, "filter must be an object")
+
+  defp ordinary_filter(params) do
+    case Map.get(params, "filter") do
+      filter when is_map(filter) -> filter |> Map.delete("deleted") |> Map.delete(:deleted)
+      filter -> filter
+    end
+  end
+
+  defp parse_deleted_filter(params, reader) do
+    filter = Map.get(params, "filter")
+
+    value =
+      if is_map(filter) do
+        Map.get(filter, "deleted", Map.get(filter, :deleted))
+      end
+
+    case {value, reader_soft_delete(reader)} do
+      {nil, _soft_delete} ->
+        :exclude
+
+      {_value, nil} ->
+        raise ArgumentError, "unknown filter key \"deleted\""
+
+      {value, %{expose: expose}} ->
+        mode = parse_deleted_mode!(value)
+
+        if mode in expose do
+          mode
+        else
+          raise ArgumentError, "deleted filter #{inspect(value)} is not exposed by this reader"
+        end
+    end
+  end
+
+  defp parse_deleted_mode!("include"), do: :include
+  defp parse_deleted_mode!("only"), do: :only
+  defp parse_deleted_mode!(:include), do: :include
+  defp parse_deleted_mode!(:only), do: :only
+
+  defp parse_deleted_mode!(value) do
+    raise ArgumentError, "invalid deleted filter #{inspect(value)}; expected \"include\" or \"only\""
+  end
+
+  defp reader_soft_delete(nil), do: nil
+
+  defp reader_soft_delete(reader) do
+    if Code.ensure_loaded?(reader) and function_exported?(reader, :soft_delete, 0),
+      do: reader.soft_delete(),
+      else: nil
+  end
 
   defp validate_declared_near!(_key, _value, nil), do: :ok
 

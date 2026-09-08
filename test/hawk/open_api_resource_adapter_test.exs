@@ -120,6 +120,18 @@ defmodule Hawk.OpenApiResourceAdapterTest do
            } in parameters
   end
 
+  test "soft-delete lifecycle modes are documented as a filter" do
+    spec = Hawk.OpenApi.spec([Videdal.Students], title: "Test API")
+    parameter = Enum.find(spec.paths["/students"].get.parameters, &(&1.name == "filter"))
+
+    assert parameter.schema.properties.deleted == %{
+             type: "string",
+             enum: ["include", "only"]
+           }
+
+    assert parameter.description =~ "deleted"
+  end
+
   test "OpenAPI omits resources with json_api disabled" do
     spec = Hawk.OpenApi.spec([Videdal.ExternalCourses, Videdal.InternalNotes], title: "Test API")
 

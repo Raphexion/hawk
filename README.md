@@ -444,6 +444,25 @@ LiveView form helpers use for live validation errors. `create/2` and `update/3`
 keep owning persistence through the repository boundary. `delete(:default)`
 generates a policy-checked `delete/2` that crosses the same repository boundary.
 
+For resources with reversible deletion, declare the lifecycle field on both
+the reader and writer:
+
+```elixir
+# Reader
+soft_delete(:deleted_at, expose: [:include, :only])
+
+# Writer
+soft_delete(:deleted_at)
+```
+
+The reader adds `deleted_at IS NULL` independently of authorization and caller
+filters. Application code can select `deleted: :include` or `deleted: :only`;
+the `:expose` list makes those modes available to JSON:API clients as
+`filter[deleted]=include` and `filter[deleted]=only`. Authorization filters are
+always retained. The writer makes `delete/2` set the timestamp and generates
+explicit `restore/2` and `hard_delete/2` functions. Policies can narrow the
+latter operations with `restore_roles:` and `hard_delete_roles:` on `write/1`.
+
 A read-only resource still keeps a writer sibling and declares `write(:never)`
 in its policy — writes are gated by the policy, not by omitting the writer, so a
 mutation attempt returns `403` instead of a `404`/`500` from a missing delegate.

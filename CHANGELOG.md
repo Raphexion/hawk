@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **First-class soft-delete lifecycles.** Readers can declare
+  `soft_delete/2` to exclude deleted rows by default while supporting explicit
+  `deleted: :include` and `deleted: :only` views without weakening policy or
+  forced filters. Opted-in modes are accepted through the JSON:API
+  `filter[deleted]` parameter and documented automatically in OpenAPI. Writers
+  can declare `soft_delete/1` to generate timestamping `delete/2`, reversible
+  `restore/2`, and explicit `hard_delete/2` operations, with independently
+  configurable restore and hard-delete policy roles.
+
 ## [0.9.0] - 2026-09-03
 
 ### Added

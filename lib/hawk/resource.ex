@@ -342,6 +342,7 @@ defmodule Hawk.Resource do
       @dialyzer {:nowarn_function, one: 1, all: 1, page: 1, count: 1}
 
       def one(opts), do: unquote(reader).one(opts)
+
       def all(opts), do: unquote(reader).all(opts)
       def page(opts), do: Hawk.Resource.call_reader_page(unquote(reader), opts)
       def count(opts), do: Hawk.Resource.call_reader_count(unquote(reader), opts)
@@ -374,7 +375,26 @@ defmodule Hawk.Resource do
       def create(attrs, authority), do: unquote(writer).create(attrs, authority)
       def update(model, attrs, authority), do: unquote(writer).update(model, attrs, authority)
       def delete(model, authority), do: unquote(writer).delete(model, authority)
+
+      def restore(model, authority),
+        do: Hawk.Resource.call_writer_mutation(unquote(writer), :restore, [model, authority])
+
+      def hard_delete(model, authority),
+        do: Hawk.Resource.call_writer_mutation(unquote(writer), :hard_delete, [model, authority])
+
       unquote(form_delegates)
+    end
+  end
+
+  @doc false
+  def call_writer_mutation(writer, function, args) when is_atom(writer) and is_atom(function) and is_list(args) do
+    arity = length(args)
+
+    if Code.ensure_loaded?(writer) and function_exported?(writer, function, arity) do
+      apply(writer, function, args)
+    else
+      raise ArgumentError,
+            "Hawk resource writer module #{inspect(writer)} does not support #{function}/#{arity}"
     end
   end
 

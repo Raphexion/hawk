@@ -7,11 +7,6 @@ defmodule Videdal.Students.Writer do
   persistence functions and non-persisting form changeset helpers.
   """
 
-  alias Hawk.MutationContext
-  alias Hawk.RepositoryBoundary
-  alias Videdal.{Repo, Student}
-  alias Videdal.Students.Policy
-
   use Hawk.Writer.Resource,
     model: Videdal.Student,
     repo: Videdal.Repo,
@@ -27,9 +22,5 @@ defmodule Videdal.Students.Writer do
     cast([:name, :active, :school_id])
   end
 
-  def delete(%Student{} = student, authority) do
-    MutationContext.delete(student, authority)
-    |> MutationContext.validate_policy(&Policy.delete?/1)
-    |> RepositoryBoundary.delete(Repo)
-  end
+  soft_delete(:deleted_at)
 end

@@ -28,6 +28,38 @@ defmodule Videdal.Students.ReaderTest do
     assert result.id == student.id
   end
 
+  test "soft-deleted resources are excluded by default and can be included or selected" do
+    school = insert(:school)
+    active = insert(:student, school_id: school.id)
+    deleted = insert(:student, school_id: school.id, deleted_at: DateTime.utc_now(:second))
+    authority = Authority.new(:school_admin, 1, scopes: %{school_id: school.id})
+
+    assert Enum.map(Students.all(authority: authority), & &1.id) == [active.id]
+
+    assert Students.all(authority: authority, deleted: :include)
+           |> Enum.map(& &1.id)
+           |> MapSet.new() == MapSet.new([active.id, deleted.id])
+
+    assert Enum.map(Students.all(authority: authority, deleted: :only), & &1.id) == [deleted.id]
+  end
+
+  test "deleted modes never bypass the read policy" do
+    school = insert(:school)
+    other_school = insert(:school)
+    deleted = insert(:student, school_id: school.id, deleted_at: DateTime.utc_now(:second))
+    insert(:student, school_id: other_school.id, deleted_at: DateTime.utc_now(:second))
+    authority = Authority.new(:school_admin, 1, scopes: %{school_id: school.id})
+
+    assert Enum.map(Students.all(authority: authority, deleted: :include), & &1.id) == [deleted.id]
+    assert Students.count(authority: authority, deleted: :only) == 1
+  end
+
+  test "rejects unknown deleted modes" do
+    assert_raise ArgumentError, ~r/invalid deleted mode/, fn ->
+      Students.all(authority: Authority.system(), deleted: :sometimes)
+    end
+  end
+
   test "all/1 preserves overlapping caller and policy root filters that can intersect" do
     school = insert(:school)
     active_student = insert(:student, school_id: school.id, active: true)

@@ -21,12 +21,24 @@ defmodule Hawk.PolicyTest.OwnedPolicy do
   write(roles: [:teacher], owned_by: [teacher_id: :teacher_id])
 end
 
+defmodule Hawk.PolicyTest.LifecyclePolicy do
+  use Hawk.Policy
+
+  read(:all)
+
+  write(
+    roles: [:teacher],
+    restore_roles: [:teacher, :principal],
+    hard_delete_roles: [:principal]
+  )
+end
+
 defmodule Hawk.PolicyTest do
   use ExUnit.Case, async: true
 
   alias Hawk.Authority
   alias Hawk.MutationContext
-  alias Hawk.PolicyTest.{ExamplePolicy, OwnedPolicy}
+  alias Hawk.PolicyTest.{ExamplePolicy, LifecyclePolicy, OwnedPolicy}
   alias Videdal.{Course, Grade}
 
   test "read role declarations return all for unrestricted roles" do
@@ -131,6 +143,18 @@ defmodule Hawk.PolicyTest do
     assert ExamplePolicy.delete?(teacher_context)
     refute ExamplePolicy.create?(readonly_context)
     refute ExamplePolicy.create?(student_context)
+  end
+
+  test "restore and hard-delete roles can be narrowed independently" do
+    teacher = context(Authority.new(:teacher, 12))
+    principal = context(Authority.new(:principal, 1))
+
+    assert LifecyclePolicy.delete?(teacher)
+    assert LifecyclePolicy.restore?(teacher)
+    refute LifecyclePolicy.hard_delete?(teacher)
+    refute LifecyclePolicy.delete?(principal)
+    assert LifecyclePolicy.restore?(principal)
+    assert LifecyclePolicy.hard_delete?(principal)
   end
 
   defp context(authority) do

@@ -13,6 +13,34 @@ defmodule Hawk.JsonApi.RequestTest do
            }) == [filter: %{school_id: "school-1", active: {:eq, true}, name: {:ilike, "%math%"}}]
   end
 
+  test "request options parse exposed soft-delete lifecycle modes" do
+    assert Request.request_options(
+             %{"filter" => %{"deleted" => "include"}},
+             reader: Videdal.Students.Reader
+           ) == [deleted: :include]
+
+    assert Request.request_options(
+             %{"filter" => %{"deleted" => "only", "active" => "true"}},
+             reader: Videdal.Students.Reader
+           ) == [deleted: :only, filter: %{active: true}]
+  end
+
+  test "request options reject invalid or undeclared soft-delete lifecycle modes" do
+    assert_raise ArgumentError, ~r/invalid deleted filter/, fn ->
+      Request.request_options(
+        %{"filter" => %{"deleted" => "sometimes"}},
+        reader: Videdal.Students.Reader
+      )
+    end
+
+    assert_raise ArgumentError, ~r/unknown filter key "deleted"/, fn ->
+      Request.request_options(
+        %{"filter" => %{"deleted" => "include"}},
+        reader: Videdal.Courses.Reader
+      )
+    end
+  end
+
   test "sparse fieldsets parse JSON:API fields params without atomizing field names" do
     assert Request.sparse_fieldsets(%{"fields" => %{"courses" => "title,teacher", "schools" => "name"}}) == %{
              "courses" => MapSet.new(["title", "teacher"]),
