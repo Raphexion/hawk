@@ -44,7 +44,7 @@ moving quickly:
 ```elixir
 def deps do
   [
-    {:hawk, github: "Raphexion/hawk", tag: "v0.7.0"}
+    {:hawk, github: "Raphexion/hawk", tag: "v0.10.0"}
   ]
 end
 ```
