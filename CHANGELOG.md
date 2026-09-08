@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Native JSON:API restore actions.** Soft-deletable resources now expose a
+  policy-gated `POST /:resource/:id/-actions/restore` action that locates
+  deleted records, delegates to the existing `restore/2` writer operation, and
+  is documented in OpenAPI and generated plans. The `restore` action name is
+  reserved for this lifecycle behavior.
+
 ## [0.10.0] - 2026-09-08
 
 ### Added

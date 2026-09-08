@@ -365,8 +365,14 @@ defmodule Hawk.JsonApi.Controller do
       authority = authority!(conn, public?)
       context = request_context(conn)
       identity = Hawk.JsonApi.Schema.identity_for_facade(resource)
+      deleted = if Hawk.Actions.lifecycle_action?(resource, action_name), do: :only, else: :exclude
 
-      case resource.one(authority: authority, context: context, filter: %{identity => normalize_id(id)}) do
+      case resource.one(
+             authority: authority,
+             context: context,
+             filter: %{identity => normalize_id(id)},
+             deleted: deleted
+           ) do
         {:ok, existing} ->
           respond_action(conn, resource, action_name, existing, params, authority)
 

@@ -128,4 +128,15 @@ defmodule Hawk.ActionsTest do
     assert Hawk.Actions.dispatch(Hawk.ActionsTest.DemoResource, "missing", course, %{}, authority) ==
              :unknown_action
   end
+
+  test "restore is reserved for Hawk's generated lifecycle action" do
+    assert_raise ArgumentError, ~r/action name "restore" is reserved/, fn ->
+      Code.compile_string("""
+      defmodule Hawk.ActionsTest.ReservedRestore do
+        use Hawk.Actions
+        action("restore", doc: "custom restore")
+      end
+      """)
+    end
+  end
 end

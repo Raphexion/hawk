@@ -199,6 +199,9 @@ defmodule Hawk.Writer.Resource do
       @doc false
       def __hawk_writer_opts__, do: unquote(writer_opts)
 
+      @doc false
+      def __hawk_soft_delete__, do: unquote(delete_mode)
+
       def change_create(attrs, authority) do
         attrs
         |> create_context(authority)

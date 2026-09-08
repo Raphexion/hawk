@@ -79,4 +79,18 @@ defmodule Hawk.OpenApiActionsTest do
              }
            }
   end
+
+  test "OpenAPI documents the generated restore action for soft-deletable resources" do
+    spec = Hawk.OpenApi.spec([Videdal.Students], title: "Test API")
+
+    action = spec.paths["/students/{id}/-actions/restore"].post
+
+    assert action.operationId == "runStudentsRestore"
+    assert action.description =~ "soft-deleted resource"
+    assert action.responses["200"].content["application/vnd.api+json"].schema != nil
+
+    request_schema = action.requestBody.content["application/vnd.api+json"].schema
+    assert request_schema.required == [:meta]
+    assert request_schema.properties.meta.properties == %{}
+  end
 end

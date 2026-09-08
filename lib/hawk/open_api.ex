@@ -138,7 +138,7 @@ defmodule Hawk.OpenApi do
 
   defp operation_entries(resource, %{action: :action} = route) do
     resource.resource
-    |> Hawk.Actions.actions()
+    |> Hawk.Actions.all_actions()
     |> Enum.map(fn {name, metadata} ->
       route.path
       |> openapi_path()

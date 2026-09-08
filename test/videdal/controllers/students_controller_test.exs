@@ -53,6 +53,61 @@ defmodule Videdal.Controllers.StudentsControllerTest do
     assert response_ids(StudentsController.index(conn(Authority.system()), %{})) == []
   end
 
+  test "restore action finds deleted resources and returns the restored resource" do
+    student = insert(:student, deleted_at: DateTime.utc_now(:second))
+
+    conn =
+      StudentsController.hawk_action(conn(Authority.system()), %{
+        "id" => student.id,
+        "action" => "restore",
+        "meta" => %{}
+      })
+
+    assert conn.status == 200
+    assert %{data: %{id: id, type: "students"}} = resp(conn)
+    assert id == student.id
+    assert %Student{deleted_at: nil} = Repo.get!(Student, student.id)
+  end
+
+  test "restore action preserves read scope and restore authorization" do
+    school = insert(:school)
+    other_school = insert(:school)
+    deleted = insert(:student, school_id: school.id, deleted_at: DateTime.utc_now(:second))
+    other_deleted = insert(:student, school_id: other_school.id, deleted_at: DateTime.utc_now(:second))
+
+    conn =
+      StudentsController.hawk_action(conn(school_admin(school)), %{
+        "id" => deleted.id,
+        "action" => "restore",
+        "meta" => %{}
+      })
+
+    assert conn.status == 200
+    assert %Student{deleted_at: nil} = Repo.get!(Student, deleted.id)
+    assert %Student{deleted_at: %DateTime{}} = Repo.get!(Student, other_deleted.id)
+
+    readonly_deleted = insert(:student, school_id: school.id, deleted_at: DateTime.utc_now(:second))
+
+    readonly =
+      StudentsController.hawk_action(conn(Authority.readonly(school_admin(school))), %{
+        "id" => readonly_deleted.id,
+        "action" => "restore",
+        "meta" => %{}
+      })
+
+    assert readonly.status == 403
+    assert %Student{deleted_at: %DateTime{}} = Repo.get!(Student, readonly_deleted.id)
+
+    forbidden =
+      StudentsController.hawk_action(conn(Authority.new(:teacher, 1)), %{
+        "id" => other_deleted.id,
+        "action" => "restore",
+        "meta" => %{}
+      })
+
+    assert forbidden.status == 404
+  end
+
   defp response_ids(conn) do
     assert conn.status == 200
     Enum.map(resp(conn).data, & &1.id)

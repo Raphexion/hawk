@@ -126,7 +126,7 @@ defmodule Hawk.Plans.Spec do
 
   defp action_ops(resource) do
     resource.resource
-    |> Actions.actions()
+    |> Actions.all_actions()
     |> Enum.map(fn {name, metadata} ->
       %{
         op: :action,

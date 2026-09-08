@@ -88,6 +88,7 @@ defmodule Hawk.Actions do
   """
   defmacro action(name, opts) when is_list(opts) do
     metadata = action_metadata(name, opts, __CALLER__)
+    validate_action_name!(metadata.name)
 
     quote do
       @hawk_actions unquote(Macro.escape(metadata))
@@ -135,6 +136,16 @@ defmodule Hawk.Actions do
   """
   def dispatch(resource, action_name, model, params, authority)
       when is_atom(resource) and is_binary(action_name) and is_struct(model) do
+    if lifecycle_action?(resource, action_name) do
+      resource.restore(model, authority)
+    else
+      dispatch_custom(resource, action_name, model, params, authority)
+    end
+  end
+
+  def dispatch(_resource, _action_name, _model, _params, _authority), do: :unknown_action
+
+  defp dispatch_custom(resource, action_name, model, params, authority) do
     actions_module = actions_module(resource)
 
     with module when is_atom(module) and module != false <- actions_module,
@@ -148,20 +159,75 @@ defmodule Hawk.Actions do
     end
   end
 
-  def dispatch(_resource, _action_name, _model, _params, _authority), do: :unknown_action
-
   @doc """
   Returns the action metadata map for a resource (`%{}` when the resource has
   no `Actions` module).
   """
   def actions(resource) when is_atom(resource) do
-    with module when is_atom(module) and module != false <- actions_module(resource),
-         {:ok, actions} <- fetch_actions(module) do
-      actions
-    else
-      _other -> %{}
+    case actions_module(resource) do
+      module when is_atom(module) and module != false ->
+        case fetch_actions(module) do
+          {:ok, actions} -> actions
+          :error -> %{}
+        end
+
+      _other ->
+        %{}
     end
   end
+
+  @doc """
+  Returns custom and generated lifecycle action metadata for a resource.
+  """
+  def all_actions(resource) when is_atom(resource),
+    do: Map.merge(lifecycle_actions(resource), actions(resource))
+
+  @doc false
+  def lifecycle_action?(resource, action_name) when is_atom(resource) and is_binary(action_name) do
+    Map.has_key?(lifecycle_actions(resource), action_name)
+  end
+
+  def lifecycle_action?(_resource, _action_name), do: false
+
+  defp lifecycle_actions(resource) do
+    if function_exported?(resource, :__hawk_resource__, 1) do
+      reader = resource.__hawk_resource__(:reader)
+      writer = resource.__hawk_resource__(:writer)
+
+      if soft_delete_reader?(reader) and soft_delete_writer?(writer) and
+           function_exported?(writer, :restore, 2) and
+           function_exported?(resource, :restore, 2) do
+        %{
+          "restore" => %{
+            name: "restore",
+            kind: :lifecycle,
+            handler: nil,
+            doc: "Restore this soft-deleted resource and any dependent content managed by its domain writer.",
+            params: %{},
+            build: nil
+          }
+        }
+      else
+        %{}
+      end
+    else
+      %{}
+    end
+  end
+
+  defp soft_delete_reader?(reader) when is_atom(reader) do
+    Code.ensure_loaded?(reader) and function_exported?(reader, :soft_delete, 0) and
+      not is_nil(reader.soft_delete())
+  end
+
+  defp soft_delete_reader?(_reader), do: false
+
+  defp soft_delete_writer?(writer) when is_atom(writer) do
+    Code.ensure_loaded?(writer) and function_exported?(writer, :__hawk_soft_delete__, 0) and
+      match?({:soft, _field}, writer.__hawk_soft_delete__())
+  end
+
+  defp soft_delete_writer?(_writer), do: false
 
   @doc false
   def actions_module(resource) when is_atom(resource) do
@@ -266,6 +332,12 @@ defmodule Hawk.Actions do
 
     %{name: name, handler: handler, doc: doc, params: params, build: build}
   end
+
+  defp validate_action_name!("restore") do
+    raise ArgumentError, ~s(action name "restore" is reserved for Hawk's generated lifecycle action)
+  end
+
+  defp validate_action_name!(_name), do: :ok
 
   defp build_fn(nil, _handler, _caller), do: nil
 

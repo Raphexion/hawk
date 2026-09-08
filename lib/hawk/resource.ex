@@ -283,8 +283,9 @@ defmodule Hawk.Resource do
   end
 
   @doc false
-  def capabilities(static_capabilities, actions_module) when is_map(static_capabilities) do
-    Map.put(static_capabilities, :actions, actions_module != false)
+  def capabilities(static_capabilities, actions_module, resource) when is_map(static_capabilities) do
+    lifecycle_actions? = map_size(Hawk.Actions.all_actions(resource)) > 0 and actions_module == false
+    Map.put(static_capabilities, :actions, actions_module != false or lifecycle_actions?)
   end
 
   defp quote_introspection(modules, runtime_modules) do
@@ -333,7 +334,12 @@ defmodule Hawk.Resource do
 
     quote do
       def __hawk_resource__(:capabilities),
-        do: Hawk.Resource.capabilities(unquote(Macro.escape(static_capabilities)), __hawk_resource__(:actions))
+        do:
+          Hawk.Resource.capabilities(
+            unquote(Macro.escape(static_capabilities)),
+            __hawk_resource__(:actions),
+            __MODULE__
+          )
     end
   end
 
