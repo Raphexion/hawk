@@ -30,11 +30,12 @@ defmodule Hawk.Writer do
   Adds default attrs with put-if-missing semantics.
 
   Zero-arity function defaults are evaluated only when the default is applied.
+  One-argument function defaults receive the current mutation context.
   """
   @spec defaults(MutationContext.t(), map() | keyword()) :: MutationContext.t()
   def defaults(%MutationContext{} = context, defaults) do
     MutationContext.guard(context, fn context ->
-      %{context | attrs: merge_defaults(context.attrs, Map.new(defaults))}
+      %{context | attrs: merge_defaults(context.attrs, Map.new(defaults), context)}
     end)
   end
 
@@ -170,20 +171,21 @@ defmodule Hawk.Writer do
     end)
   end
 
-  defp resolve_default(value) when is_function(value, 0), do: value.()
-  defp resolve_default(value), do: value
-
-  defp merge_defaults(attrs, defaults) do
+  defp merge_defaults(attrs, defaults, context) do
     Enum.reduce(defaults, attrs, fn {key, value}, acc ->
-      put_default(acc, key, value)
+      put_default(acc, key, value, context)
     end)
   end
 
-  defp put_default(attrs, key, _value) when is_map_key(attrs, key), do: attrs
+  defp put_default(attrs, key, _value, _context) when is_map_key(attrs, key), do: attrs
 
-  defp put_default(attrs, key, value) do
-    Map.put(attrs, default_key(attrs, key), resolve_default(value))
+  defp put_default(attrs, key, value, context) do
+    Map.put(attrs, default_key(attrs, key), resolve_default(value, context))
   end
+
+  defp resolve_default(value, _context) when is_function(value, 0), do: value.()
+  defp resolve_default(value, context) when is_function(value, 1), do: value.(context)
+  defp resolve_default(value, _context), do: value
 
   defp default_key(attrs, key) when is_atom(key) do
     string_key = Atom.to_string(key)

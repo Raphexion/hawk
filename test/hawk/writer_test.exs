@@ -134,6 +134,15 @@ defmodule Hawk.WriterTest do
       assert context.error == :invalid
       assert {"is invalid", _opts} = context.changeset.errors[:active]
     end
+
+    test "one-argument defaults receive the mutation context" do
+      context =
+        %Student{}
+        |> context(%{})
+        |> Writer.defaults(identity: fn context -> context.authority.identity end)
+
+      assert context.attrs.identity == :system
+    end
   end
 
   describe "validate_required/2" do
