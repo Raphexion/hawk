@@ -24,6 +24,8 @@ defmodule Hawk.OpenApi do
     * `:security` — the top-level security list (default `[]`).
     * `:security_schemes` — named OpenAPI security scheme definitions (default `%{}`).
     * `:path_prefix` — a prefix applied to every path (default `""`).
+    * `:extra_paths` — application-owned OpenAPI path items merged into the
+      generated resource paths (default `%{}`).
   """
   def spec(resources, opts \\ []) when is_list(resources) do
     resources = resources |> Enum.map(&normalize_resource/1) |> Enum.reject(&is_nil/1)
@@ -49,7 +51,9 @@ defmodule Hawk.OpenApi do
       servers: Keyword.get(opts, :servers, [%{url: "/"}]),
       security: Keyword.get(opts, :security, []),
       tags: tags(resources),
-      paths: paths(resources, Keyword.get(opts, :path_prefix, "")),
+      paths:
+        paths(resources, Keyword.get(opts, :path_prefix, ""))
+        |> Map.merge(Keyword.get(opts, :extra_paths, %{})),
       components: components
     }
   end

@@ -188,4 +188,16 @@ defmodule Hawk.OpenApiResourceAdapterTest do
       Hawk.OpenApi.spec([Videdal.ExternalCourses])
     end
   end
+
+  test "merges application-owned extra paths into the generated spec" do
+    extra_paths = %{"/imports" => %{post: %{summary: "Import resources"}}}
+
+    spec =
+      Hawk.OpenApi.spec([Videdal.ExternalCourses],
+        title: "Test API",
+        extra_paths: extra_paths
+      )
+
+    assert spec.paths["/imports"] == extra_paths["/imports"]
+  end
 end
