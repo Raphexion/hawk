@@ -274,6 +274,9 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
              }
            }
 
+    assert create_schema.properties.data.properties.attributes.required == [:title]
+    assert create_schema.properties.data.properties.relationships.required == [:school, :teacher]
+
     assert update_schema.properties.data.properties.attributes.properties == %{
              title: %{
                type: "string",
@@ -281,6 +284,9 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
                example: "Math"
              }
            }
+
+    refute Map.has_key?(update_schema.properties.data.properties.attributes, :required)
+    refute Map.has_key?(update_schema.properties.data.properties.relationships, :required)
 
     assert create_schema.required == [:data]
     assert create_schema.properties.data.required == [:type]

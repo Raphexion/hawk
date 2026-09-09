@@ -753,6 +753,11 @@ defmodule Hawk.OpenApi do
     }
 
     data_properties =
+      data_properties
+      |> put_required_fields(:attributes, required_fields(resource, :attributes, capability))
+      |> put_required_fields(:relationships, required_fields(resource, :relationships, capability))
+
+    data_properties =
       if capability == :updatable do
         Map.put(data_properties, :id, %{type: "string", format: "uuid"})
       else
@@ -854,6 +859,25 @@ defmodule Hawk.OpenApi do
     |> Map.new(fn {name, metadata} ->
       {name, relationship_schema(resource, name, metadata, false)}
     end)
+  end
+
+  defp required_fields(resource, field_type, capability) do
+    operation = if capability == :creatable, do: :create, else: :update
+
+    resource.json_api
+    |> Map.fetch!(field_type)
+    |> Enum.filter(fn {_name, metadata} -> operation in Map.get(metadata, :required, []) end)
+    |> Enum.map(&elem(&1, 0))
+    |> case do
+      [] -> nil
+      fields -> fields
+    end
+  end
+
+  defp put_required_fields(properties, _field, nil), do: properties
+
+  defp put_required_fields(properties, field, required) do
+    update_in(properties, [field], &Map.put(&1, :required, required))
   end
 
   defp attribute_type(resource, name, metadata) do

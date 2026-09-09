@@ -12,6 +12,7 @@ defmodule Videdal.Courses.JsonApi do
 
   attribute(:title,
     writable: true,
+    required: :create,
     doc: "Human-readable course title.",
     example: "Math"
   )
@@ -33,12 +34,14 @@ defmodule Videdal.Courses.JsonApi do
 
   relationship(:school,
     writable: true,
+    required: :create,
     doc: "The school offering the course.",
     example: %{type: "schools", id: Videdal.school_id()}
   )
 
   relationship(:teacher,
     writable: true,
+    required: :create,
     doc: "The teacher responsible for the course.",
     example: %{type: "teachers", id: Videdal.teacher_id()}
   )

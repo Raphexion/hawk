@@ -27,6 +27,8 @@ defmodule Hawk.JsonApi.Resource do
     * `:source` — the internal Ecto field (default: the attribute name).
     * `:writable` — boolean shortcut setting both creatable+updatable.
     * `:creatable` / `:updatable` — per-direction writability (default false).
+    * `:required` — `:create`, `:update`, a list of those operations, or `true`
+      for both; documents request-level requiredness in OpenAPI.
     * `:doc` / `:example` — surfaced in OpenAPI.
     * `:resolver` — a `&fun/1` computing the attribute from the model (for
       computed/projection attributes not backed by a field).
@@ -35,6 +37,8 @@ defmodule Hawk.JsonApi.Resource do
 
     * `:source` — the internal association name (default: the relationship name).
     * `:writable` / `:creatable` / `:updatable` — linkage writability.
+    * `:required` — `:create`, `:update`, a list of those operations, or `true`
+      for both; documents request-level requiredness in OpenAPI.
     * `:doc` / `:example` — surfaced in OpenAPI. The `example` describes the
       `data` payload (a single identifier object for to-one, an array for
       to-many) and is nested under `data` in the emitted schema.
@@ -232,6 +236,32 @@ defmodule Hawk.JsonApi.Resource do
     opts
     |> Keyword.take([:doc, :example, :source, :resolver])
     |> Map.new(fn {key, value} -> {key, literal!(value, caller)} end)
+    |> put_required_metadata(opts)
+  end
+
+  defp put_required_metadata(metadata, opts) do
+    case Keyword.get(opts, :required, false) do
+      false ->
+        metadata
+
+      true ->
+        Map.put(metadata, :required, [:create, :update])
+
+      operation when operation in [:create, :update] ->
+        Map.put(metadata, :required, [operation])
+
+      operations when is_list(operations) ->
+        if Enum.all?(operations, &(&1 in [:create, :update])) do
+          Map.put(metadata, :required, Enum.uniq(operations))
+        else
+          raise ArgumentError,
+                "JSON:API field :required must contain only :create and :update"
+        end
+
+      invalid ->
+        raise ArgumentError,
+              "JSON:API field :required must be true, :create, :update, or a list of those operations; got: #{inspect(invalid)}"
+    end
   end
 
   defp writable_metadata(name, opts) do
