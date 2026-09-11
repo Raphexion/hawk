@@ -46,13 +46,13 @@ defmodule Hawk.Resource.Validation do
         actions: available?(modules.actions, :actions, mode)
       }
 
-      run_validations(modules, flags)
+      run_validations(modules, flags, mode)
     end
 
     :ok
   end
 
-  defp run_validations(modules, flags) do
+  defp run_validations(modules, flags, mode) do
     if flags.reader, do: validate_functions!(modules.reader, :reader, all: 1, one: 1)
     if flags.policy, do: validate_functions!(modules.policy, :policy, read_filter: 1)
 
@@ -71,7 +71,7 @@ defmodule Hawk.Resource.Validation do
     end
 
     if flags.live_view and flags.reader do
-      validate_live_view_contract!(modules.model, modules.reader, modules.live_view)
+      validate_live_view_contract!(modules.model, modules.reader, modules.live_view, mode)
     end
 
     if flags.actions, do: validate_functions!(modules.actions, :actions, __hawk_actions__: 0)
@@ -256,9 +256,9 @@ defmodule Hawk.Resource.Validation do
     :ok
   end
 
-  defp validate_live_view_contract!(_model, _reader, false), do: :ok
+  defp validate_live_view_contract!(_model, _reader, false, _mode), do: :ok
 
-  defp validate_live_view_contract!(model, reader, live_view_module) do
+  defp validate_live_view_contract!(model, reader, live_view_module, mode) do
     live_view = live_view_module.__hawk_live_view__()
 
     index = live_view[:index] || %{}
@@ -280,7 +280,8 @@ defmodule Hawk.Resource.Validation do
       reader,
       live_view_module,
       :index,
-      Map.get(index, :table, [])
+      Map.get(index, :table, []),
+      mode
     )
 
     validate_live_view_fields!(
@@ -288,7 +289,8 @@ defmodule Hawk.Resource.Validation do
       reader,
       live_view_module,
       :show,
-      Map.get(live_view[:show] || %{}, :fields, [])
+      Map.get(live_view[:show] || %{}, :fields, []),
+      mode
     )
 
     validate_live_view_fields!(
@@ -296,7 +298,8 @@ defmodule Hawk.Resource.Validation do
       reader,
       live_view_module,
       :create_form,
-      Map.get(live_view[:create_form] || %{}, :fields, [])
+      Map.get(live_view[:create_form] || %{}, :fields, []),
+      mode
     )
 
     validate_live_view_fields!(
@@ -304,7 +307,8 @@ defmodule Hawk.Resource.Validation do
       reader,
       live_view_module,
       :update_form,
-      Map.get(live_view[:update_form] || %{}, :fields, [])
+      Map.get(live_view[:update_form] || %{}, :fields, []),
+      mode
     )
   end
 
@@ -357,17 +361,17 @@ defmodule Hawk.Resource.Validation do
   defp computed_attribute?(%{resolver: resolver}) when is_function(resolver, 2), do: true
   defp computed_attribute?(_metadata), do: false
 
-  defp validate_live_view_fields!(model, reader, live_view_module, kind, fields) do
+  defp validate_live_view_fields!(model, reader, live_view_module, kind, fields, mode) do
     preload_keys = reader_preload_keys(reader)
 
     Enum.each(fields, fn metadata ->
       name = Map.fetch!(metadata, :name)
       source = Map.get(metadata, :source, name)
-      validate_live_view_field!(model, live_view_module, kind, name, source, preload_keys)
+      validate_live_view_field!(model, live_view_module, kind, name, source, preload_keys, mode)
     end)
   end
 
-  defp validate_live_view_field!(model, live_view_module, kind, name, source, _preload_keys)
+  defp validate_live_view_field!(model, live_view_module, kind, name, source, _preload_keys, _mode)
        when is_atom(source) do
     if is_nil(model.__schema__(:type, source)) do
       raise ArgumentError,
@@ -376,7 +380,7 @@ defmodule Hawk.Resource.Validation do
     end
   end
 
-  defp validate_live_view_field!(_model, live_view_module, kind, name, [association | _rest], _preload_keys)
+  defp validate_live_view_field!(_model, live_view_module, kind, name, [association | _rest], _preload_keys, _mode)
        when kind in [:create_form, :update_form] and is_atom(association) do
     raise ArgumentError,
           "Hawk resource live_view module #{inspect(live_view_module)} #{kind} field #{inspect(name)} " <>
@@ -384,7 +388,7 @@ defmodule Hawk.Resource.Validation do
             "writer casts, not preloaded associations. Render a related value with a show field instead"
   end
 
-  defp validate_live_view_field!(model, live_view_module, kind, name, [association | rest], preload_keys)
+  defp validate_live_view_field!(model, live_view_module, kind, name, [association | rest], preload_keys, mode)
        when is_atom(association) do
     case model.__schema__(:association, association) do
       nil ->
@@ -399,13 +403,13 @@ defmodule Hawk.Resource.Validation do
                   "reaches association #{inspect(association)}, which must be declared as a reader preload"
         end
 
-        validate_path_tail(association_meta.related, live_view_module, kind, name, rest)
+        validate_path_tail(association_meta.related, live_view_module, kind, name, rest, mode)
     end
   end
 
-  defp validate_path_tail(_related, _live_view_module, _kind, _name, []), do: :ok
+  defp validate_path_tail(_related, _live_view_module, _kind, _name, [], _mode), do: :ok
 
-  defp validate_path_tail(related, live_view_module, kind, name, [key | rest]) when is_atom(key) do
+  defp validate_path_tail(related, live_view_module, kind, name, [key | rest], mode) when is_atom(key) do
     cond do
       not is_nil(related.__schema__(:type, key)) ->
         # Leaf field — the display target. Nothing more to preload.
@@ -415,17 +419,16 @@ defmodule Hawk.Resource.Validation do
         # A nested association in the path must be preloaded by *its* resource's
         # reader, not just exist on the schema — otherwise the contract passes
         # but the runtime preload fails (the exact drift this check prevents).
-        nested_preloads = reader_preload_keys(Hawk.Resource.Convention.reader_module(related))
-
-        unless MapSet.member?(nested_preloads, key) do
-          raise ArgumentError,
-                "Hawk resource live_view module #{inspect(live_view_module)} #{kind} field " <>
-                  "#{inspect(name)} reaches nested association #{inspect(key)} on " <>
-                  "#{inspect(related)}, which must be declared as a reader preload by " <>
-                  "#{inspect(Hawk.Resource.Convention.reader_module(related))}"
-        end
-
-        validate_path_tail(association.related, live_view_module, kind, name, rest)
+        validate_nested_reader_path(
+          related,
+          live_view_module,
+          kind,
+          name,
+          key,
+          association,
+          rest,
+          mode
+        )
 
       true ->
         raise ArgumentError,
@@ -435,11 +438,53 @@ defmodule Hawk.Resource.Validation do
     end
   end
 
+  defp validate_nested_reader_path(related, live_view_module, kind, name, key, association, rest, mode) do
+    nested_reader = Hawk.Resource.Convention.reader_module(related)
+
+    case reader_preload_keys(nested_reader, mode) do
+      {:ok, nested_preloads} ->
+        unless MapSet.member?(nested_preloads, key) do
+          raise ArgumentError,
+                "Hawk resource live_view module #{inspect(live_view_module)} #{kind} field " <>
+                  "#{inspect(name)} reaches nested association #{inspect(key)} on " <>
+                  "#{inspect(related)}, which must be declared as a reader preload by " <>
+                  "#{inspect(nested_reader)}"
+        end
+
+        validate_path_tail(association.related, live_view_module, kind, name, rest, mode)
+
+      :unavailable ->
+        :ok
+    end
+  end
+
   defp reader_preload_keys(reader) do
     if Code.ensure_loaded?(reader) and function_exported?(reader, :preload_keys, 0) do
       reader.preload_keys()
     else
       MapSet.new()
     end
+  end
+
+  defp reader_preload_keys(reader, :compile) do
+    if Code.ensure_loaded?(reader) and function_exported?(reader, :preload_keys, 0) do
+      {:ok, reader.preload_keys()}
+    else
+      IO.warn(
+        "Hawk nested reader module #{inspect(reader)} is not available yet; " <>
+          "skipping nested preload validation. Run `mix hawk.validate` to enforce."
+      )
+
+      :unavailable
+    end
+  end
+
+  defp reader_preload_keys(reader, :strict) do
+    unless Code.ensure_loaded?(reader) and function_exported?(reader, :preload_keys, 0) do
+      raise ArgumentError,
+            "Hawk nested reader module #{inspect(reader)} is not available"
+    end
+
+    {:ok, reader.preload_keys()}
   end
 end
