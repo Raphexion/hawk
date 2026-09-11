@@ -79,6 +79,7 @@ defmodule Hawk.JsonApi.Resource do
   @doc false
   defmacro __using__(_opts) do
     quote do
+      @behaviour Hawk.JsonApi.PresentationBehaviour
       import Hawk.JsonApi.Resource,
         only: [
           attribute: 2,

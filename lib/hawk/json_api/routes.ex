@@ -37,6 +37,18 @@ defmodule Hawk.JsonApi.Routes do
     end
   end
 
+  def alias_routes(alias_module, opts \\ []) when is_atom(alias_module) do
+    Code.ensure_compiled!(alias_module)
+
+    unless function_exported?(alias_module, :__hawk_alias__, 0) do
+      raise ArgumentError, "Hawk JSON:API alias #{inspect(alias_module)} must define __hawk_alias__/0"
+    end
+
+    %{resource: resource, adapter: adapter} = alias_module.__hawk_alias__()
+    Code.ensure_compiled!(resource)
+    resource_routes(%{resource: resource, json_api: adapter.__hawk_json_api__()}, opts)
+  end
+
   defp normalize_resource(module) do
     Code.ensure_compiled(module)
 

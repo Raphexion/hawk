@@ -34,7 +34,11 @@ defmodule Hawk.JsonApi.QueryController do
 
         case query.page(opts) do
           {:error, %Hawk.Error{} = error} ->
-            ControllerSupport.json(conn, error.status, Hawk.Errors.to_json_api(error))
+            ControllerSupport.json(
+              conn,
+              error.status,
+              Hawk.Errors.to_json_api(ControllerSupport.presentation(conn, source), error)
+            )
 
           result ->
             document =

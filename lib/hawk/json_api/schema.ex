@@ -35,6 +35,15 @@ defmodule Hawk.JsonApi.Schema do
     metadata_cached(module, @metadata_cache_enabled)
   end
 
+  def metadata(%module{}, presentation), do: metadata(module, presentation)
+
+  def metadata(module, presentation) when is_atom(module) do
+    case Hawk.JsonApi.Presentation.adapter(presentation, module) do
+      nil -> metadata_cached(module, @metadata_cache_enabled)
+      adapter -> normalize_metadata(adapter.__hawk_json_api__())
+    end
+  end
+
   def metadata_cached(module, true) do
     key = {@metadata_cache_key, module}
 
@@ -79,9 +88,9 @@ defmodule Hawk.JsonApi.Schema do
   sent because the spec exposes the field as `name`.
   """
   @spec external_pointer(struct() | module(), atom()) :: String.t()
-  def external_pointer(model, field) when is_atom(field) do
+  def external_pointer(model, field, presentation \\ nil) when is_atom(field) do
     module = schema_module(model)
-    json_api = metadata(module)
+    json_api = metadata(module, presentation)
 
     case attribute_external_name(json_api, field) do
       {:ok, name} -> "/data/attributes/#{name}"

@@ -52,6 +52,13 @@ defmodule Hawk.JsonApiRouterTest.ReadOnlyRouter do
   hawk_json_api(Videdal.CourseCatalog, Videdal.Controllers.CourseCatalogController, path_prefix: "/api/v1")
 end
 
+defmodule Hawk.JsonApiRouterTest.AliasRouter do
+  use Hawk.JsonApiRouterTest.FakeRouter
+  import Hawk.JsonApi.Router
+
+  hawk_json_api_alias(Videdal.Courses.BusinessJsonApi, Videdal.Controllers.CourseRoutesController)
+end
+
 defmodule Hawk.JsonApiRouterTest.QueryRouter do
   use Hawk.JsonApiRouterTest.FakeRouter
   import Hawk.JsonApi.Router
@@ -69,7 +76,7 @@ end
 defmodule Hawk.JsonApiRouterTest do
   use ExUnit.Case, async: true
 
-  alias Hawk.JsonApiRouterTest.{FullRouter, HiddenRouter, QueryRouter, ReadOnlyRouter}
+  alias Hawk.JsonApiRouterTest.{AliasRouter, FullRouter, HiddenRouter, QueryRouter, ReadOnlyRouter}
 
   test "router macro emits full resource routes" do
     assert FullRouter.__fake_routes__() == [
@@ -97,6 +104,17 @@ defmodule Hawk.JsonApiRouterTest do
              {:get, "/api/v1/course-catalog/:id/relationships/:relationship",
               Videdal.Controllers.CourseCatalogController, :relationship},
              {:get, "/api/v1/course-catalog/:id/:relationship", Videdal.Controllers.CourseCatalogController, :related}
+           ]
+  end
+
+  test "alias router macro emits the canonical resource route set under the alias type" do
+    assert AliasRouter.__fake_routes__() == [
+             {:get, "/modules", Videdal.Controllers.CourseRoutesController, :index},
+             {:post, "/modules", Videdal.Controllers.CourseRoutesController, :create},
+             {:get, "/modules/:id", Videdal.Controllers.CourseRoutesController, :show},
+             {:patch, "/modules/:id", Videdal.Controllers.CourseRoutesController, :update},
+             {:delete, "/modules/:id", Videdal.Controllers.CourseRoutesController, :delete},
+             {:post, "/modules/:id/-actions/:action", Videdal.Controllers.CourseRoutesController, :hawk_action}
            ]
   end
 

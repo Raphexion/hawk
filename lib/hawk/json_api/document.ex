@@ -47,11 +47,11 @@ defmodule Hawk.JsonApi.Document do
   @doc """
   Renders a `GET /:id/relationships/:relationship` linkage document.
   """
-  def relationship_document(model, relationship)
+  def relationship_document(model, relationship, opts \\ [])
       when is_struct(model) and is_binary(relationship) do
-    json_api = Schema.metadata(model)
+    json_api = Schema.metadata(model, Keyword.get(opts, :presentation))
     {name, source} = Schema.relationship_mapping!(json_api, relationship)
-    data = relationship_data(model, source, [source])
+    data = relationship_data(model, source, [source], Keyword.get(opts, :presentation))
 
     %{
       links: relationship_links(model, json_api, name),
@@ -64,13 +64,14 @@ defmodule Hawk.JsonApi.Document do
   """
   def related_document(model, relationship, opts \\ [])
       when is_struct(model) and is_binary(relationship) do
-    {_name, source} = Schema.relationship_mapping!(Schema.metadata(model), relationship)
+    presentation = Keyword.get(opts, :presentation)
+    {_name, source} = Schema.relationship_mapping!(Schema.metadata(model, presentation), relationship)
 
     case related_value(model, source) do
       models when is_list(models) ->
         document(
           models,
-          opts |> Keyword.put(:links, true) |> Keyword.put(:self, collection_path(model, source))
+          opts |> Keyword.put(:links, true) |> Keyword.put(:self, collection_path(model, source, presentation))
         )
 
       nil ->
@@ -82,7 +83,7 @@ defmodule Hawk.JsonApi.Document do
   end
 
   defp resource_object(model, opts) do
-    json_api = Schema.metadata(model)
+    json_api = Schema.metadata(model, Keyword.get(opts, :presentation))
 
     %{
       type: json_api.type,
@@ -143,7 +144,7 @@ defmodule Hawk.JsonApi.Document do
           %{}
         end
 
-      case relationship_data(model, source, preloads) do
+      case relationship_data(model, source, preloads, Keyword.get(opts, :presentation)) do
         :not_loaded when relationship == %{} -> relationships
         :not_loaded -> Map.put(relationships, name, relationship)
         data -> Map.put(relationships, name, Map.put(relationship, :data, data))
@@ -151,12 +152,12 @@ defmodule Hawk.JsonApi.Document do
     end)
   end
 
-  defp relationship_data(model, name, preloads) do
+  defp relationship_data(model, name, preloads, presentation) do
     association = Schema.schema_module(model).__schema__(:association, name)
 
     case association.cardinality do
-      :one -> belongs_to_identifier(model, association)
-      :many -> many_identifiers(Map.get(model, name), preload_requested?(preloads, name))
+      :one -> belongs_to_identifier(model, association, presentation)
+      :many -> many_identifiers(Map.get(model, name), preload_requested?(preloads, name), presentation)
     end
   end
 
@@ -179,7 +180,7 @@ defmodule Hawk.JsonApi.Document do
 
   defp put_document_links(document, [first | _models], opts) do
     if Keyword.get(opts, :links, false) do
-      Map.put(document, :links, %{self: Keyword.get(opts, :self, document_self_link(first))})
+      Map.put(document, :links, %{self: Keyword.get(opts, :self, document_self_link(first, opts))})
     else
       document
     end
@@ -193,20 +194,21 @@ defmodule Hawk.JsonApi.Document do
     end
   end
 
-  defp document_self_link(model) when is_struct(model), do: resource_path(model, Schema.metadata(model))
+  defp document_self_link(model, opts) when is_struct(model),
+    do: resource_path(model, Schema.metadata(model, Keyword.get(opts, :presentation)))
 
-  defp collection_path(model, relationship) do
+  defp collection_path(model, relationship, presentation) do
     association = Schema.schema_module(model).__schema__(:association, relationship)
-    "/" <> Schema.metadata(association.related).type
+    "/" <> Schema.metadata(association.related, presentation).type
   end
 
   defp resource_path(model, json_api) do
     "/" <> json_api.type <> "/" <> to_string(Map.get(model, Schema.identity(model)))
   end
 
-  defp belongs_to_identifier(model, association) do
+  defp belongs_to_identifier(model, association, presentation) do
     id = Map.get(model, association.owner_key)
-    type = Schema.metadata(association.related).type
+    type = Schema.metadata(association.related, presentation).type
 
     # The FK value is the related resource's identity iff the association's
     # related_key equals the related resource's declared identity. The default
@@ -216,14 +218,14 @@ defmodule Hawk.JsonApi.Document do
     if is_nil(id), do: nil, else: %{type: type, id: to_string(id)}
   end
 
-  defp many_identifiers(_models, false), do: :not_loaded
-  defp many_identifiers(%Ecto.Association.NotLoaded{}, true), do: :not_loaded
-  defp many_identifiers(nil, true), do: :not_loaded
+  defp many_identifiers(_models, false, _presentation), do: :not_loaded
+  defp many_identifiers(%Ecto.Association.NotLoaded{}, true, _presentation), do: :not_loaded
+  defp many_identifiers(nil, true, _presentation), do: :not_loaded
 
-  defp many_identifiers(models, true) do
+  defp many_identifiers(models, true, presentation) do
     Enum.map(
       models,
-      &%{type: Schema.metadata(&1).type, id: to_string(Map.get(&1, Schema.identity(&1)))}
+      &%{type: Schema.metadata(&1, presentation).type, id: to_string(Map.get(&1, Schema.identity(&1)))}
     )
   end
 
@@ -236,7 +238,8 @@ defmodule Hawk.JsonApi.Document do
   end
 
   defp put_included(document, models, opts) do
-    primary_resources = MapSet.new(models, &resource_identity/1)
+    presentation = Keyword.get(opts, :presentation)
+    primary_resources = MapSet.new(models, &resource_identity(&1, presentation))
 
     {included, _seen} = included_resources(models, Keyword.get(opts, :preloads, []), opts, primary_resources)
 
@@ -247,8 +250,8 @@ defmodule Hawk.JsonApi.Document do
     end
   end
 
-  defp resource_identity(model) do
-    {Schema.metadata(model).type, to_string(Map.get(model, Schema.identity(model)))}
+  defp resource_identity(model, presentation) do
+    {Schema.metadata(model, presentation).type, to_string(Map.get(model, Schema.identity(model)))}
   end
 
   defp included_resources(models, preloads, opts, seen) do
@@ -274,7 +277,7 @@ defmodule Hawk.JsonApi.Document do
     model
     |> related_models(name)
     |> Enum.reduce({[], seen}, fn related, {included, seen} ->
-      identity = resource_identity(related)
+      identity = resource_identity(related, Keyword.get(opts, :presentation))
 
       if MapSet.member?(seen, identity) do
         {nested_included, seen} = included_resources_for_model(related, nested, opts, seen)

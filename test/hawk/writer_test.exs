@@ -392,7 +392,7 @@ defmodule Hawk.WriterTest do
 
       assert {:invalid, _context} = result
 
-      assert %{errors: [error]} = Errors.to_json_api(result)
+      assert %{errors: [error]} = Errors.to_json_api(Videdal.Courses.JsonApi, result)
       assert error.code == "invalid"
       assert error.source == %{pointer: "/data/attributes/email"}
       # The repo violation's error message ("has already been taken") overrides the

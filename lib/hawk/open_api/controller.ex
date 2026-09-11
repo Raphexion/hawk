@@ -46,12 +46,12 @@ defmodule Hawk.OpenApi.Controller do
     quote do
       use Phoenix.Controller, formats: []
 
-      def spec do
-        OpenApi.spec(unquote(resources), unquote(spec_opts))
+      def spec(opts \\ []) do
+        OpenApi.spec(unquote(resources), Keyword.merge(unquote(spec_opts), opts))
       end
 
       def show(conn, _params) do
-        OpenApiController.show(conn, spec())
+        OpenApiController.show(conn, spec(presentation: conn.assigns[:hawk_api_presentation]))
       end
     end
   end

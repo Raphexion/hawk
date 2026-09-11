@@ -11,25 +11,26 @@ defmodule Hawk.Errors do
   Converts a Hawk error or writer result into a JSON:API error document
   (`%{errors: [...]}`) with client-visible `source.pointer`s.
   """
-  def to_json_api(error_or_result) do
-    %{errors: Enum.map(to_errors(error_or_result), &json_api_error/1)}
+  def to_json_api(presentation, error_or_result) do
+    %{errors: Enum.map(to_errors(presentation, error_or_result), &json_api_error/1)}
   end
 
   @doc """
   Normalizes a Hawk error or writer result into a list of `Hawk.Error` structs.
   """
   def to_errors(%Error{} = error), do: [error]
+  def to_errors(_presentation, %Error{} = error), do: to_errors(error)
 
-  def to_errors({:not_authorized, %MutationContext{} = context}) do
+  def to_errors(_presentation, {:not_authorized, %MutationContext{} = context}) do
     [Map.fetch!(context.meta, :authorization_error)]
   end
 
-  def to_errors({:invalid, %MutationContext{} = context}) do
+  def to_errors(presentation, {:invalid, %MutationContext{} = context}) do
     model = context.model
-    Enum.map(context.changeset.errors, &validation_error(&1, model))
+    Enum.map(context.changeset.errors, &validation_error(&1, model, presentation))
   end
 
-  def to_errors({:error, message}) when is_binary(message), do: [Error.error(message)]
+  def to_errors(_presentation, {:error, message}) when is_binary(message), do: [Error.error(message)]
 
   @doc """
   Converts a Hawk writer result into a LiveView-friendly error shape
@@ -56,8 +57,8 @@ defmodule Hawk.Errors do
     |> put_optional(:source, error.source)
   end
 
-  defp validation_error({field, {message, opts}}, model) do
-    pointer = Hawk.JsonApi.Schema.external_pointer(model, field)
+  defp validation_error({field, {message, opts}}, model, presentation) do
+    pointer = Hawk.JsonApi.Schema.external_pointer(model, field, presentation)
     Error.invalid(pointer, interpolate(message, opts))
   end
 

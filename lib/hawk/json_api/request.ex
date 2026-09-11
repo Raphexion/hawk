@@ -83,7 +83,7 @@ defmodule Hawk.JsonApi.Request do
   def validate_document!(params, model, capability, opts \\ [])
       when capability in [:creatable, :updatable] do
     data = request_data!(params)
-    json_api = Schema.metadata(model)
+    json_api = Schema.metadata(model, Keyword.get(opts, :presentation))
 
     validate_type!(data, json_api.type)
     validate_update_identity!(data, capability, opts)
@@ -109,9 +109,9 @@ defmodule Hawk.JsonApi.Request do
   @doc """
   Extracts writer attrs from a create/update request document.
   """
-  def attributes(params, model, capability, _opts \\ [])
+  def attributes(params, model, capability, opts \\ [])
       when capability in [:creatable, :updatable] do
-    json_api = Schema.metadata(model)
+    json_api = Schema.metadata(model, Keyword.get(opts, :presentation))
     allowed = Map.fetch!(json_api, capability)
     data = Map.get(params, "data", %{})
 
@@ -128,10 +128,15 @@ defmodule Hawk.JsonApi.Request do
     reader = Keyword.get(opts, :reader)
     model = Keyword.get(opts, :model)
     authority = Keyword.get(opts, :authority)
+    presentation = Keyword.get(opts, :presentation)
 
     []
     |> put_request_option(:page, parse_page(params), %{})
-    |> put_request_option(:preloads, parse_include(Map.get(params, "include"), reader, model, authority), [])
+    |> put_request_option(
+      :preloads,
+      parse_include(Map.get(params, "include"), reader, model, authority, presentation),
+      []
+    )
     |> put_request_option(:filter, parse_filter(ordinary_filter(params), reader), :all)
     |> put_request_option(:deleted, parse_deleted_filter(params, reader), :exclude)
     |> put_sort(Map.get(params, "sort"), reader)
@@ -600,36 +605,37 @@ defmodule Hawk.JsonApi.Request do
   defp parse_filter_scalar("false"), do: false
   defp parse_filter_scalar(value), do: value
 
-  defp parse_include(nil, _reader, _model, _authority), do: []
-  defp parse_include("", _reader, _model, _authority), do: []
+  defp parse_include(nil, _reader, _model, _authority, _presentation), do: []
+  defp parse_include("", _reader, _model, _authority, _presentation), do: []
 
-  defp parse_include(include, reader, model, authority) when is_binary(include) do
+  defp parse_include(include, reader, model, authority, presentation) when is_binary(include) do
     include
     |> String.split(",", trim: true)
     |> Enum.map(&String.split(&1, ".", trim: true))
-    |> Enum.map(&include_path_to_preload(&1, reader, model, authority))
+    |> Enum.map(&include_path_to_preload(&1, reader, model, authority, presentation))
     |> Enum.reduce([], &merge_preload/2)
     |> Enum.reverse()
   end
 
-  defp parse_include(_include, _reader, _model, _authority), do: raise(ArgumentError, "include must be a string")
+  defp parse_include(_include, _reader, _model, _authority, _presentation),
+    do: raise(ArgumentError, "include must be a string")
 
-  defp include_path_to_preload([segment], reader, model, authority) do
-    include_atom!(segment, reader, model, authority)
+  defp include_path_to_preload([segment], reader, model, authority, presentation) do
+    include_atom!(segment, reader, model, authority, presentation)
   end
 
-  defp include_path_to_preload([segment | rest], reader, model, authority) do
-    key = include_atom!(segment, reader, model, authority)
+  defp include_path_to_preload([segment | rest], reader, model, authority, presentation) do
+    key = include_atom!(segment, reader, model, authority, presentation)
     nested_reader = preload_reader(reader, model, key)
     nested_model = preload_model(model, key)
 
-    {key, [include_path_to_preload(rest, nested_reader, nested_model, authority)]}
+    {key, [include_path_to_preload(rest, nested_reader, nested_model, authority, presentation)]}
   end
 
-  defp include_atom!(segment, reader, nil, _authority), do: internal_include_atom!(segment, reader)
+  defp include_atom!(segment, reader, nil, _authority, _presentation), do: internal_include_atom!(segment, reader)
 
-  defp include_atom!(segment, reader, model, authority) do
-    json_api = Schema.metadata(model)
+  defp include_atom!(segment, reader, model, authority, presentation) do
+    json_api = Schema.metadata(model, presentation)
 
     with {:ok, {name, source}} <- Schema.relationship_mapping(json_api, segment),
          true <- Schema.visible_field?(json_api, name, authority),

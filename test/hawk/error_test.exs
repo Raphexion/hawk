@@ -52,7 +52,7 @@ defmodule Hawk.ErrorTest do
 
     result = Grades.update(grade, %{score: 12}, authority)
 
-    assert Errors.to_json_api(result) == %{
+    assert Errors.to_json_api(Videdal.Grades.JsonApi, result) == %{
              errors: [
                %{
                  status: "403",
@@ -71,7 +71,7 @@ defmodule Hawk.ErrorTest do
     result =
       Grades.create(%{score: 12, school_id: @school_id, student_id: @student_id}, authority)
 
-    assert %{errors: [error]} = Errors.to_json_api(result)
+    assert %{errors: [error]} = Errors.to_json_api(Videdal.Grades.JsonApi, result)
     assert error.status == "422"
     assert error.code == "invalid"
     # course_id is the foreign key of the `:course` relationship, so the pointer
@@ -90,7 +90,7 @@ defmodule Hawk.ErrorTest do
       |> MutationContext.create(%{}, Authority.system())
       |> MutationContext.add_error(:title, "can't be blank")
 
-    assert %{errors: [error]} = Errors.to_json_api({:invalid, context})
+    assert %{errors: [error]} = Errors.to_json_api(Videdal.ExternalCourses.JsonApi, {:invalid, context})
     assert error.source == %{pointer: "/data/attributes/name"}
     assert error.title == "Invalid attribute"
   end
@@ -113,7 +113,7 @@ defmodule Hawk.ErrorTest do
       |> MutationContext.create(%{}, Authority.system())
       |> MutationContext.add_error(:app_name, "is invalid for %{type}", type: type)
 
-    assert %{errors: [%{detail: detail}]} = Errors.to_json_api({:invalid, context})
+    assert %{errors: [%{detail: detail}]} = Errors.to_json_api(Videdal.Students.JsonApi, {:invalid, context})
     assert detail =~ "is invalid for"
     assert detail =~ "Ecto.Enum"
   end
@@ -129,7 +129,7 @@ defmodule Hawk.ErrorTest do
              source: nil
            }
 
-    assert Errors.to_json_api(error) == %{
+    assert Errors.to_json_api(Videdal.Courses.JsonApi, error) == %{
              errors: [
                %{status: "400", code: "bad_request", title: "Bad request", detail: "bad filter"}
              ]

@@ -50,6 +50,20 @@ defmodule Hawk.JsonApi.Router do
     end)
   end
 
+  @doc "Emits routes for a declarative alternate JSON:API presentation."
+  defmacro hawk_json_api_alias(alias_module, controller, opts \\ []) do
+    env = __CALLER__
+    alias_module = Macro.expand(alias_module, env)
+    controller = Macro.expand(controller, env)
+    opts = Macro.expand(opts, env)
+    routes = Routes.alias_routes(alias_module, opts)
+    validate_controller!(controller, routes)
+
+    routes
+    |> Enum.map(&quote_route(controller, &1))
+    |> then(fn quoted_routes -> quote do: (unquote_splicing(quoted_routes)) end)
+  end
+
   @doc """
   Emits a generated GET route for a Hawk query returning a resource collection.
   """

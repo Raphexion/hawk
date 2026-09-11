@@ -28,7 +28,8 @@ defmodule Hawk.OpenApi do
       generated resource paths (default `%{}`).
   """
   def spec(resources, opts \\ []) when is_list(resources) do
-    resources = resources |> Enum.map(&normalize_resource/1) |> Enum.reject(&is_nil/1)
+    presentation = Keyword.get(opts, :presentation)
+    resources = resources |> Enum.map(&normalize_resource(&1, presentation)) |> Enum.reject(&is_nil/1)
 
     title =
       Keyword.get(opts, :title) ||
@@ -67,13 +68,13 @@ defmodule Hawk.OpenApi do
   defp maybe_put_security_schemes(components, schemes) when schemes == %{}, do: components
   defp maybe_put_security_schemes(components, schemes), do: Map.put(components, :securitySchemes, schemes)
 
-  defp normalize_resource(module) when is_atom(module) do
+  defp normalize_resource(module, presentation) when is_atom(module) do
     Code.ensure_compiled(module)
 
     if function_exported?(module, :__hawk_resource__, 1) do
       model = module.__hawk_resource__(:model)
 
-      case json_api_metadata!(module) do
+      case json_api_metadata!(module, presentation) do
         nil ->
           nil
 
@@ -89,10 +90,16 @@ defmodule Hawk.OpenApi do
     end
   end
 
-  defp json_api_metadata!(resource) do
+  defp json_api_metadata!(resource, presentation) do
     case resource.__hawk_resource__(:json_api) do
-      false -> nil
-      json_api -> json_api.__hawk_json_api__()
+      false ->
+        nil
+
+      json_api ->
+        case Hawk.JsonApi.Presentation.adapter(presentation, resource.__hawk_resource__(:model)) do
+          nil -> json_api.__hawk_json_api__()
+          adapter -> adapter.__hawk_json_api__()
+        end
     end
   end
 
