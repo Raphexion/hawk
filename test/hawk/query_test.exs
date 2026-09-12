@@ -70,8 +70,8 @@ defmodule Hawk.QueryTest do
     end
   end
 
-  test "missing policy warns in compile mode" do
-    warning =
+  test "missing policy is silently deferred in compile mode" do
+    output =
       capture_io(:stderr, fn ->
         Code.compile_string("""
         defmodule Hawk.QueryTest.MissingPolicy do
@@ -80,7 +80,7 @@ defmodule Hawk.QueryTest do
         """)
       end)
 
-    assert warning =~ "Hawk query policy module Hawk.QueryTest.MissingPolicy.Policy is not available yet"
+    assert output == ""
   end
 
   test "malformed policy fails immediately" do

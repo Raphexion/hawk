@@ -6,11 +6,12 @@ defmodule Mix.Tasks.Hawk.Validate do
   their sibling modules and the underlying Ecto models.
 
   This is the authoritative, order-independent gate that complements the
-  compile-time warnings emitted by `use Hawk.Resource`. Compile-time validation
-  warns (instead of raising) when a sibling module is not available yet, so a
-  facade can compile before its siblings during incremental edits or code
-  generation. This task runs the *same* validation in `:strict` mode — missing
-  siblings raise — plus `Hawk.ResourceContract.validate!/3` cross-checks.
+  best-effort validation performed by `use Hawk.Resource`. Compile-time
+  validation silently defers checks when a sibling module is not available
+  yet, so a facade can compile before its siblings during incremental edits,
+  code generation, or parallel compilation. This task runs the *same*
+  validation in `:strict` mode — missing siblings raise — plus
+  `Hawk.ResourceContract.validate!/3` cross-checks.
 
   ## Usage
 

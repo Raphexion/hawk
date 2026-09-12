@@ -42,9 +42,8 @@ defmodule Hawk.Resource do
   `__using__/1` runs three phases:
 
     1. **Resolve** — discovers each sibling by convention or explicit option.
-       A missing *required* sibling is a compile-time warning during
-       incremental edits/codegen, and a hard error under `mix hawk.validate`
-       (see `Hawk.Resource.Validation`).
+       A missing *required* sibling is deferred during compilation and is a
+       hard error under `mix hawk.validate` (see `Hawk.Resource.Validation`).
     2. **Validate** — `Hawk.Resource.Validation.validate!/2` checks that every
        *present* sibling has the shape Hawk needs: required functions exist,
        and adapter contracts (JSON:API attributes/relationships, reader

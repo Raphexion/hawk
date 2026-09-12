@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is documented in OpenAPI and generated plans. The `restore` action name is
   reserved for this lifecycle behavior.
 
+### Fixed
+
+- Compile-time validation now silently defers checks for unavailable resource
+  and Query modules, and always defers transitive nested Reader checks so a
+  development reload cannot validate a stale Reader BEAM.
+  `mix compile --warnings-as-errors` therefore remains compatible with parallel
+  compilation, while `mix hawk.validate` continues to enforce the complete,
+  order-independent contract.
+
 ## [0.10.0] - 2026-09-08
 
 ### Added

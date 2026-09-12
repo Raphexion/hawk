@@ -40,7 +40,7 @@ defmodule Hawk.ResourceValidationNestedReaderTest.Courses.LiveView do
 end
 
 defmodule Hawk.ResourceValidationNestedReaderTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Hawk.ResourceValidationNestedReaderTest.{Course, Courses}
 
@@ -56,19 +56,51 @@ defmodule Hawk.ResourceValidationNestedReaderTest do
     }
   end
 
-  test "compile validation defers unavailable nested readers" do
-    warning =
+  test "compile validation silently defers nested readers" do
+    output =
       ExUnit.CaptureIO.capture_io(:stderr, fn ->
         assert :ok = Hawk.Resource.Validation.validate!(modules(), :compile)
       end)
 
-    assert warning =~ "nested reader module"
-    assert warning =~ "Run `mix hawk.validate` to enforce"
+    assert output == ""
   end
 
   test "strict validation still rejects unavailable nested readers" do
     assert_raise ArgumentError, ~r/nested reader module .* is not available/, fn ->
       Hawk.Resource.Validation.validate!(modules(), :strict)
     end
+  end
+
+  test "strict validation reads reloaded nested reader metadata" do
+    nested_reader = Hawk.ResourceValidationNestedReaderTest.Lessons.Reader
+
+    on_exit(fn ->
+      :code.purge(nested_reader)
+      :code.delete(nested_reader)
+    end)
+
+    compile_nested_reader([:cards])
+    assert :ok = Hawk.Resource.Validation.validate!(modules(), :strict)
+
+    compile_nested_reader([])
+
+    assert :ok = Hawk.Resource.Validation.validate!(modules(), :compile)
+
+    assert_raise ArgumentError, ~r/reaches nested association :cards/, fn ->
+      Hawk.Resource.Validation.validate!(modules(), :strict)
+    end
+
+    compile_nested_reader([:cards])
+    assert :ok = Hawk.Resource.Validation.validate!(modules(), :strict)
+  end
+
+  defp compile_nested_reader(preloads) do
+    ExUnit.CaptureIO.capture_io(:stderr, fn ->
+      Code.compile_string("""
+      defmodule Hawk.ResourceValidationNestedReaderTest.Lessons.Reader do
+        def preload_keys, do: MapSet.new(#{inspect(preloads)})
+      end
+      """)
+    end)
   end
 end

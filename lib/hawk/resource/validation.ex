@@ -9,11 +9,12 @@ defmodule Hawk.Resource.Validation do
   Validation runs in two modes:
 
     * `:compile` (default) — emitted from `use Hawk.Resource`. A *missing*
-      sibling module (not yet compiled) produces a warning and skips that
-      module's shape checks, so a facade can compile before its siblings
-      during incremental edits or code generation. A *present but malformed*
+      sibling module (not yet compiled) silently skips checks that need it, so
+      a facade can compile before its siblings during incremental edits, code
+      generation, and parallel compilation. A *present but malformed* direct
       sibling still raises, because that is real contract drift, not a
-      write-order artifact.
+      write-order artifact. Transitive nested Reader checks are always deferred
+      to avoid reading a stale module during development code reloads.
     * `:strict` — used by `mix hawk.validate`. Missing modules raise, so the
       task is the authoritative gate that a generator or CI runs once the
       whole resource set is written.
@@ -27,13 +28,13 @@ defmodule Hawk.Resource.Validation do
   @doc """
   Validates the resolved module map against their contracts.
 
-  `mode` defaults to `:compile` (warn on missing siblings, raise on drift).
+  `mode` defaults to `:compile` (defer missing siblings, raise on drift).
   Pass `:strict` to raise on missing siblings too — used by `mix hawk.validate`.
   """
   @spec validate!(map(), mode()) :: :ok
   def validate!(modules, mode \\ :compile) when mode in [:compile, :strict] do
     # The model is required and every other check depends on it. Without it
-    # there is nothing useful to validate, so warn/raise on it alone and stop.
+    # there is nothing useful to validate, so defer/raise on it alone and stop.
     if available?(modules.model, :model, mode) do
       validate_identity!(modules.model, Map.get(modules, :identity, :id))
 
@@ -87,20 +88,12 @@ defmodule Hawk.Resource.Validation do
     true
   end
 
-  defp available?(module, key, :compile) when is_atom(module) do
+  defp available?(module, _key, :compile) when is_atom(module) do
     if compiled?(module) do
       true
     else
-      warn_missing(key, module)
       false
     end
-  end
-
-  defp warn_missing(key, module) do
-    IO.warn(
-      "Hawk resource #{key} module #{inspect(module)} is not available yet; " <>
-        "skipping its contract validation. Run `mix hawk.validate` to enforce."
-    )
   end
 
   defp validate_identity!(model, identity) when is_atom(identity) do
@@ -466,18 +459,10 @@ defmodule Hawk.Resource.Validation do
     end
   end
 
-  defp reader_preload_keys(reader, :compile) do
-    if Code.ensure_loaded?(reader) and function_exported?(reader, :preload_keys, 0) do
-      {:ok, reader.preload_keys()}
-    else
-      IO.warn(
-        "Hawk nested reader module #{inspect(reader)} is not available yet; " <>
-          "skipping nested preload validation. Run `mix hawk.validate` to enforce."
-      )
-
-      :unavailable
-    end
-  end
+  # Nested readers are transitive dependencies of the LiveView contract. They
+  # may still be compiling or an older BEAM may still be loaded by a running
+  # development node, so compile mode must never use them as validation input.
+  defp reader_preload_keys(_reader, :compile), do: :unavailable
 
   defp reader_preload_keys(reader, :strict) do
     unless Code.ensure_loaded?(reader) and function_exported?(reader, :preload_keys, 0) do

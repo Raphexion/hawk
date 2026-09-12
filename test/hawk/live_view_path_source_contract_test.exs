@@ -235,6 +235,16 @@ defmodule Hawk.LiveViewPathSourceContractTest do
                      use Hawk.Resource, model: Videdal.Grade
                    end
                    """)
+
+                   validate_resource!(Hawk.PathSourceNested.Posts)
                  end
+  end
+
+  defp validate_resource!(resource) do
+    modules =
+      [:model, :reader, :policy, :writer, :json_api, :live_view, :actions, :identity]
+      |> Map.new(&{&1, resource.__hawk_resource__(&1)})
+
+    Hawk.Resource.Validation.validate!(modules, :strict)
   end
 end

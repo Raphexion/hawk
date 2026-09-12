@@ -181,8 +181,8 @@ defmodule Hawk.ResourceTest do
              Hawk.ResourceTest.CustomFacade.CustomLiveView
   end
 
-  test "missing conventional modules warn at compile time instead of raising" do
-    warning =
+  test "missing conventional modules are silently deferred at compile time" do
+    output =
       ExUnit.CaptureIO.capture_io(:stderr, fn ->
         Code.compile_string("""
         defmodule Hawk.ResourceTest.Broken.Writer do
@@ -200,8 +200,8 @@ defmodule Hawk.ResourceTest do
         """)
       end)
 
-    assert warning =~ "Hawk resource reader module Hawk.ResourceTest.Broken.Reader is not available yet"
-    assert warning =~ "Run `mix hawk.validate` to enforce"
+    refute output =~ "Hawk resource reader module"
+    refute output =~ "Run `mix hawk.validate` to enforce"
     assert function_exported?(Hawk.ResourceTest.Broken, :__hawk_resource__, 1)
   end
 

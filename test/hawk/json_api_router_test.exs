@@ -138,7 +138,7 @@ defmodule Hawk.JsonApiRouterTest do
         """)
       end)
 
-    assert output =~ "skipping router validation"
+    assert output == ""
 
     assert router.__fake_routes__() == [
              {:get, "/future-query", Hawk.JsonApi.QueryController, :index,

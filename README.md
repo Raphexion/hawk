@@ -74,12 +74,13 @@ end
 
 By convention Hawk expects sibling modules such as `MyApp.Courses.Reader`,
 `MyApp.Courses.Policy`, `MyApp.Courses.Writer`, `MyApp.Courses.JsonApi`, and
-`MyApp.Courses.LiveView`. A *missing* conventional module emits a compile-time
-warning (so a facade can compile before its siblings during incremental edits
-or code generation), while a *present but malformed* module still fails fast.
-Run `mix hawk.validate` as the authoritative, order-independent gate once the
-whole resource set is written — it validates every discovered Hawk resource
-in strict mode (missing siblings raise) plus the full adapter contract.
+`MyApp.Courses.LiveView`. A *missing* conventional module is silently deferred
+at compile time (so a facade can compile before its siblings during incremental
+edits, code generation, or parallel compilation), while a *present but
+malformed* module still fails fast. Run `mix hawk.validate` as the
+authoritative, order-independent gate once the whole resource set is written —
+it validates every discovered Hawk resource in strict mode (missing siblings
+raise) plus the full adapter contract.
 Intentional absence is explicit and disables the corresponding adapter entrypoint:
 
 ```elixir
@@ -1628,10 +1629,13 @@ filters, labels, docs, and writer rules by hand.
 
 ### Validation gate
 
-`use Hawk.Resource` validates at compile time, but a *missing* sibling emits a
-warning rather than raising, so a facade can compile before its siblings during
-incremental edits or code generation. A *present but malformed* sibling still
-fails fast — that is real contract drift, not a write-order artifact.
+`use Hawk.Resource` performs best-effort validation at compile time, but checks
+that need a *missing* sibling are silently deferred so a facade can compile
+before its siblings during incremental edits, code generation, or parallel
+compilation. A *present but malformed* sibling still fails fast — that is real
+contract drift, not a write-order artifact. Transitive nested Reader checks are
+always deferred because a running development node may still have the previous
+Reader BEAM loaded while recompilation is in progress.
 
 `mix hawk.validate` is the authoritative, order-independent gate. It validates
 every discovered Hawk resource in strict mode (missing siblings raise) and runs
@@ -1644,6 +1648,14 @@ mix test                          # mix hawk.validate + the test suite
 mix hawk.validate                # discover and validate all Hawk resources
 mix hawk.validate MyApp.Courses  # validate explicit resource(s)
 ```
+
+Nested Reader metadata is not copied into the resource facade. LiveView helpers
+derive their declared preload paths on each call, and nested preloading asks the
+currently loaded Reader modules for their metadata. Phoenix code reloading can
+therefore replace a LiveView adapter or Reader without leaving a stale preload
+contract in another compiled module; the next request uses the reloaded module.
+Run `mix hawk.validate` in CI after `mix compile --warnings-as-errors` to enforce
+the complete cross-module contract once compilation has settled.
 
 `mix hawk.openapi` writes an OpenAPI spec from every discovered Hawk facade
 (`json_api: false` resources are omitted by `Hawk.OpenApi.spec/2`), so the spec

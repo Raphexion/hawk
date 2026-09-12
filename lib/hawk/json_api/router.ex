@@ -87,11 +87,6 @@ defmodule Hawk.JsonApi.Router do
         Hawk.Query.validate!(query, :strict)
 
       _other ->
-        IO.warn(
-          "Hawk query module #{inspect(query)} is not available yet; " <>
-            "skipping router validation. Run `mix hawk.validate` to enforce."
-        )
-
         :ok
     end
   end

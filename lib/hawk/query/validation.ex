@@ -104,20 +104,12 @@ defmodule Hawk.Query.Validation do
     true
   end
 
-  defp available?(module, key, :compile) when is_atom(module) do
+  defp available?(module, _key, :compile) when is_atom(module) do
     if compiled?(module) do
       true
     else
-      warn_missing(key, module)
       false
     end
-  end
-
-  defp warn_missing(key, module) do
-    IO.warn(
-      "Hawk query #{key} module #{inspect(module)} is not available yet; " <>
-        "skipping its contract validation. Run `mix hawk.validate` to enforce."
-    )
   end
 
   defp compiled?(module), do: match?({:module, ^module}, Code.ensure_compiled(module))
