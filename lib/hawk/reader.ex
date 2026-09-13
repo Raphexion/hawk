@@ -31,25 +31,7 @@ defmodule Hawk.Reader do
                    ])
   @sort_dirs [:asc, :desc, :asc_nulls_first, :asc_nulls_last, :desc_nulls_first, :desc_nulls_last]
 
-  @type config :: %{
-          required(:repo) => module(),
-          required(:schema) => module(),
-          required(:filter_keys) => Enumerable.t(),
-          required(:read_filter) => (term() -> Filter.t()),
-          optional(:filter_handlers) => FilterCompiler.handlers(),
-          optional(:coordinate_filters) => %{optional(atom()) => Hawk.Reader.Coordinates.options()},
-          optional(:join_plan) => [JoinPlan.rule()],
-          optional(:forced_filter) => Filter.t(),
-          optional(:soft_delete) => %{field: atom(), expose: [atom()]},
-          optional(:preload_keys) => Enumerable.t(),
-          optional(:preload_readers) => %{optional(atom()) => module()},
-          optional(:preload_options) => %{optional(atom()) => map()},
-          optional(:scope) => (Ecto.Query.t(), map(), map() -> Ecto.Query.t()),
-          optional(:sort_keys) => Enumerable.t(),
-          optional(:default_sort) => keyword(atom()),
-          optional(:default_page_size) => pos_integer() | nil,
-          optional(:max_page_size) => pos_integer() | nil
-        }
+  @type config :: %{optional(atom()) => term()}
 
   @doc """
   Fetches all records for a reader config and options.

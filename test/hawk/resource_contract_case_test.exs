@@ -91,6 +91,26 @@ defmodule Hawk.ResourceContractCaseTest.MismatchedPolicyResource do
   def all(opts), do: Reader.all(opts)
 end
 
+defmodule Hawk.ResourceContractCaseTest.LiveViewOnlyResource.Reader do
+  use Hawk.Reader.Resource,
+    repo: Videdal.Repo,
+    schema: Videdal.Course,
+    policy: Videdal.Courses.Policy
+
+  filter(:id)
+  filter(:school_id)
+  filter(:teacher_id)
+  preload(:teacher)
+end
+
+defmodule Hawk.ResourceContractCaseTest.LiveViewOnlyResource do
+  alias Hawk.ResourceContractCaseTest.LiveViewOnlyResource.Reader
+
+  def __hawk_resource__(:reader), do: Reader
+  def __hawk_resource__(:policy), do: Videdal.Courses.Policy
+  def __hawk_resource__(:json_api), do: false
+end
+
 defmodule Hawk.ResourceContractCaseTest do
   use ExUnit.Case, async: true
 
@@ -124,5 +144,13 @@ defmodule Hawk.ResourceContractCaseTest do
                      Videdal.Course
                    )
                  end
+  end
+
+  test "JSON:API-disabled resources may preload associations for LiveView" do
+    assert :ok =
+             Hawk.ResourceContract.validate!(
+               Hawk.ResourceContractCaseTest.LiveViewOnlyResource,
+               Videdal.Course
+             )
   end
 end

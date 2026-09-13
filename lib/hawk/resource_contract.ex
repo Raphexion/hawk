@@ -14,12 +14,16 @@ defmodule Hawk.ResourceContract do
       must be preloadable by the reader.
   """
   def validate!(resource, model, opts \\ []) when is_atom(resource) and is_atom(model) do
-    json_api = do_validate_model!(model, resolve_json_api(resource, model, opts))
+    json_api = resolve_json_api(resource, model, opts)
     reader = resource_module(resource, :reader, Reader)
     policy = resource_module(resource, :policy, Policy)
 
-    validate_reader_preloads!(reader, json_api)
-    maybe_validate_relationship_preloads!(reader, json_api, opts)
+    if json_api do
+      json_api = do_validate_model!(model, json_api)
+      validate_reader_preloads!(reader, json_api)
+      maybe_validate_relationship_preloads!(reader, json_api, opts)
+    end
+
     validate_reader_sorts!(reader, model)
     validate_reader_filters!(reader, model)
     validate_reader_coordinate_filters!(reader, model)
@@ -52,7 +56,7 @@ defmodule Hawk.ResourceContract do
 
       function_exported?(resource, :__hawk_resource__, 1) ->
         case resource.__hawk_resource__(:json_api) do
-          false -> Hawk.JsonApi.Schema.metadata(model)
+          false -> false
           adapter -> adapter_metadata(adapter)
         end
 
