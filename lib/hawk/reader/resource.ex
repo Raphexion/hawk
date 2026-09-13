@@ -512,13 +512,19 @@ defmodule Hawk.Reader.Resource do
 
   defp quote_public_reader_functions do
     quote do
-      @dialyzer {:nowarn_function, one: 1, all: 1, page: 1, count: 1, preload_query: 2}
-
+      @spec one(keyword() | map()) :: {:ok, struct()} | :not_found
       def one(opts), do: Hawk.Reader.one(config(), opts)
+
+      @spec all(keyword() | map()) :: [struct()]
       def all(opts), do: Hawk.Reader.all(config(), opts)
+
+      @spec page(keyword() | map()) :: Hawk.Reader.Page.t()
       def page(opts), do: Hawk.Reader.page(config(), opts)
+
+      @spec count(keyword() | map()) :: non_neg_integer()
       def count(opts), do: Hawk.Reader.count(config(), opts)
 
+      @spec preload_query(Ecto.Query.t(), Hawk.Authority.t()) :: Ecto.Query.t()
       def preload_query(query, authority) do
         query
         |> Hawk.Reader.apply_authorized_filter(config(), authority)

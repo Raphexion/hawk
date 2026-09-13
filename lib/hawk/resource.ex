@@ -344,12 +344,16 @@ defmodule Hawk.Resource do
 
   defp quote_reader_delegates(reader) do
     quote do
-      @dialyzer {:nowarn_function, one: 1, all: 1, page: 1, count: 1}
-
+      @spec one(keyword() | map()) :: {:ok, struct()} | :not_found
       def one(opts), do: unquote(reader).one(opts)
 
+      @spec all(keyword() | map()) :: [struct()]
       def all(opts), do: unquote(reader).all(opts)
+
+      @spec page(keyword() | map()) :: Hawk.Reader.Page.t()
       def page(opts), do: Hawk.Resource.call_reader_page(unquote(reader), opts)
+
+      @spec count(keyword() | map()) :: non_neg_integer()
       def count(opts), do: Hawk.Resource.call_reader_count(unquote(reader), opts)
     end
   end
@@ -377,13 +381,20 @@ defmodule Hawk.Resource do
     form_delegates = quote_writer_form_delegates(writer)
 
     quote do
+      @spec create(map(), Hawk.Authority.t()) :: Hawk.Result.t(struct())
       def create(attrs, authority), do: unquote(writer).create(attrs, authority)
+
+      @spec update(struct(), map(), Hawk.Authority.t()) :: Hawk.Result.t(struct())
       def update(model, attrs, authority), do: unquote(writer).update(model, attrs, authority)
+
+      @spec delete(struct(), Hawk.Authority.t()) :: Hawk.Result.t(struct())
       def delete(model, authority), do: unquote(writer).delete(model, authority)
 
+      @spec restore(struct(), Hawk.Authority.t()) :: Hawk.Result.t(struct())
       def restore(model, authority),
         do: Hawk.Resource.call_writer_mutation(unquote(writer), :restore, [model, authority])
 
+      @spec hard_delete(struct(), Hawk.Authority.t()) :: Hawk.Result.t(struct())
       def hard_delete(model, authority),
         do: Hawk.Resource.call_writer_mutation(unquote(writer), :hard_delete, [model, authority])
 
@@ -405,9 +416,11 @@ defmodule Hawk.Resource do
 
   defp quote_writer_form_delegates(writer) do
     quote do
+      @spec change_create(map(), Hawk.Authority.t()) :: Ecto.Changeset.t()
       def change_create(attrs, authority),
         do: Hawk.Resource.call_writer_change(unquote(writer), :change_create, [attrs, authority])
 
+      @spec change_update(struct(), map(), Hawk.Authority.t()) :: Ecto.Changeset.t()
       def change_update(model, attrs, authority),
         do: Hawk.Resource.call_writer_change(unquote(writer), :change_update, [model, attrs, authority])
     end

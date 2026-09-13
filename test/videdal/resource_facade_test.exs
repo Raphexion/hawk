@@ -17,6 +17,12 @@ defmodule Videdal.ResourceFacadeTest do
   @school_admin_id Videdal.school_admin_id()
   @school_name "Videdal Skole"
 
+  test "generated resource APIs expose dialyzer-visible typespecs" do
+    assert_specs(Videdal.Courses, one: 1, all: 1, page: 1, count: 1, create: 2, update: 3)
+    assert_specs(Videdal.Courses.Reader, one: 1, all: 1, page: 1, count: 1, preload_query: 2)
+    assert_specs(Videdal.Courses.Writer, change_create: 2, create: 2, change_update: 3, update: 3)
+  end
+
   test "read facades expose one/1 for controller and LiveView style callers" do
     course = insert(:course, title: "Math")
 
@@ -321,5 +327,16 @@ defmodule Videdal.ResourceFacadeTest do
 
     assert {:ok, deleted_teacher} = Teachers.delete(created_teacher, authority)
     assert deleted_teacher.id == created_teacher.id
+  end
+
+  defp assert_specs(module, functions) do
+    {:ok, specs} = Code.Typespec.fetch_specs(module)
+
+    for {name, arity} <- functions do
+      assert Enum.any?(specs, fn {{spec_name, spec_arity}, _spec} ->
+               spec_name == name and spec_arity == arity
+             end),
+             "expected #{inspect(module)}.#{name}/#{arity} to have a typespec"
+    end
   end
 end

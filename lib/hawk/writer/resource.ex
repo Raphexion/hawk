@@ -202,12 +202,14 @@ defmodule Hawk.Writer.Resource do
       @doc false
       def __hawk_soft_delete__, do: unquote(delete_mode)
 
+      @spec change_create(map(), Hawk.Authority.t()) :: Ecto.Changeset.t()
       def change_create(attrs, authority) do
         attrs
         |> create_context(authority)
         |> Hawk.Writer.changeset()
       end
 
+      @spec create(map(), Hawk.Authority.t()) :: Hawk.Result.t(struct())
       def create(attrs, authority) do
         attrs
         |> create_context(authority)
@@ -229,12 +231,14 @@ defmodule Hawk.Writer.Resource do
     update_context = quote_context_pipeline(:update, update_block, nil, policy)
 
     quote do
+      @spec change_update(struct(), map(), Hawk.Authority.t()) :: Ecto.Changeset.t()
       def change_update(model, attrs, authority) do
         model
         |> update_context(attrs, authority)
         |> Hawk.Writer.changeset()
       end
 
+      @spec update(struct(), map(), Hawk.Authority.t()) :: Hawk.Result.t(struct())
       def update(model, attrs, authority) do
         model
         |> update_context(attrs, authority)
@@ -251,6 +255,7 @@ defmodule Hawk.Writer.Resource do
 
   defp quote_delete_functions(:default, repo, policy) do
     quote do
+      @spec delete(struct(), Hawk.Authority.t()) :: Hawk.Result.t(struct())
       def delete(model, authority) do
         model
         |> Hawk.MutationContext.delete(authority)
@@ -262,6 +267,7 @@ defmodule Hawk.Writer.Resource do
 
   defp quote_delete_functions({:soft, field}, repo, policy) do
     quote do
+      @spec delete(struct(), Hawk.Authority.t()) :: Hawk.Result.t(struct())
       def delete(model, authority) do
         model
         |> Hawk.MutationContext.delete(authority, %{unquote(field) => DateTime.utc_now(:second)})
@@ -270,6 +276,7 @@ defmodule Hawk.Writer.Resource do
         |> Hawk.RepositoryBoundary.update(unquote(repo), __hawk_writer_opts__())
       end
 
+      @spec restore(struct(), Hawk.Authority.t()) :: Hawk.Result.t(struct())
       def restore(model, authority) do
         model
         |> Hawk.MutationContext.restore(authority, %{unquote(field) => nil})
@@ -278,6 +285,7 @@ defmodule Hawk.Writer.Resource do
         |> Hawk.RepositoryBoundary.update(unquote(repo), __hawk_writer_opts__())
       end
 
+      @spec hard_delete(struct(), Hawk.Authority.t()) :: Hawk.Result.t(struct())
       def hard_delete(model, authority) do
         model
         |> Hawk.MutationContext.hard_delete(authority)
