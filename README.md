@@ -78,12 +78,15 @@ plug Hawk.Token.BearerPlug,
     key: MyApp.TokenKey.jwk(),
     issuer: "https://auth.example",
     audience: "my-hawk-api",
-    roles: [:agent, :admin]
+    roles: [:agent, :admin],
+    authority_builder: {MyApp.Auth, :authority_from_claims}
   ]
 ```
 
 The verifier validates the signature, issuer, audience, issued-at, and expiry
-claims before constructing an authority. Access tokens should normally live for
+claims before constructing an authority. `authority_builder` is optional and
+runs only after those checks, so applications can resolve database-backed
+identities or map custom claims to Hawk scopes. Access tokens should normally live for
 5–15 minutes. JWTs are bearer credentials: a leaked token remains usable until
 it expires, so use HTTPS, narrow scopes, and revoke the long-lived credential at
 the token issuer. Hawk does not provide a token endpoint or own credential

@@ -4,6 +4,70 @@ defmodule Hawk.Token.BearerPlugTest do
   alias Hawk.Authority
   alias Hawk.Token.BearerPlug
 
+  def assign_principal(conn, authority, assign_key \\ :principal_id) do
+    Plug.Conn.assign(conn, assign_key, authority.identity)
+  end
+
+  test "supports module callbacks with and without extra arguments" do
+    for {callback, assign_key} <- [
+          {{__MODULE__, :assign_principal}, :principal_id},
+          {{__MODULE__, :assign_principal, [:actor_id]}, :actor_id}
+        ] do
+      conn = Plug.Test.conn("get", "/") |> Plug.Conn.put_req_header("authorization", "Bearer good")
+
+      conn =
+        BearerPlug.call(conn,
+          verifier: fn "good" -> {:ok, Authority.new(:agent, "a-1")} end,
+          on_verified: callback
+        )
+
+      assert conn.assigns[assign_key] == "a-1"
+      assert conn.assigns.hawk_authority == Authority.new(:agent, "a-1")
+    end
+  end
+
+  test "callback sees a custom authority assign and can halt the connection" do
+    conn = Plug.Test.conn("get", "/") |> Plug.Conn.put_req_header("authorization", "Bearer good")
+
+    conn =
+      BearerPlug.call(conn,
+        verifier: fn "good" -> {:ok, Authority.new(:agent, "a-1")} end,
+        assign: :actor,
+        on_verified: fn conn, authority ->
+          assert conn.assigns.actor == authority
+          conn |> Plug.Conn.send_resp(403, "Forbidden") |> Plug.Conn.halt()
+        end
+      )
+
+    assert conn.halted
+    assert conn.status == 403
+    assert conn.resp_body == "Forbidden"
+    refute Map.has_key?(conn.assigns, :hawk_authority)
+  end
+
+  test "does not invoke on_verified for missing, malformed, rejected, or invalid verifier results" do
+    for required <- [false, true],
+        header <- [nil, "Bearer", "Basic good", "Bearer bad"],
+        result <- [{:error, :invalid_token}, {:ok, %{identity: "a-1"}}] do
+      conn = Plug.Test.conn("get", "/")
+      conn = if header, do: Plug.Conn.put_req_header(conn, "authorization", header), else: conn
+
+      returned =
+        BearerPlug.call(conn,
+          required: required,
+          verifier: fn _ -> result end,
+          on_verified: fn _, _ -> flunk("callback must not run without a verified authority") end
+        )
+
+      if required do
+        assert returned.halted
+        assert returned.status == 401
+      else
+        assert returned == conn
+      end
+    end
+  end
+
   test "assigns the verified authority" do
     conn = Plug.Test.conn("get", "/") |> Plug.Conn.put_req_header("authorization", "Bearer good")
 
@@ -85,6 +149,22 @@ defmodule Hawk.Token.BearerPlugTest do
       )
 
     assert %Authority{role: :agent} = conn.assigns.hawk_authority
+  end
+
+  test "runs on_verified after assigning the authority" do
+    conn = Plug.Test.conn("get", "/") |> Plug.Conn.put_req_header("authorization", "Bearer good")
+
+    conn =
+      BearerPlug.call(conn,
+        verifier: fn "good" -> {:ok, Authority.new(:agent, "a-1")} end,
+        on_verified: fn conn, authority ->
+          assert conn.assigns.hawk_authority == authority
+          Plug.Conn.assign(conn, :principal_id, authority.identity)
+        end
+      )
+
+    assert conn.assigns.hawk_authority == Authority.new(:agent, "a-1")
+    assert conn.assigns.principal_id == "a-1"
   end
 
   test "required authentication returns a JSON:API 401 response" do

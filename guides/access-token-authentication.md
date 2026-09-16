@@ -91,12 +91,15 @@ plug Hawk.Token.BearerPlug,
     key: MyApp.TokenKey.jwk(),
     issuer: "https://auth.example",
     audience: "my-hawk-api",
-    roles: [:teacher, :agent]
+    roles: [:teacher, :agent],
+    authority_builder: {MyApp.Auth, :authority_from_claims}
   ]
 ```
 
 `Hawk.Token.JWT` checks the signed JWT and turns it into a
-`Hawk.Authority`. The host application still owns the API-token webpage,
+`Hawk.Authority`. Applications can use `authority_builder` to resolve an
+application identity and add database-backed scopes after verification. The
+host application still owns the API-token webpage,
 API-token database, `/api/token` endpoint, JWT signing, rotation, and
 revocation. Hawk does not currently create or store those long-term API
 tokens.

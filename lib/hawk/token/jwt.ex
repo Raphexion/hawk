@@ -6,6 +6,16 @@ defmodule Hawk.Token.JWT do
   a `JOSE.JWK` key and only permits the configured algorithm (HS256 by default).
   Applications should prefer an asymmetric JWK when tokens are verified by
   more than one service.
+
+  By default, verified claims are mapped to an authority using `sub`, `role`,
+  and `scope`. Applications that need database-backed identities or custom
+  Hawk scopes can provide `:authority_builder`. The builder is called only
+  after the signature and standard claims have been verified, and receives
+  the verified claims plus the default authority:
+
+      authority_builder: fn claims, authority ->
+        {:ok, %{authority | scopes: %{school_id: claims["school_id"]}}}
+      end
   """
 
   @behaviour Hawk.Token.Verifier
@@ -23,7 +33,8 @@ defmodule Hawk.Token.JWT do
          algorithm <- Keyword.get(opts, :algorithm, @default_algorithm),
          {true, jwt, _jws} <- JOSE.JWT.verify_strict(key, [algorithm], token),
          true <- valid_claims?(jwt.fields, issuer, audience),
-         {:ok, authority} <- authority(jwt.fields, roles, opts) do
+         {:ok, authority} <- authority(jwt.fields, roles, opts),
+         {:ok, authority} <- build_authority(authority, jwt.fields, opts) do
       {:ok, authority}
     else
       _ -> {:error, :invalid_token}
@@ -37,7 +48,7 @@ defmodule Hawk.Token.JWT do
   defp authority(claims, roles, opts) when is_list(roles) do
     with sub when is_binary(sub) <- Map.get(claims, "sub"),
          role_name when is_binary(role_name) <- Map.get(claims, Keyword.get(opts, :role_claim, "role")),
-         role when is_atom(role) <- role_for(role_name, roles) do
+         role when is_atom(role) and not is_nil(role) <- role_for(role_name, roles) do
       permissions = claims |> Map.get(Keyword.get(opts, :scope_claim, "scope"), "") |> scopes()
       meta = %{token_id: Map.get(claims, "jti"), issuer: Map.get(claims, "iss")}
       {:ok, Authority.new(role, sub, scopes: %{permissions: permissions}, meta: meta)}
@@ -47,6 +58,31 @@ defmodule Hawk.Token.JWT do
   end
 
   defp authority(_claims, _roles, _opts), do: {:error, :invalid_token}
+
+  defp build_authority(authority, claims, opts) do
+    case Keyword.get(opts, :authority_builder) do
+      nil -> {:ok, authority}
+      builder -> invoke_builder(builder, claims, authority)
+    end
+  end
+
+  defp invoke_builder(builder, claims, authority) when is_function(builder, 2) do
+    normalize_builder_result(builder.(claims, authority))
+  end
+
+  defp invoke_builder({module, function}, claims, authority) do
+    normalize_builder_result(apply(module, function, [claims, authority]))
+  end
+
+  defp invoke_builder({module, function, extra}, claims, authority) do
+    normalize_builder_result(apply(module, function, [claims, authority | extra]))
+  end
+
+  defp invoke_builder(_builder, _claims, _authority), do: {:error, :invalid_token}
+
+  defp normalize_builder_result({:ok, %Authority{} = authority}), do: {:ok, authority}
+  defp normalize_builder_result(%Authority{} = authority), do: {:ok, authority}
+  defp normalize_builder_result(_result), do: {:error, :invalid_token}
 
   defp role_for(role_name, roles) do
     Enum.find_value(roles, fn

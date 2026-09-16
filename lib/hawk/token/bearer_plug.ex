@@ -4,6 +4,10 @@ defmodule Hawk.Token.BearerPlug do
 
   Pass `required: true` for protected pipelines. Invalid and missing tokens
   intentionally produce the same response to avoid leaking token state.
+
+  Use `:on_verified` when the application needs to assign additional request
+  context after the authority has been verified. The callback receives the
+  connection and verified authority and must return the connection.
   """
 
   import Plug.Conn
@@ -23,8 +27,13 @@ defmodule Hawk.Token.BearerPlug do
     verifier = Keyword.get(opts, :verifier) || raise ArgumentError, "Hawk.Token.BearerPlug requires :verifier"
 
     case invoke(verifier, token, opts) do
-      {:ok, %Authority{} = authority} -> assign(conn, Keyword.get(opts, :assign, :hawk_authority), authority)
-      _ -> handle_invalid(conn, opts)
+      {:ok, %Authority{} = authority} ->
+        conn
+        |> assign(Keyword.get(opts, :assign, :hawk_authority), authority)
+        |> on_verified(authority, opts)
+
+      _ ->
+        handle_invalid(conn, opts)
     end
   end
 
@@ -43,6 +52,22 @@ defmodule Hawk.Token.BearerPlug do
     do: apply(module, function, [token, Keyword.get(opts, :verifier_opts, [])])
 
   defp invoke({module, function, extra}, token, _opts), do: apply(module, function, [token | extra])
+
+  defp on_verified(conn, authority, opts) do
+    case Keyword.get(opts, :on_verified) do
+      nil -> conn
+      callback -> invoke_callback(callback, conn, authority)
+    end
+  end
+
+  defp invoke_callback(callback, conn, authority) when is_function(callback, 2),
+    do: callback.(conn, authority)
+
+  defp invoke_callback({module, function}, conn, authority),
+    do: apply(module, function, [conn, authority])
+
+  defp invoke_callback({module, function, extra}, conn, authority),
+    do: apply(module, function, [conn, authority | extra])
 
   defp unauthorized(conn) do
     body =
