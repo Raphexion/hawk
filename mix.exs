@@ -149,6 +149,7 @@ defmodule Hawk.MixProject do
       {:phoenix_ecto, "~> 4.0"},
       {:phoenix_pubsub, "~> 2.1"},
       {:jason, "~> 1.4"},
+      {:jose, "~> 1.11"},
       # Test factories
       {:ex_machina, "~> 2.8", only: :test},
       # Code quality
