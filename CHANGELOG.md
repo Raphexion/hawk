@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Bearer access-token authentication.** Added a configurable Bearer Plug,
+  JWT verifier, and verifier behaviour for mapping signed access tokens to
+  `Hawk.Authority` values with strict issuer, audience, expiry, issued-at, and
+  role-allowlist checks. Authorization headers now accept case-insensitive
+  Bearer schemes while rejecting blank or malformed tokens before verification.
 - **Native JSON:API restore actions.** Soft-deletable resources now expose a
   policy-gated `POST /:resource/:id/-actions/restore` action that locates
   deleted records, delegates to the existing `restore/2` writer operation, and

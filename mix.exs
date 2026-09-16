@@ -42,7 +42,10 @@ defmodule Hawk.MixProject do
     [
       main: "Hawk",
       source_url: @source_url,
-      extras: ["guides/preserves-roots.md"],
+      extras: [
+        "guides/preserves-roots.md",
+        "guides/access-token-authentication.md"
+      ],
       groups_for_modules: [
         "Resource facade": [Hawk.Resource],
         "DSL modules": [
@@ -74,6 +77,9 @@ defmodule Hawk.MixProject do
           Hawk.Authority.Plug,
           Hawk.Authority.Session,
           Hawk.PhoenixAuth,
+          Hawk.Token.Verifier,
+          Hawk.Token.JWT,
+          Hawk.Token.BearerPlug,
           Hawk.MutationContext,
           Hawk.RepositoryBoundary,
           Hawk.Result,

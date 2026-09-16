@@ -57,6 +57,39 @@ mix compile
 mix hawk.validate
 ```
 
+## Access-token authentication
+
+Hawk can turn a verified Bearer access token into a `Hawk.Authority`. Keep the
+long-lived API credential in the agent runtime or a token broker and exchange
+it for a short-lived access token. Do not give the API credential to a model or
+put either credential in URLs or logs.
+
+For a non-technical explanation of the teacher-to-agent flow, see the
+[access-token authentication guide](guides/access-token-authentication.md).
+
+For JWT access tokens, use `Hawk.Token.JWT` with an application-owned role
+allowlist and a strict issuer and audience:
+
+```elixir
+plug Hawk.Token.BearerPlug,
+  required: true,
+  verifier: {Hawk.Token.JWT, :verify},
+  verifier_opts: [
+    key: MyApp.TokenKey.jwk(),
+    issuer: "https://auth.example",
+    audience: "my-hawk-api",
+    roles: [:agent, :admin]
+  ]
+```
+
+The verifier validates the signature, issuer, audience, issued-at, and expiry
+claims before constructing an authority. Access tokens should normally live for
+5–15 minutes. JWTs are bearer credentials: a leaked token remains usable until
+it expires, so use HTTPS, narrow scopes, and revoke the long-lived credential at
+the token issuer. Hawk does not provide a token endpoint or own credential
+storage; applications remain responsible for issuance, rotation, revocation,
+and secret storage.
+
 If you are trying Hawk in a fresh Phoenix app, start with one existing Ecto schema
 and build the resource siblings around it. Hawk expects the app to own the Repo,
 migrations, authentication, endpoint, and router; Hawk owns the reusable resource
