@@ -93,4 +93,14 @@ defmodule Hawk.OpenApiActionsTest do
     assert request_schema.required == [:meta]
     assert request_schema.properties.meta.properties == %{}
   end
+
+  test "OpenAPI documents the generated hard-delete action for soft-deletable resources" do
+    spec = Hawk.OpenApi.spec([Videdal.Students], title: "Test API")
+
+    action = spec.paths["/students/{id}/-actions/hard-delete"].post
+
+    assert action.operationId == "runStudentsHardDelete"
+    assert action.description =~ "Permanently delete"
+    assert action.responses["200"].content["application/vnd.api+json"].schema != nil
+  end
 end

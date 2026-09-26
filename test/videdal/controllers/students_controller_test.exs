@@ -108,6 +108,46 @@ defmodule Videdal.Controllers.StudentsControllerTest do
     assert forbidden.status == 404
   end
 
+  test "hard-delete action permanently removes a soft-deleted resource" do
+    student = insert(:student, deleted_at: DateTime.utc_now(:second))
+
+    conn =
+      StudentsController.hawk_action(conn(Authority.system()), %{
+        "id" => student.id,
+        "action" => "hard-delete",
+        "meta" => %{}
+      })
+
+    assert conn.status == 200
+    assert Repo.get(Student, student.id) == nil
+  end
+
+  test "hard-delete action only finds soft-deleted resources and honors authorization" do
+    active = insert(:student)
+
+    assert StudentsController.hawk_action(conn(Authority.system()), %{
+             "id" => active.id,
+             "action" => "hard-delete",
+             "meta" => %{}
+           }).status == 404
+
+    school = insert(:school)
+    readonly_deleted = insert(:student, school_id: school.id, deleted_at: DateTime.utc_now(:second))
+
+    readonly =
+      StudentsController.hawk_action(
+        conn(Authority.readonly(school_admin(school))),
+        %{
+          "id" => readonly_deleted.id,
+          "action" => "hard-delete",
+          "meta" => %{}
+        }
+      )
+
+    assert readonly.status == 403
+    assert Repo.get(Student, readonly_deleted.id)
+  end
+
   defp response_ids(conn) do
     assert conn.status == 200
     Enum.map(resp(conn).data, & &1.id)

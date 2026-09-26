@@ -139,4 +139,15 @@ defmodule Hawk.ActionsTest do
       """)
     end
   end
+
+  test "hard-delete is reserved for Hawk's generated lifecycle action" do
+    assert_raise ArgumentError, ~r/action name "hard-delete" is reserved/, fn ->
+      Code.compile_string("""
+      defmodule Hawk.ActionsTest.ReservedHardDelete do
+        use Hawk.Actions
+        action("hard-delete", doc: "custom hard delete")
+      end
+      """)
+    end
+  end
 end

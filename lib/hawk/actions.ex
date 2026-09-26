@@ -137,7 +137,11 @@ defmodule Hawk.Actions do
   def dispatch(resource, action_name, model, params, authority)
       when is_atom(resource) and is_binary(action_name) and is_struct(model) do
     if lifecycle_action?(resource, action_name) do
-      resource.restore(model, authority)
+      case action_name do
+        "restore" -> resource.restore(model, authority)
+        "hard-delete" -> resource.hard_delete(model, authority)
+        _other -> :unknown_action
+      end
     else
       dispatch_custom(resource, action_name, model, params, authority)
     end
@@ -207,6 +211,7 @@ defmodule Hawk.Actions do
             build: nil
           }
         }
+        |> maybe_add_hard_delete(writer, resource)
       else
         %{}
       end
@@ -228,6 +233,21 @@ defmodule Hawk.Actions do
   end
 
   defp soft_delete_writer?(_writer), do: false
+
+  defp maybe_add_hard_delete(actions, writer, resource) do
+    if function_exported?(writer, :hard_delete, 2) and function_exported?(resource, :hard_delete, 2) do
+      Map.put(actions, "hard-delete", %{
+        name: "hard-delete",
+        kind: :lifecycle,
+        handler: nil,
+        doc: "Permanently delete this soft-deleted resource and any dependent content managed by its domain writer.",
+        params: %{},
+        build: nil
+      })
+    else
+      actions
+    end
+  end
 
   @doc false
   def actions_module(resource) when is_atom(resource) do
@@ -335,6 +355,10 @@ defmodule Hawk.Actions do
 
   defp validate_action_name!("restore") do
     raise ArgumentError, ~s(action name "restore" is reserved for Hawk's generated lifecycle action)
+  end
+
+  defp validate_action_name!("hard-delete") do
+    raise ArgumentError, ~s(action name "hard-delete" is reserved for Hawk's generated lifecycle action)
   end
 
   defp validate_action_name!(_name), do: :ok
