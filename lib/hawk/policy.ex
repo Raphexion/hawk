@@ -63,8 +63,8 @@ defmodule Hawk.Policy do
       filter map.
     * `create?/1`, `update?/1`, `delete?/1`, `restore?/1`, and
       `hard_delete?/1` — take an `Hawk.MutationContext` and return a boolean.
-    * `__hawk_policy__/0` — the raw read-role declarations, used by contract
-      validation and `Hawk.Policy.Assertions`.
+    * `__hawk_policy__/0` — the read-role declarations and write capability
+      (`:never` or `:available`), used by route generation and contract validation.
 
   ## See also
 
@@ -78,6 +78,7 @@ defmodule Hawk.Policy do
       import Hawk.Policy, only: [read: 1, role: 2, write: 1]
 
       Module.register_attribute(__MODULE__, :hawk_policy_read_roles, accumulate: true)
+      Module.register_attribute(__MODULE__, :hawk_policy_write_mode, persist: false)
       @before_compile Hawk.Policy
     end
   end
@@ -129,6 +130,7 @@ defmodule Hawk.Policy do
   """
   defmacro write(:never) do
     quote do
+      @hawk_policy_write_mode :never
       def create?(%Hawk.MutationContext{}), do: false
       def update?(%Hawk.MutationContext{}), do: false
       def delete?(%Hawk.MutationContext{}), do: false
@@ -144,6 +146,7 @@ defmodule Hawk.Policy do
     owned_by = Keyword.get(opts, :owned_by, [])
 
     quote do
+      @hawk_policy_write_mode :available
       def create?(%Hawk.MutationContext{} = context),
         do: write_allowed?(context, unquote(roles), unquote(owned_by))
 
@@ -214,13 +217,15 @@ defmodule Hawk.Policy do
       |> Module.get_attribute(:hawk_policy_read_roles)
       |> Enum.reverse()
 
+    write_mode = Module.get_attribute(env.module, :hawk_policy_write_mode) || :available
+
     quote do
       def read_filter(%Hawk.Authority{} = authority) do
         Hawk.Policy.read_filter(authority, unquote(Macro.escape(read_roles)))
       end
 
       def __hawk_policy__ do
-        %{read: unquote(Macro.escape(read_roles))}
+        %{read: unquote(Macro.escape(read_roles)), write: unquote(write_mode)}
       end
     end
   end

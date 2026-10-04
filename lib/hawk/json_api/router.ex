@@ -4,9 +4,10 @@ defmodule Hawk.JsonApi.Router do
 
   `import Hawk.JsonApi.Router` inside a Phoenix router and call
   `hawk_json_api/3` to emit ordinary router DSL calls (`get/3`, `post/3`,
-  `patch/3`, `delete/3`) from `Hawk.JsonApi.Routes`. The custom-action route is
-  a stable dispatch route; the controller returns not found when no matching
-  action exists.
+  `patch/3`, `delete/3`) from `Hawk.JsonApi.Routes`. Globally read-only
+  resources omit mutation and custom-action routes based on `write(:never)`;
+  role-scoped write policies retain them. Policy changes recompile consuming
+  routers, including during Phoenix development code reloads.
 
   ## Example
 
@@ -37,6 +38,7 @@ defmodule Hawk.JsonApi.Router do
     resource = Macro.expand(resource, env)
     controller = Macro.expand(controller, env)
     opts = Macro.expand(opts, env)
+    track_policy_dependency!(resource, env)
     routes = Routes.routes(resource, opts)
 
     validate_controller!(controller, routes)
@@ -56,6 +58,9 @@ defmodule Hawk.JsonApi.Router do
     alias_module = Macro.expand(alias_module, env)
     controller = Macro.expand(controller, env)
     opts = Macro.expand(opts, env)
+    Code.ensure_compiled!(alias_module)
+    %{resource: resource} = Macro.compile_apply(alias_module, :__hawk_alias__, [], env)
+    track_policy_dependency!(resource, env)
     routes = Routes.alias_routes(alias_module, opts)
     validate_controller!(controller, routes)
 
@@ -89,6 +94,17 @@ defmodule Hawk.JsonApi.Router do
       _other ->
         :ok
     end
+  end
+
+  defp track_policy_dependency!(resource, env) do
+    Code.ensure_compiled!(resource)
+    policy = Macro.compile_apply(resource, :__hawk_resource__, [:policy], env)
+    Code.ensure_compiled!(policy)
+
+    # Route specs are evaluated inside this macro, so their dynamic policy
+    # calls are invisible to Mix's dependency tracker. Track even custom
+    # policies without __hawk_policy__/0: adding that metadata changes routes.
+    Macro.compile_apply(policy, :__info__, [:functions], env)
   end
 
   defp validate_controller!(controller, routes) do

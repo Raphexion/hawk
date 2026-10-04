@@ -24,35 +24,25 @@ defmodule Hawk.JsonApiRoutesTest do
   end
 
   test "routes include the stable action dispatch endpoint" do
-    assert Routes.routes(Videdal.CourseCatalog) == [
-             route(:get, "/course-catalog", :index, :read, Videdal.CourseCatalog),
-             route(:post, "/course-catalog", :create, :write, Videdal.CourseCatalog),
-             route(:get, "/course-catalog/:id", :show, :read, Videdal.CourseCatalog),
-             route(:patch, "/course-catalog/:id", :update, :write, Videdal.CourseCatalog),
-             route(:delete, "/course-catalog/:id", :delete, :write, Videdal.CourseCatalog),
-             route(
-               :post,
-               "/course-catalog/:id/-actions/:action",
-               :action,
-               :action,
-               Videdal.CourseCatalog,
-               :hawk_action
-             ),
-             route(
-               :get,
-               "/course-catalog/:id/relationships/:relationship",
-               :relationship,
-               :read,
-               Videdal.CourseCatalog
-             ),
-             route(
-               :get,
-               "/course-catalog/:id/:relationship",
-               :related,
-               :read,
-               Videdal.CourseCatalog
-             )
+    assert Enum.any?(Routes.routes(Videdal.Courses), &(&1.action == :action))
+  end
+
+  test "globally read-only resources retain reads and omit every mutation route" do
+    routes = Routes.routes(Videdal.CourseCatalog)
+
+    assert Enum.map(routes, &{&1.method, &1.action}) == [
+             get: :index,
+             get: :show,
+             get: :relationship,
+             get: :related
            ]
+  end
+
+  test "role-scoped writes retain routes for authorized callers" do
+    assert Enum.any?(Routes.routes(Videdal.Courses), &(&1.action == :create))
+    assert Enum.any?(Routes.routes(Videdal.Courses), &(&1.action == :update))
+    assert Enum.any?(Routes.routes(Videdal.Courses), &(&1.action == :delete))
+    assert Enum.any?(Routes.routes(Videdal.Courses), &(&1.action == :action))
   end
 
   test "routes omit resources with json_api disabled" do
@@ -62,18 +52,7 @@ defmodule Hawk.JsonApiRoutesTest do
   test "routes support path prefixes" do
     assert Routes.routes(Videdal.CourseCatalog, path_prefix: "/api/v1") == [
              route(:get, "/api/v1/course-catalog", :index, :read, Videdal.CourseCatalog),
-             route(:post, "/api/v1/course-catalog", :create, :write, Videdal.CourseCatalog),
              route(:get, "/api/v1/course-catalog/:id", :show, :read, Videdal.CourseCatalog),
-             route(:patch, "/api/v1/course-catalog/:id", :update, :write, Videdal.CourseCatalog),
-             route(:delete, "/api/v1/course-catalog/:id", :delete, :write, Videdal.CourseCatalog),
-             route(
-               :post,
-               "/api/v1/course-catalog/:id/-actions/:action",
-               :action,
-               :action,
-               Videdal.CourseCatalog,
-               :hawk_action
-             ),
              route(
                :get,
                "/api/v1/course-catalog/:id/relationships/:relationship",

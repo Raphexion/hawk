@@ -141,19 +141,28 @@ defmodule Hawk.OpenApiResourceAdapterTest do
     refute Map.has_key?(spec.components.schemas, :InternalNoteResource)
   end
 
-  test "OpenAPI exposes write routes and omits action routes when actions are absent" do
+  test "OpenAPI omits mutation operations for globally read-only resources" do
     spec = Hawk.OpenApi.spec([Videdal.CourseCatalog], title: "Test API")
 
     assert spec.paths["/course-catalog"].get
-    assert Map.has_key?(spec.paths["/course-catalog"], :post)
+    refute Map.has_key?(spec.paths["/course-catalog"], :post)
 
     assert spec.paths["/course-catalog/{id}"].get
-    assert Map.has_key?(spec.paths["/course-catalog/{id}"], :patch)
-    assert Map.has_key?(spec.paths["/course-catalog/{id}"], :delete)
+    refute Map.has_key?(spec.paths["/course-catalog/{id}"], :patch)
+    refute Map.has_key?(spec.paths["/course-catalog/{id}"], :delete)
     refute Map.has_key?(spec.paths, "/course-catalog/{id}/-actions/{action}")
 
     assert Map.has_key?(spec.paths, "/course-catalog/{id}/relationships/{relationship}")
     assert Map.has_key?(spec.paths, "/course-catalog/{id}/{relationship}")
+  end
+
+  test "OpenAPI preserves mutations for resources with role-scoped writes" do
+    spec = Hawk.OpenApi.spec([Videdal.Courses], title: "Test API")
+
+    assert Map.has_key?(spec.paths["/courses"], :post)
+    assert Map.has_key?(spec.paths["/courses/{id}"], :patch)
+    assert Map.has_key?(spec.paths["/courses/{id}"], :delete)
+    assert Map.has_key?(spec.paths["/courses/{id}/-actions/open-registration"], :post)
   end
 
   test "show id parameter documents short ids; mutations/actions/relationships require full UUIDs" do

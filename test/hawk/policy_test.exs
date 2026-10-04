@@ -72,8 +72,14 @@ defmodule Hawk.PolicyTest do
                {:school_admin, {:scoped, [:school_id], %{}}},
                {:teacher, {:scoped, [:school_id, :teacher_id], %{}}},
                {:student, {:scoped, [:school_id, :student_id], %{active: true}}}
-             ]
+             ],
+             write: :available
            }
+  end
+
+  test "policy metadata distinguishes global read-only from role-scoped writes" do
+    assert Videdal.CourseCatalog.Policy.__hawk_policy__().write == :never
+    assert ExamplePolicy.__hawk_policy__().write == :available
   end
 
   test "read role declarations fail closed for unknown roles" do

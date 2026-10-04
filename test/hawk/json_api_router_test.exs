@@ -92,19 +92,22 @@ defmodule Hawk.JsonApiRouterTest do
            ]
   end
 
-  test "router macro emits write routes and applies prefixes" do
+  test "router macro omits writes for globally read-only resources and applies prefixes" do
     assert ReadOnlyRouter.__fake_routes__() == [
              {:get, "/api/v1/course-catalog", Videdal.Controllers.CourseCatalogController, :index},
-             {:post, "/api/v1/course-catalog", Videdal.Controllers.CourseCatalogController, :create},
              {:get, "/api/v1/course-catalog/:id", Videdal.Controllers.CourseCatalogController, :show},
-             {:patch, "/api/v1/course-catalog/:id", Videdal.Controllers.CourseCatalogController, :update},
-             {:delete, "/api/v1/course-catalog/:id", Videdal.Controllers.CourseCatalogController, :delete},
-             {:post, "/api/v1/course-catalog/:id/-actions/:action", Videdal.Controllers.CourseCatalogController,
-              :hawk_action},
              {:get, "/api/v1/course-catalog/:id/relationships/:relationship",
               Videdal.Controllers.CourseCatalogController, :relationship},
              {:get, "/api/v1/course-catalog/:id/:relationship", Videdal.Controllers.CourseCatalogController, :related}
            ]
+  end
+
+  test "router macro keeps write routes for role-scoped resources" do
+    routes = FullRouter.__fake_routes__()
+
+    assert Enum.any?(routes, &match?({:post, "/courses", _, :create}, &1))
+    assert Enum.any?(routes, &match?({:patch, "/courses/:id", _, :update}, &1))
+    assert Enum.any?(routes, &match?({:delete, "/courses/:id", _, :delete}, &1))
   end
 
   test "alias router macro emits the canonical resource route set under the alias type" do
@@ -148,7 +151,7 @@ defmodule Hawk.JsonApiRouterTest do
 
   test "router macro validates emitted controller actions" do
     assert_raise ArgumentError,
-                 ~r/Hawk JSON:API router controller Hawk.JsonApiRouterTest.IncompleteController must define create\/2 for post \/course-catalog/,
+                 ~r/Hawk JSON:API router controller Hawk.JsonApiRouterTest.IncompleteController must define create\/2 for post \/courses/,
                  fn ->
                    Code.compile_string("""
                    defmodule Hawk.JsonApiRouterTest.IncompleteController do
@@ -160,7 +163,7 @@ defmodule Hawk.JsonApiRouterTest do
                      use Hawk.JsonApiRouterTest.FakeRouter
                      import Hawk.JsonApi.Router
 
-                     hawk_json_api Videdal.CourseCatalog, Hawk.JsonApiRouterTest.IncompleteController
+                     hawk_json_api Videdal.Courses, Hawk.JsonApiRouterTest.IncompleteController
                    end
                    """)
                  end

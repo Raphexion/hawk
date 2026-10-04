@@ -11,10 +11,9 @@ defmodule Hawk.JsonApi.Routes do
   Returns the JSON:API route specs for a resource or list of resources.
 
   Each route is a map of `{method, path, action, capability, resource}`.
-  `create`/`update`/`delete` are always present because the writer is a required
-  sibling for every Hawk resource. `/-actions/:action` is also a stable dispatch
-  route; the controller returns not found when no matching action exists. Used by
-  `Hawk.OpenApi` and by tests asserting route/controller consistency.
+  Write routes are omitted when the resource policy declares `write(:never)`;
+  policies with role-scoped writes retain them. `Hawk.OpenApi` consumes the same
+  route specs so its documented surface stays consistent with generated routes.
 
   ## Options
 
@@ -74,18 +73,37 @@ defmodule Hawk.JsonApi.Routes do
     collection_path = resource_path(opts, resource.json_api.type)
     member_path = collection_path <> "/:id"
 
+    write_routes? = writes_available?(resource.resource)
+
     [
       route(resource, :get, collection_path, :index, :read),
-      route(resource, :post, collection_path, :create, :write),
+      if(write_routes?, do: route(resource, :post, collection_path, :create, :write)),
       route(resource, :get, member_path, :show, :read),
-      route(resource, :patch, member_path, :update, :write),
-      route(resource, :delete, member_path, :delete, :write),
-      route(resource, :post, member_path <> "/-actions/:action", :action, :action, :hawk_action),
+      if(write_routes?, do: route(resource, :patch, member_path, :update, :write)),
+      if(write_routes?, do: route(resource, :delete, member_path, :delete, :write)),
+      if write_routes? do
+        route(resource, :post, member_path <> "/-actions/:action", :action, :action, :hawk_action)
+      end,
       relationship_route(resource, member_path),
       related_route(resource, member_path)
     ]
     |> Enum.reject(&is_nil/1)
   end
+
+  # Unknown/custom policy metadata is treated as writable for compatibility.
+  # Only the explicit DSL declaration `write(:never)` removes routes.
+  defp writes_available?(resource) when is_atom(resource) do
+    with true <- function_exported?(resource, :__hawk_resource__, 1),
+         policy when is_atom(policy) <- resource.__hawk_resource__(:policy),
+         {:module, ^policy} <- Code.ensure_loaded(policy),
+         true <- function_exported?(policy, :__hawk_policy__, 0) do
+      policy.__hawk_policy__()[:write] != :never
+    else
+      _other -> true
+    end
+  end
+
+  defp writes_available?(_resource), do: true
 
   defp relationship_route(resource, member_path) do
     if map_size(resource.json_api.relationships) > 0 do

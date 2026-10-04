@@ -1,5 +1,8 @@
 defmodule Hawk.QueryTest do
-  use ExUnit.Case, async: true
+  # This module captures compiler output. Keep it out of the async test group so
+  # warnings from unrelated modules compiling in parallel cannot leak into the
+  # captured stderr.
+  use ExUnit.Case, async: false
 
   import ExUnit.CaptureIO
 
@@ -227,7 +230,7 @@ defmodule Hawk.QueryTest do
 
     assert Hawk.Query.validate!(Hawk.QueryTest.UnmappedQueryParam, :strict) == :ok
 
-    assert Hawk.QueryTest.UnmappedQueryParam.__hawk_query__(:query_params) == %{
+    assert apply(Hawk.QueryTest.UnmappedQueryParam, :__hawk_query__, [:query_params]) == %{
              target_waitlist_count: %{required: true, source_filter: false}
            }
   end
