@@ -8,6 +8,7 @@ defmodule Hawk.Writer do
 
   alias Ecto.Changeset
   alias Hawk.MutationContext
+  alias Hawk.Writer.RelationshipAuthorization
 
   @type validator_error ::
           {:error, atom(), String.t()}
@@ -122,6 +123,21 @@ defmodule Hawk.Writer do
     validate_changeset(context, fn changeset ->
       apply(Changeset, validator, [changeset, field, opts])
     end)
+  end
+
+  @doc """
+  Authorizes effective belongs-to identifiers through their related readers.
+
+  Names use the model's association reader metadata. `{name, reader}` entries
+  override that reader. All non-nil references are checked in one SQL query;
+  nil references are skipped, so required relationships need `validate_required`.
+  Reader policies, lifecycle filters, and resource scopes are applied. This
+  checks reference visibility, not permission to mutate the related resource.
+  Existing errors skip the check. Callers should validate the write policy first.
+  """
+  @spec authorize_relationships(MutationContext.t(), [atom() | {atom(), module()}], module()) :: MutationContext.t()
+  def authorize_relationships(%MutationContext{} = context, relationships, repo) do
+    RelationshipAuthorization.authorize(context, relationships, repo)
   end
 
   @doc """

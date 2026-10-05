@@ -35,6 +35,17 @@ defmodule Hawk.Writer.Resource do
     * `validate_required([:field, ...])` — required-field validation.
     * `validate(&fun/1)` — run a validator that returns a changeset.
     * `validate_changeset(&fun/1)` — run a function receiving the changeset.
+    * `authorize_relationships([:association, ...])` — authorize references through their readers.
+      Entries may also be `{association, ReaderModule}` to override discovery.
+      The check runs after preparation and write-policy validation, regardless
+      of its position in the block. Multiple declarations share one SQL query.
+      Optional nil identifiers are skipped; use `validate_required` for required
+      relationships. Updates check all effective identifiers, including unchanged
+      ones. Inaccessible references return `:not_authorized` and invalidate form
+      changesets. Related readers must use the writer's repo.
+      This grants permission to reference a visible record, not to modify it.
+      Foreign-key constraints remain necessary, and eligibility depending on a
+      pair of records still needs an application policy or database constraint.
     * `constraint(kind, field, opts)` — declare a DB constraint (see `constraint/3`).
 
   `delete(:default)` enables the standard hard delete through the policy.
@@ -309,27 +320,45 @@ defmodule Hawk.Writer.Resource do
   end
 
   defp quote_context_pipeline(:create, block, model, policy) do
-    block
-    |> expressions()
-    |> quote_pipeline(quote(do: Hawk.MutationContext.create(%unquote(model){}, attrs, authority)))
-    |> then(fn acc ->
-      quote do
-        unquote(acc)
-        |> Hawk.MutationContext.validate_policy(&unquote(policy).create?/1)
-      end
-    end)
+    initial = quote(do: Hawk.MutationContext.create(%unquote(model){}, attrs, authority))
+    quote_authorized_pipeline(block, initial, policy, :create?)
   end
 
   defp quote_context_pipeline(:update, block, _model, policy) do
-    block
-    |> expressions()
-    |> quote_pipeline(quote(do: Hawk.MutationContext.update(model, attrs, authority)))
-    |> then(fn acc ->
+    initial = quote(do: Hawk.MutationContext.update(model, attrs, authority))
+    quote_authorized_pipeline(block, initial, policy, :update?)
+  end
+
+  defp quote_authorized_pipeline(block, initial, policy, predicate) do
+    {authorization, preparation} =
+      block |> expressions() |> Enum.split_with(&match?({:authorize_relationships, _, _}, &1))
+
+    prepared = quote_pipeline(preparation, initial)
+
+    checked =
       quote do
-        unquote(acc)
-        |> Hawk.MutationContext.validate_policy(&unquote(policy).update?/1)
+        unquote(prepared)
+        |> Hawk.MutationContext.validate_policy(&(unquote(policy).unquote(predicate) / 1))
       end
-    end)
+
+    # Reference declarations cannot grant write access. Gate the writer first,
+    # and combine all reference declarations into a single authorization query.
+    case authorization do
+      [] ->
+        checked
+
+      steps ->
+        relationships =
+          Enum.map(steps, fn
+            {:authorize_relationships, _, [relationships]} -> relationships
+            step -> raise ArgumentError, "unsupported Hawk writer step #{Macro.to_string(step)}"
+          end)
+
+        quote do
+          unquote(checked)
+          |> Hawk.Writer.authorize_relationships(List.flatten(unquote(relationships)), @hawk_writer_repo)
+        end
+    end
   end
 
   defp quote_pipeline(steps, initial) do

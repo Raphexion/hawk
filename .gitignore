@@ -25,3 +25,4 @@ hawk-*.tar
 # Ignore dialyzer
 priv/plts/
 .DS_Store
+.envrc

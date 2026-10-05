@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Writer relationship authorization.** Added `authorize_relationships/1`
+  for create and update pipelines. Checks all non-nil belongs-to references in
+  one SQL query through related readers, reusing their read policies, lifecycle
+  filters, and resource scopes. Supports explicit reader overrides and checks
+  effective foreign keys on updates, including unchanged references. Runs after
+  write-policy validation; denied writes and invalid input perform no reference
+  query. Inaccessible references return authorization errors and invalidate form
+  changesets. Rejects malformed identifiers and readers configured for a
+  different schema or repository. Foreign-key constraints remain necessary.
+- Reader `schema/0` metadata exposes the configured Ecto schema for validating
+  relationship reader compatibility.
+
+### Fixed
+
+- OpenAPI create and update request schemas now sort required attribute and
+  relationship names, producing stable output regardless of map iteration order.
+
 ## [0.11.0] - 2026-09-16
 
 ### Added

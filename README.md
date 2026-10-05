@@ -444,6 +444,51 @@ fallback.
 
 ### Writer
 
+#### Authorizing writer relationships
+
+Use `authorize_relationships/1` in a writer's `create` or `update` block to
+check referenced records through their Hawk readers instead of duplicating
+ownership queries in the write policy:
+
+```elixir
+create do
+  cast([:student_group_id, :course_id])
+  validate_required([:student_group_id, :course_id])
+  authorize_relationships([:student_group, :course])
+  constraint(:foreign_key, :student_group_id)
+  constraint(:foreign_key, :course_id)
+end
+```
+
+Hawk resolves readers from the model's association metadata. All non-nil
+references share **one authorization SQL query**, including declarations
+split across multiple steps. Each reader applies its own read policy,
+soft-delete filter, and resource scope. The write policy runs first; denied
+writes and invalid input perform no relationship authorization query.
+
+Updates check the effective foreign keys, including unchanged references.
+Optional nil references are skipped; required ones need `validate_required`.
+Missing, inaccessible, and soft-deleted records produce the same authorization
+denial, with a base error on form changesets. Even system authorities retain
+the reader's lifecycle filters. Malformed identifiers produce validation errors.
+
+When reference eligibility differs from ordinary visibility, declare a
+purpose-built reader and pass it explicitly:
+
+```elixir
+authorize_relationships([:student_group, student: MyApp.EnrollableStudents.Reader])
+```
+
+The override must use the writer's repo. This also supports plain Ecto schemas
+without Hawk association metadata. Authorization checks visibility; it does
+not grant permission to modify the related record or replace the write policy's
+role/readonly checks. Conditions relating two records (for example, requiring
+their organizations to match) still need an application policy or constraint.
+Keep database foreign-key constraints: the authorization query does not lock
+related records or replace transactional/concurrency guarantees.
+
+#### Writer example
+
 ```elixir
 defmodule MyApp.Courses.Writer do
   use Hawk.Writer.Resource,

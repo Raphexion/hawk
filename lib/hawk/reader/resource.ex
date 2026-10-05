@@ -79,6 +79,7 @@ defmodule Hawk.Reader.Resource do
       metadata.
     * `read_filter/1` — delegates to the policy.
     * `repo/0` — the configured repo.
+    * `schema/0` — the configured Ecto schema.
 
   Nested includes (`include=grades.student`) become nested Ecto preloads where
   every layer uses that resource's own reader and policy — opening `courses`
@@ -540,6 +541,9 @@ defmodule Hawk.Reader.Resource do
       Returns the repo module this reader is configured with.
       """
       def repo, do: @hawk_reader_repo
+
+      @doc "Returns the Ecto schema this reader is configured with."
+      def schema, do: @hawk_reader_schema
 
       def default_sort, do: @hawk_reader_default_sort
       def default_page_size, do: @hawk_reader_default_page_size

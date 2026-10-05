@@ -879,6 +879,7 @@ defmodule Hawk.OpenApi do
     |> Map.fetch!(field_type)
     |> Enum.filter(fn {_name, metadata} -> operation in Map.get(metadata, :required, []) end)
     |> Enum.map(&elem(&1, 0))
+    |> Enum.sort()
     |> case do
       [] -> nil
       fields -> fields
