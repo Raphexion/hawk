@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Delete relationship authorization.** Writers can declare `delete do` blocks
+  containing `authorize_relationships/1` steps. References share one SQL query
+  after the delete policy passes. Blocks enable ordinary hard deletion or combine
+  with `soft_delete/1` in either order, applying the same relationship checks to
+  explicit `hard_delete/2`. Restore retains its separate policy. Existing delete
+  declarations without a block remain compatible.
 - **Writer relationship authorization.** Added `authorize_relationships/1`
   for create and update pipelines. Checks all non-nil belongs-to references in
   one SQL query through related readers, reusing their read policies, lifecycle

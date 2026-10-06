@@ -52,6 +52,14 @@ defmodule Hawk.Writer.Resource do
   `soft_delete(:field)` instead generates reversible `delete/2`, `restore/2`,
   and explicit `hard_delete/2` operations.
 
+  Use a `delete do ... end` block containing `authorize_relationships/1`
+  declarations to check the model's existing references before deletion. The
+  block enables ordinary hard deletion, or combines with `soft_delete(:field)`
+  in either declaration order. Its checks apply to both `delete/2` and explicit
+  `hard_delete/2`, after their respective write policies. Multiple declarations
+  share one SQL query. `restore/2` continues to use its own policy.
+  Other writer steps are not supported in delete blocks.
+
   ## Example
 
       defmodule MyApp.Courses.Writer do
@@ -131,12 +139,23 @@ defmodule Hawk.Writer.Resource do
   end
 
   @doc """
-  Enables the standard delete through the policy. Without this, `delete/2` is
-  not generated.
+  Enables deletion through the policy. `delete(:default)` generates ordinary
+  hard deletion. A `delete do` block declares relationship authorization and
+  enables ordinary hard deletion when no `soft_delete/1` is configured.
+
+  With `soft_delete/1`, the block's declarations apply to both `delete/2` and
+  `hard_delete/2`; `restore/2` retains its own policy. Only
+  `authorize_relationships/1` steps are supported in delete blocks.
   """
   defmacro delete(:default) do
     quote do
       @hawk_writer_delete :default
+    end
+  end
+
+  defmacro delete(do: block) do
+    quote do
+      @hawk_writer_delete_block unquote(Macro.escape(block))
     end
   end
 
@@ -194,7 +213,9 @@ defmodule Hawk.Writer.Resource do
     model = Module.get_attribute(env.module, :hawk_writer_model)
     repo = Module.get_attribute(env.module, :hawk_writer_repo)
     policy = Module.get_attribute(env.module, :hawk_writer_policy)
-    delete_mode = Module.get_attribute(env.module, :hawk_writer_delete)
+    delete_block = Module.get_attribute(env.module, :hawk_writer_delete_block)
+    delete_mode = Module.get_attribute(env.module, :hawk_writer_delete) || if(delete_block, do: :default)
+    validate_delete_block!(delete_block)
     pubsub = Module.get_attribute(env.module, :hawk_writer_pubsub)
     topic_strategy = Module.get_attribute(env.module, :hawk_writer_topic_strategy)
     resource = env.module |> Module.split() |> Enum.drop(-1) |> Module.concat()
@@ -202,7 +223,7 @@ defmodule Hawk.Writer.Resource do
 
     create_context = quote_context_pipeline(:create, create_block, model, policy)
     update_functions = quote_update_functions(update_block, repo, policy)
-    delete_functions = quote_delete_functions(delete_mode, repo, policy)
+    delete_functions = quote_delete_functions(delete_mode, delete_block, repo, policy)
 
     validate_soft_delete!(model, delete_mode)
 
@@ -262,28 +283,37 @@ defmodule Hawk.Writer.Resource do
     end
   end
 
-  defp quote_delete_functions(nil, _repo, _policy), do: []
+  defp quote_delete_functions(nil, _block, _repo, _policy), do: []
 
-  defp quote_delete_functions(:default, repo, policy) do
+  defp quote_delete_functions(:default, block, repo, policy) do
+    initial = quote(do: Hawk.MutationContext.delete(model, authority))
+    context = quote_delete_context(block, initial, policy, :delete?)
+
     quote do
       @spec delete(struct(), Hawk.Authority.t()) :: Hawk.Result.t(struct())
       def delete(model, authority) do
-        model
-        |> Hawk.MutationContext.delete(authority)
-        |> Hawk.MutationContext.validate_policy(&unquote(policy).delete?/1)
+        unquote(context)
         |> Hawk.RepositoryBoundary.delete(unquote(repo), __hawk_writer_opts__())
       end
     end
   end
 
-  defp quote_delete_functions({:soft, field}, repo, policy) do
-    quote do
-      @spec delete(struct(), Hawk.Authority.t()) :: Hawk.Result.t(struct())
-      def delete(model, authority) do
+  defp quote_delete_functions({:soft, field}, block, repo, policy) do
+    initial =
+      quote do
         model
         |> Hawk.MutationContext.delete(authority, %{unquote(field) => DateTime.utc_now(:second)})
         |> Hawk.Writer.cast([unquote(field)])
-        |> Hawk.MutationContext.validate_policy(&unquote(policy).delete?/1)
+      end
+
+    delete_context = quote_delete_context(block, initial, policy, :delete?)
+    hard_delete_initial = quote(do: Hawk.MutationContext.hard_delete(model, authority))
+    hard_delete_context = quote_delete_context(block, hard_delete_initial, policy, :hard_delete?)
+
+    quote do
+      @spec delete(struct(), Hawk.Authority.t()) :: Hawk.Result.t(struct())
+      def delete(model, authority) do
+        unquote(delete_context)
         |> Hawk.RepositoryBoundary.update(unquote(repo), __hawk_writer_opts__())
       end
 
@@ -298,12 +328,30 @@ defmodule Hawk.Writer.Resource do
 
       @spec hard_delete(struct(), Hawk.Authority.t()) :: Hawk.Result.t(struct())
       def hard_delete(model, authority) do
-        model
-        |> Hawk.MutationContext.hard_delete(authority)
-        |> Hawk.MutationContext.validate_policy(&unquote(policy).hard_delete?/1)
+        unquote(hard_delete_context)
         |> Hawk.RepositoryBoundary.delete(unquote(repo), __hawk_writer_opts__())
       end
     end
+  end
+
+  defp quote_delete_context(nil, initial, policy, predicate) do
+    quote do
+      unquote(initial)
+      |> Hawk.MutationContext.validate_policy(&(unquote(policy).unquote(predicate) / 1))
+    end
+  end
+
+  defp quote_delete_context(block, initial, policy, predicate) do
+    quote_authorized_pipeline(block, initial, policy, predicate)
+  end
+
+  defp validate_delete_block!(nil), do: :ok
+
+  defp validate_delete_block!(block) do
+    Enum.each(expressions(block), fn
+      {:authorize_relationships, _, [_relationships]} -> :ok
+      step -> raise ArgumentError, "unsupported Hawk delete step #{Macro.to_string(step)}"
+    end)
   end
 
   defp validate_soft_delete!(_model, mode) when mode in [nil, :default], do: :ok

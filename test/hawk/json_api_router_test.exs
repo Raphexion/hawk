@@ -74,7 +74,9 @@ defmodule Hawk.JsonApiRouterTest.HiddenRouter do
 end
 
 defmodule Hawk.JsonApiRouterTest do
-  use ExUnit.Case, async: true
+  # Compiler warnings use global stderr, so unrelated async compilation can
+  # leak into the warning-free compilation assertion below.
+  use ExUnit.Case, async: false
 
   alias Hawk.JsonApiRouterTest.{AliasRouter, FullRouter, HiddenRouter, QueryRouter, ReadOnlyRouter}
 

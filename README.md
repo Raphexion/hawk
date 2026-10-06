@@ -472,6 +472,26 @@ Missing, inaccessible, and soft-deleted records produce the same authorization
 denial, with a base error on form changesets. Even system authorities retain
 the reader's lifecycle filters. Malformed identifiers produce validation errors.
 
+For deletion, declare the references whose visibility grants permission to
+remove the model:
+
+```elixir
+delete do
+  authorize_relationships([:student_group])
+end
+```
+
+A delete block enables hard deletion and accepts only relationship authorization
+steps. Multiple declarations share one authorization query, after the delete
+policy passes. Only declared relationships are checked; this lets an application
+remove an assignment to archived content while requiring access to its group.
+
+Combine the block with `soft_delete(:deleted_at)` in either declaration order to
+check relationships for both reversible `delete/2` and explicit `hard_delete/2`.
+Each operation retains its own write policy. `restore/2` uses its separate policy
+and does not run the delete block. Existing `delete(:default)` and
+`soft_delete/1` declarations keep their behavior when no block is provided.
+
 When reference eligibility differs from ordinary visibility, declare a
 purpose-built reader and pass it explicitly:
 
