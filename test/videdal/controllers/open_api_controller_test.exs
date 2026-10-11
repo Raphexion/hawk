@@ -45,25 +45,8 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
     assert operation[:"x-resource-group"] == "Courses"
     assert operation[:"x-resource-type"] == "courses"
 
-    assert %{
-             name: "include",
-             in: "query",
-             schema: %{
-               type: "string",
-               enum: [
-                 "enrollments",
-                 "enrollments.course",
-                 "enrollments.school",
-                 "enrollments.student",
-                 "grades",
-                 "grades.course",
-                 "grades.student",
-                 "school",
-                 "teacher",
-                 "teacher.campus"
-               ]
-             }
-           } in parameters
+    assert %{name: "include", in: "query", schema: %{type: "string"}} =
+             Enum.find(parameters, &(&1.name == "include"))
 
     assert %{
              name: "sort",

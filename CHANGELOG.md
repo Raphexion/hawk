@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- JSON:API attributes accept `nullable: true` to document JSON null values in
+  OpenAPI schemas independently of request-level requiredness.
 - **Composable Ecto reader sources.** Readers can declare an arity-1
   `source_query` callback that returns a map projection, letting Hawk apply
   policies, filters, sorting, pagination, and counts without a physical table
@@ -18,6 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- OpenAPI include parameters now describe comma-separated relationship paths
+  without a finite enum or depth limit, including on resource show operations.
+- OpenAPI maps Ecto map and array fields to structured schemas and adds date
+  and date-time formats for date and UTC timestamp fields.
+- Generated OpenAPI operations with declared authentication security now
+  document JSON:API `401` responses for missing or invalid credentials.
+- OpenAPI relationship types now follow the selected JSON:API presentation,
+  including request linkage and related-resource response schemas.
 - Source query results now load adapter values using the declared schema types
   across ordinary and counted reads, including standard `:binary_id` UUIDs.
 - Source reader contract validation now handles declared sort keys correctly.

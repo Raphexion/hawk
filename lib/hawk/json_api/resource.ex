@@ -30,6 +30,8 @@ defmodule Hawk.JsonApi.Resource do
     * `:required` — `:create`, `:update`, a list of those operations, or `true`
       for both; documents request-level requiredness in OpenAPI.
     * `:doc` / `:example` — surfaced in OpenAPI.
+    * `:nullable` — boolean (default false); allows JSON null in the OpenAPI
+      attribute schema. Independent of request-level `:required`.
     * `:resolver` — a `&fun/1` computing the attribute from the model (for
       computed/projection attributes not backed by a field).
 
@@ -235,7 +237,7 @@ defmodule Hawk.JsonApi.Resource do
 
   defp field_metadata(opts, caller) do
     opts
-    |> Keyword.take([:doc, :example, :source, :resolver])
+    |> Keyword.take([:doc, :example, :source, :resolver, :nullable])
     |> Map.new(fn {key, value} -> {key, literal!(value, caller)} end)
     |> put_required_metadata(opts)
   end

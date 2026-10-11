@@ -54,6 +54,7 @@ defmodule Hawk.OpenApi do
       tags: tags(resources),
       paths:
         paths(resources, Keyword.get(opts, :path_prefix, ""))
+        |> put_authentication_responses(Keyword.get(opts, :security, []))
         |> Map.merge(Keyword.get(opts, :extra_paths, %{})),
       components: components
     }
@@ -81,6 +82,7 @@ defmodule Hawk.OpenApi do
         json_api ->
           %{
             model: model,
+            presentation: presentation,
             resource: module,
             reader: module.__hawk_resource__(:reader),
             json_api: json_api,
@@ -197,7 +199,7 @@ defmodule Hawk.OpenApi do
     |> Map.merge(%{
       operationId: "show#{pascalize(resource.json_api.type)}",
       summary: "Show #{resource_name(resource)}",
-      parameters: [show_id_parameter(), fields_parameter(resource)],
+      parameters: [show_id_parameter(), include_parameter(resource), fields_parameter(resource)],
       responses: responses(resource, 200, data_schema(resource))
     })
   end
@@ -543,14 +545,16 @@ defmodule Hawk.OpenApi do
     |> Enum.map(&to_string/1)
   end
 
-  defp include_parameter(resource) do
+  defp include_parameter(_resource) do
     %{
       name: "include",
       in: "query",
-      schema: %{
-        type: "string",
-        enum: include_values(resource)
-      }
+      description:
+        "Comma-separated relationship paths. Use dots for nested relationships " <>
+          "(for example, lessons.cards.blocks). Each segment uses the selected " <>
+          "presentation's relationship names and must be allowed by the reader and policy. " <>
+          "An empty value includes no related resources; supported paths have no fixed depth limit.",
+      schema: %{type: "string"}
     }
   end
 
@@ -637,6 +641,22 @@ defmodule Hawk.OpenApi do
       "422" => json_api_content("Validation failed", error_document_ref())
     }
     |> put_negotiation_responses()
+  end
+
+  defp put_authentication_responses(paths, security) do
+    if Enum.any?(security, &(map_size(&1) > 0)) do
+      Map.new(paths, fn {path, operations} ->
+        {path,
+         Map.new(operations, fn {method, operation} ->
+           {method,
+            update_in(operation.responses, fn responses ->
+              Map.put(responses, "401", json_api_content("Missing or invalid credentials", error_document_ref()))
+            end)}
+         end)}
+      end)
+    else
+      paths
+    end
   end
 
   defp put_negotiation_responses(responses) do
@@ -916,7 +936,7 @@ defmodule Hawk.OpenApi do
   defp resolve_relationship_target(resource, source) do
     case resource.model.__schema__(:association, source) do
       %{related: related, cardinality: cardinality} ->
-        {Hawk.JsonApi.Schema.metadata(related).type, cardinality}
+        {Hawk.JsonApi.Schema.metadata(related, resource.presentation).type, cardinality}
 
       _no_association ->
         nil
@@ -955,9 +975,24 @@ defmodule Hawk.OpenApi do
   defp field_schema(type, metadata) do
     type
     |> openapi_type()
+    |> nullable_schema(metadata)
     |> put_optional(:description, metadata, :doc)
     |> put_optional(:example, metadata, :example)
   end
+
+  defp nullable_schema(schema, %{nullable: true}) do
+    Map.update!(schema, :type, &Enum.uniq(List.wrap(&1) ++ ["null"]))
+  end
+
+  defp nullable_schema(schema, _metadata), do: schema
+
+  defp openapi_type(:map), do: %{type: "object", additionalProperties: true}
+  defp openapi_type({:map, type}), do: %{type: "object", additionalProperties: openapi_type(type)}
+  defp openapi_type({:array, type}), do: %{type: "array", items: openapi_type(type)}
+  defp openapi_type(:date), do: %{type: "string", format: "date"}
+
+  defp openapi_type(type) when type in [:utc_datetime, :utc_datetime_usec],
+    do: %{type: "string", format: "date-time"}
 
   defp openapi_type(:integer), do: %{type: "integer"}
   defp openapi_type(:id), do: %{type: "integer"}
@@ -1049,78 +1084,6 @@ defmodule Hawk.OpenApi do
   end
 
   defp resource_name(resource), do: resource.json_api.type |> String.trim_trailing("s")
-
-  defp include_values(resource) do
-    resource.model
-    |> include_values(resource.reader, 2, [])
-    |> Enum.sort()
-  end
-
-  defp external_relationship_name(schema, source) do
-    schema
-    |> Hawk.JsonApi.Schema.metadata()
-    |> Map.fetch!(:relationships)
-    |> Enum.find_value(source, fn {name, metadata} ->
-      if Map.get(metadata, :source, name) == source, do: name
-    end)
-    |> to_string()
-  end
-
-  defp include_values(schema, reader, depth, seen) do
-    if {schema, reader} in seen do
-      []
-    else
-      seen = [{schema, reader} | seen]
-
-      reader
-      |> preload_keys()
-      |> Enum.flat_map(fn key ->
-        external = external_relationship_name(schema, key)
-        nested = nested_include_values(schema, reader, key, depth, seen)
-        [external | Enum.map(nested, &"#{external}.#{&1}")]
-      end)
-    end
-  end
-
-  defp nested_include_values(_schema, _reader, _key, 1, _seen), do: []
-
-  defp nested_include_values(schema, reader, key, depth, seen) do
-    with {:ok, association} <- fetch_association(schema, key),
-         {:ok, nested_reader} <- fetch_preload_reader(schema, reader, key) do
-      include_values(association.related, nested_reader, depth - 1, seen)
-    else
-      :error -> []
-    end
-  end
-
-  defp preload_keys(reader) do
-    if Code.ensure_loaded?(reader) and function_exported?(reader, :preload_keys, 0) do
-      reader.preload_keys() |> Enum.sort()
-    else
-      []
-    end
-  end
-
-  defp fetch_association(schema, key) do
-    case schema.__schema__(:association, key) do
-      nil -> :error
-      association -> {:ok, association}
-    end
-  end
-
-  defp fetch_preload_reader(schema, reader, key) do
-    reader_readers =
-      if Code.ensure_loaded?(reader) and function_exported?(reader, :preload_readers, 0) do
-        reader.preload_readers()
-      else
-        %{}
-      end
-
-    case Map.fetch(reader_readers, key) do
-      {:ok, nested_reader} -> {:ok, nested_reader}
-      :error -> schema.__hawk_association_reader__(key)
-    end
-  end
 
   defp sort_keys(reader) do
     if Code.ensure_loaded?(reader) and function_exported?(reader, :sort_keys, 0) do

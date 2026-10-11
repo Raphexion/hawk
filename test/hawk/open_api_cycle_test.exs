@@ -63,13 +63,14 @@ end
 defmodule Hawk.OpenApiCycleTest do
   use ExUnit.Case, async: true
 
-  test "OpenAPI include generation stops on self-referential reader cycles" do
+  test "OpenAPI permits recursive includes without enumerating self-referential readers" do
     spec = Hawk.OpenApi.spec([Hawk.OpenApiCycleTest.Nodes], title: "Test API")
 
     include =
       spec.paths["/nodes"].get.parameters
       |> Enum.find(&(&1.name == "include"))
 
-    assert include.schema.enum == ["parent"]
+    assert include.schema == %{type: "string"}
+    assert include.description =~ "no fixed depth limit"
   end
 end

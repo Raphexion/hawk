@@ -104,8 +104,8 @@ defmodule Hawk.OpenApiResourceAdapterTest do
     assert %{
              name: "include",
              in: "query",
-             schema: %{type: "string", enum: ["instructor", "instructor.campus"]}
-           } in parameters
+             schema: %{type: "string"}
+           } = Enum.find(parameters, &(&1.name == "include"))
 
     assert %{
              name: "sort",
