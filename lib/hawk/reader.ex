@@ -531,22 +531,7 @@ defmodule Hawk.Reader do
 
     loaded =
       Map.new(entry, fn {field, value} ->
-        type = schema.__schema__(:type, field)
-
-        loaded_value =
-          case {Ecto.Type.adapter_load(adapter, type, value), Map.get(config, :source_query)} do
-            {{:ok, loaded_value}, _source_query} ->
-              loaded_value
-
-            {:error, source_query} when is_function(source_query, 1) ->
-              raise ArgumentError,
-                    "source_query for #{inspect(config.reader)} returned an incompatible value for " <>
-                      "#{inspect(field)} (expected #{inspect(type)}, got #{inspect(value)})"
-
-            {:error, _source_query} ->
-              raise ArgumentError,
-                    "could not load #{inspect(field)} as #{inspect(type)} in counted reader result"
-          end
+        loaded_value = load_source_value!(config, field, value, adapter)
 
         {field, loaded_value}
       end)
@@ -667,7 +652,7 @@ defmodule Hawk.Reader do
       %{} = values when not is_struct(values) ->
         values =
           Map.new(values, fn {field, value} ->
-            {field, cast_source_value!(config, field, value)}
+            {field, load_source_value!(config, field, value, config.repo.__adapter__())}
           end)
 
         config.schema
@@ -681,16 +666,30 @@ defmodule Hawk.Reader do
 
   defp load_source_results(results, _config), do: results
 
-  defp cast_source_value!(config, field, value) do
-    case Ecto.Type.cast(config.schema.__schema__(:type, field), value) do
+  defp load_source_value!(config, field, value, adapter) do
+    type = config.schema.__schema__(:type, field)
+
+    case safely_adapter_load(adapter, type, value) do
       {:ok, cast_value} ->
         cast_value
 
       :error ->
-        raise ArgumentError,
-              "source_query for #{inspect(config.reader)} returned an incompatible value for " <>
-                "#{inspect(field)} (expected #{inspect(config.schema.__schema__(:type, field))}, got #{inspect(value)})"
+        case Ecto.Type.cast(type, value) do
+          {:ok, cast_value} ->
+            cast_value
+
+          :error ->
+            raise ArgumentError,
+                  "source_query for #{inspect(config.reader)} returned an incompatible value for " <>
+                    "#{inspect(field)} (expected #{inspect(type)}, got #{inspect(value)})"
+        end
     end
+  end
+
+  defp safely_adapter_load(adapter, type, value) do
+    Ecto.Type.adapter_load(adapter, type, value)
+  rescue
+    ArgumentError -> :error
   end
 
   defp validate_source_read_only!(config) do

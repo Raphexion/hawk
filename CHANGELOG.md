@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   source-backed readers require `write(:never)`. Their own preloads use related
   readers; using one as an incoming association preload remains unsupported.
 
+### Fixed
+
+- Source query results now load adapter values using the declared schema types
+  across ordinary and counted reads, including standard `:binary_id` UUIDs.
+- Source reader contract validation now handles declared sort keys correctly.
+
 ## [0.12.0] - 2026-10-11
 
 ### Added

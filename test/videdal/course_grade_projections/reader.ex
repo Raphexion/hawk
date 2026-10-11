@@ -9,6 +9,12 @@ defmodule Videdal.CourseGradeProjections.Queries do
 
   def source(_context), do: source_base()
 
+  def nested_source(context) do
+    from(row in subquery(source(context)),
+      select: %{id: row.id, course_id: row.course_id, school_id: row.school_id, grade_count: row.grade_count}
+    )
+  end
+
   defp source_base do
     from(course in Videdal.Course,
       as: :course,
@@ -72,6 +78,24 @@ defmodule Videdal.CourseGradeProjections.Policy do
   write(:never)
 end
 
+defmodule Videdal.CourseGradeProjections.Writer do
+  @moduledoc false
+  use Hawk.Writer.Resource,
+    model: Videdal.CourseGradeProjection,
+    repo: Videdal.Repo,
+    policy: Videdal.CourseGradeProjections.Policy
+
+  create do
+    cast([])
+  end
+
+  update do
+    cast([])
+  end
+
+  def delete(_record, _authority), do: :ok
+end
+
 defmodule Videdal.CourseGradeProjections.Reader do
   @moduledoc false
 
@@ -79,10 +103,19 @@ defmodule Videdal.CourseGradeProjections.Reader do
     repo: Videdal.Repo,
     schema: Videdal.CourseGradeProjection,
     policy: Videdal.CourseGradeProjections.Policy,
-    source_query: &Videdal.CourseGradeProjections.Queries.source/1
+    source_query: &Videdal.CourseGradeProjections.Queries.nested_source/1
 
   filter(:school_id)
   filter(:course_id)
   sort(:grade_count)
   preload(:grades, reader: Videdal.Grades.Reader)
+end
+
+defmodule Videdal.CourseGradeProjections do
+  @moduledoc false
+  use Hawk.Resource,
+    model: Videdal.CourseGradeProjection,
+    reader: Videdal.CourseGradeProjections.Reader,
+    json_api: false,
+    live_view: false
 end

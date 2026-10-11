@@ -24,6 +24,14 @@ defmodule Videdal.CourseGradeProjections.ReaderTest do
              Reader.all(authority: authority, filter: %{course_id: course.id})
 
     assert course_id == course.id
+    assert is_binary(course_id) and byte_size(course_id) == 36
+
+    assert {:ok, json} =
+             Reader.all(authority: authority, filter: %{course_id: course.id})
+             |> Hawk.JsonApi.Document.document()
+             |> Jason.encode()
+
+    assert json =~ course.id
     assert Reader.count(authority: authority, filter: %{course_id: course.id}) == 1
 
     assert [%Videdal.CourseGradeProjection{id: contextual_id}] =
@@ -36,6 +44,11 @@ defmodule Videdal.CourseGradeProjections.ReaderTest do
 
     assert {:ok, %Videdal.CourseGradeProjection{grade_count: 1}} =
              Reader.one(authority: authority, filter: %{course_id: course.id})
+
+    assert {:ok, %Videdal.CourseGradeProjection{id: one_id}} =
+             Reader.one(authority: authority, filter: %{course_id: course.id}, select: [:id])
+
+    assert one_id == course.id
 
     assert :not_found = Reader.one(authority: authority, filter: %{course_id: Ecto.UUID.generate()})
 
@@ -62,6 +75,7 @@ defmodule Videdal.CourseGradeProjections.ReaderTest do
     assert [%Videdal.CourseGradeProjection{course_id: id, grade_count: 2}] = page.entries
     assert id == two.id
     assert page.total_count == 2
+    assert is_binary(page.entries |> hd() |> Map.fetch!(:id))
 
     next_page =
       Reader.page(
@@ -72,6 +86,7 @@ defmodule Videdal.CourseGradeProjections.ReaderTest do
 
     assert [%Videdal.CourseGradeProjection{course_id: next_id, grade_count: 1}] = next_page.entries
     assert next_id == one.id
+    assert byte_size(next_page.entries |> hd() |> Map.fetch!(:id)) == 36
 
     empty_page =
       Reader.page(
@@ -81,6 +96,14 @@ defmodule Videdal.CourseGradeProjections.ReaderTest do
 
     assert empty_page.entries == []
     assert empty_page.total_count == 2
+  end
+
+  test "source readers with declared sort keys pass resource contract validation" do
+    assert :ok =
+             Hawk.ResourceContract.validate!(
+               Videdal.CourseGradeProjections,
+               Videdal.CourseGradeProjection
+             )
   end
 
   test "preloads preserve the selected parent restriction and use the related reader" do

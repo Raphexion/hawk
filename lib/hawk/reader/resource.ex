@@ -436,7 +436,9 @@ defmodule Hawk.Reader.Resource do
       declarations.filter_sets
     )
 
-    quote_reader(declarations, schema)
+    source_query? = not is_nil(Module.get_attribute(env.module, :hawk_reader_source_query))
+
+    quote_reader(declarations, schema, source_query?)
   end
 
   defp convention_policy(reader_module) do
@@ -473,12 +475,12 @@ defmodule Hawk.Reader.Resource do
     |> Enum.reverse()
   end
 
-  defp quote_reader(declarations, schema) do
+  defp quote_reader(declarations, schema, source_query?) do
     quote_filter_metadata_functions(declarations, schema) ++
       [
         quote_reader_metadata_functions(declarations),
         quote_source_query_metadata_function(),
-        quote_public_reader_functions(),
+        quote_public_reader_functions(source_query?),
         quote_config_function()
       ]
   end
@@ -544,7 +546,9 @@ defmodule Hawk.Reader.Resource do
     end
   end
 
-  defp quote_public_reader_functions do
+  defp quote_public_reader_functions(source_query?) do
+    preload_query = quote_preload_query_function(source_query?)
+
     quote do
       @spec one(keyword() | map()) :: {:ok, struct()} | :not_found
       def one(opts), do: Hawk.Reader.one(config(), opts)
@@ -558,13 +562,24 @@ defmodule Hawk.Reader.Resource do
       @spec count(keyword() | map()) :: non_neg_integer()
       def count(opts), do: Hawk.Reader.count(config(), opts)
 
+      unquote(preload_query)
+    end
+  end
+
+  defp quote_preload_query_function(true) do
+    quote do
+      @spec preload_query(Ecto.Query.t(), Hawk.Authority.t()) :: no_return()
+      def preload_query(_query, _authority) do
+        raise ArgumentError,
+              "source-backed reader #{inspect(__MODULE__)} does not support association preloads yet"
+      end
+    end
+  end
+
+  defp quote_preload_query_function(false) do
+    quote do
       @spec preload_query(Ecto.Query.t(), Hawk.Authority.t()) :: Ecto.Query.t()
       def preload_query(query, authority) do
-        if @hawk_reader_has_source_query do
-          raise ArgumentError,
-                "source-backed reader #{inspect(__MODULE__)} does not support association preloads yet"
-        end
-
         query
         |> Hawk.Reader.apply_authorized_filter(config(), authority)
         |> Hawk.Reader.apply_lifecycle_filter(config(), :exclude)

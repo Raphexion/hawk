@@ -255,7 +255,7 @@ defmodule Hawk.ResourceContract do
       required_fields =
         [Hawk.JsonApi.Schema.identity(model)] ++
           Enum.reject(reader_values(reader, :filter_keys), &MapSet.member?(handler_keys, &1)) ++
-          reader_values(reader, :sort_keys) ++
+          Enum.to_list(reader_values(reader, :sort_keys)) ++
           preload_owner_keys ++
           case reader_values(reader, :soft_delete) do
             %{field: field} -> [field]
