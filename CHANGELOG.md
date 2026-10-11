@@ -7,8 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-11
+
 ### Added
 
+- **Authentication hooks.** JWT verification accepts an `:authority_builder`
+  callback to map verified claims into application-specific identities and
+  scopes. The Bearer Plug accepts an `:on_verified` callback to assign additional
+  request context after successful authentication.
+- **Native JSON:API hard-delete actions.** Soft-deletable resources now expose
+  a policy-gated `POST /:resource/:id/-actions/hard-delete` lifecycle action,
+  documented in OpenAPI and generated plans. The `hard-delete` action name is
+  reserved for this lifecycle behavior.
 - **Delete relationship authorization.** Writers can declare `delete do` blocks
   containing `authorize_relationships/1` steps. References share one SQL query
   after the delete policy passes. Blocks enable ordinary hard deletion or combine
@@ -27,8 +37,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reader `schema/0` metadata exposes the configured Ecto schema for validating
   relationship reader compatibility.
 
+### Changed
+
+- **Read-only JSON:API resources.** Resources declaring `write(:never)` now omit
+  create, update, delete, and action routes from generated routers and OpenAPI.
+  Role-scoped write policies retain those routes. Policy changes recompile
+  consuming routers, including during Phoenix development reloads.
+
 ### Fixed
 
+- JWT verification now rejects roles outside the configured allowlist instead
+  of accepting them as a `nil` authority role.
 - OpenAPI create and update request schemas now sort required attribute and
   relationship names, producing stable output regardless of map iteration order.
 
@@ -362,7 +381,8 @@ Initial tracked release. Adds the MIT License and Hex package metadata
 (`licenses`, `links`, `files`) in `mix.exs`. Earlier 0.x versions are
 untracked history.
 
-[Unreleased]: https://github.com/Raphexion/hawk/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/Raphexion/hawk/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/Raphexion/hawk/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/Raphexion/hawk/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/Raphexion/hawk/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/Raphexion/hawk/compare/v0.8.0...v0.9.0
