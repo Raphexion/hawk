@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Composable Ecto reader sources.** Readers can declare an arity-1
+  `source_query` callback that returns a map projection, letting Hawk apply
+  policies, filters, sorting, pagination, and counts without a physical table
+  or view for the read model. Results load into the declared schema, and
+  source-backed readers require `write(:never)`. Their own preloads use related
+  readers; using one as an incoming association preload remains unsupported.
+
 ## [0.12.0] - 2026-10-11
 
 ### Added

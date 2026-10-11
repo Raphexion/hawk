@@ -17,6 +17,11 @@ defmodule Hawk.Reader.Resource do
 
     * `:repo` (required) — the `Ecto.Repo` to query through.
     * `:schema` (required) — the `Hawk.Model` / `Ecto.Schema` to read.
+    * `:source_query` — an optional arity-1 callback returning an `Ecto.Query`
+      with a map projection. It receives authority, request context, and params.
+      Source-backed readers require a `write(:never)` policy. They can preload
+      their own associations through related readers; using one as an incoming
+      association preload is currently unsupported.
     * `:policy` — the policy module (default: the conventional sibling
       `<Resource>.Policy`).
     * `:forced_filter` — a filter map always merged into every query (default
@@ -56,6 +61,7 @@ defmodule Hawk.Reader.Resource do
         use Hawk.Reader.Resource,
           repo: MyApp.Repo,
           schema: MyApp.Course,
+          source_query: &MyApp.CourseQueries.read_model/1,
           default_page_size: 100,
           max_page_size: 100
 
@@ -85,6 +91,16 @@ defmodule Hawk.Reader.Resource do
   every layer uses that resource's own reader and policy — opening `courses`
   does not accidentally open `grades` or `students`.
 
+  A source-backed reader's callback must return an explicit map projection. The
+  projection must include the schema identity and every declared reader,
+  policy, and lifecycle field. Hawk applies its normal authorization and reader
+  operations to an outer `:root` binding, then loads results into the declared
+  schema. The schema source name is metadata only and does not need a database
+  table or view. Since a custom projection cannot safely replace an incoming
+  association preload query yet, source-backed readers reject being loaded as
+  an incoming association preload. Their own declared preloads still use the
+  related readers and their policies.
+
   ## See also
 
     * `Hawk.Reader` — the execution engine.
@@ -106,6 +122,11 @@ defmodule Hawk.Reader.Resource do
     default_sort = Keyword.get(opts, :default_sort, asc: :id)
     max_page_size = Keyword.get(opts, :max_page_size, 100)
     default_page_size = Keyword.get(opts, :default_page_size, max_page_size)
+    source_query = Keyword.get(opts, :source_query)
+
+    unless is_nil(source_query) or source_query_arity_one?(source_query) do
+      raise ArgumentError, "reader :source_query must be a function capture with arity 1"
+    end
 
     quote do
       import Ecto.Query, except: [preload: 2]
@@ -127,6 +148,8 @@ defmodule Hawk.Reader.Resource do
 
       @hawk_reader_repo unquote(repo)
       @hawk_reader_schema unquote(schema)
+      @hawk_reader_source_query unquote(source_query)
+      @hawk_reader_has_source_query unquote(not is_nil(source_query))
       @hawk_reader_policy unquote(policy)
       @hawk_reader_forced_filter unquote(forced_filter)
       @hawk_reader_default_sort unquote(default_sort)
@@ -424,6 +447,9 @@ defmodule Hawk.Reader.Resource do
     |> Module.concat()
   end
 
+  defp source_query_arity_one?({:&, _, [{:/, _, [_function, 1]}]}), do: true
+  defp source_query_arity_one?(_source_query), do: false
+
   defp reader_declarations(module) do
     %{
       filter_keys: reversed_attribute(module, :hawk_reader_filter_keys),
@@ -451,6 +477,7 @@ defmodule Hawk.Reader.Resource do
     quote_filter_metadata_functions(declarations, schema) ++
       [
         quote_reader_metadata_functions(declarations),
+        quote_source_query_metadata_function(),
         quote_public_reader_functions(),
         quote_config_function()
       ]
@@ -511,6 +538,12 @@ defmodule Hawk.Reader.Resource do
     end
   end
 
+  defp quote_source_query_metadata_function do
+    quote do
+      def source_query, do: @hawk_reader_source_query
+    end
+  end
+
   defp quote_public_reader_functions do
     quote do
       @spec one(keyword() | map()) :: {:ok, struct()} | :not_found
@@ -527,6 +560,11 @@ defmodule Hawk.Reader.Resource do
 
       @spec preload_query(Ecto.Query.t(), Hawk.Authority.t()) :: Ecto.Query.t()
       def preload_query(query, authority) do
+        if @hawk_reader_has_source_query do
+          raise ArgumentError,
+                "source-backed reader #{inspect(__MODULE__)} does not support association preloads yet"
+        end
+
         query
         |> Hawk.Reader.apply_authorized_filter(config(), authority)
         |> Hawk.Reader.apply_lifecycle_filter(config(), :exclude)
@@ -555,6 +593,9 @@ defmodule Hawk.Reader.Resource do
         %{
           repo: @hawk_reader_repo,
           schema: @hawk_reader_schema,
+          source_query: @hawk_reader_source_query,
+          reader: __MODULE__,
+          policy: @hawk_reader_policy,
           identity: Hawk.JsonApi.Schema.identity(@hawk_reader_schema),
           filter_keys: filter_declarations.filter_keys,
           filter_handlers: filter_declarations.filter_handlers,

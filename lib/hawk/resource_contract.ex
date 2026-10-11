@@ -28,6 +28,7 @@ defmodule Hawk.ResourceContract do
     validate_reader_filters!(reader, model)
     validate_reader_coordinate_filters!(reader, model)
     validate_policy_filters!(policy, reader)
+    validate_reader_source!(reader, policy, model)
 
     :ok
   end
@@ -234,6 +235,49 @@ defmodule Hawk.ResourceContract do
     |> policy_read_filters()
     |> Enum.reject(&MapSet.member?(declared_reader_filters, &1))
     |> raise_if_any!("policy read filters must be declared reader filters")
+  end
+
+  defp validate_reader_source!(reader, policy, model) do
+    source_query = reader_values(reader, :source_query)
+
+    if is_function(source_query, 1) do
+      unless Code.ensure_loaded?(policy) and function_exported?(policy, :__hawk_policy__, 0) and
+               policy.__hawk_policy__().write == :never do
+        raise ArgumentError,
+              "source-backed reader #{inspect(reader)} requires an explicit write(:never) policy"
+      end
+
+      declared_fields = MapSet.new(model.__schema__(:fields))
+      handler_keys = reader_filter_handler_keys(reader)
+
+      preload_owner_keys = reader_preload_owner_keys(reader, model)
+
+      required_fields =
+        [Hawk.JsonApi.Schema.identity(model)] ++
+          Enum.reject(reader_values(reader, :filter_keys), &MapSet.member?(handler_keys, &1)) ++
+          reader_values(reader, :sort_keys) ++
+          preload_owner_keys ++
+          case reader_values(reader, :soft_delete) do
+            %{field: field} -> [field]
+            _ -> []
+          end
+
+      required_fields
+      |> Enum.uniq()
+      |> Enum.reject(&MapSet.member?(declared_fields, &1))
+      |> raise_if_any!("source-backed reader fields must be declared schema fields")
+    end
+  end
+
+  defp reader_preload_owner_keys(reader, model) do
+    reader
+    |> reader_values(:preload_keys)
+    |> Enum.flat_map(fn key ->
+      case model.__schema__(:association, key) do
+        %{owner_key: owner_key} -> [owner_key]
+        _ -> []
+      end
+    end)
   end
 
   defp reader_filter_handler_keys(reader) do

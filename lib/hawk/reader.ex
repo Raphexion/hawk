@@ -50,6 +50,7 @@ defmodule Hawk.Reader do
     config
     |> build_query(opts)
     |> config.repo.all()
+    |> load_source_results(config)
     |> Preloader.preload(
       config.repo,
       opts.preloads,
@@ -80,13 +81,14 @@ defmodule Hawk.Reader do
       if page[:total] do
         case build_counted_page_query(config, opts, sort, page) do
           {:ok, counted_query} ->
-            run_counted_page_query(counted_query, config.repo, config.schema)
+            counted_page_results(counted_query, config, opts)
 
           :fallback ->
             results =
               config
               |> build_query_from_normalized(%{opts | page: lookahead_page(page)}, sort)
               |> config.repo.all()
+              |> load_source_results(config)
 
             {results, count(config, opts)}
         end
@@ -95,6 +97,7 @@ defmodule Hawk.Reader do
           config
           |> build_query_from_normalized(%{opts | page: lookahead_page(page)}, sort)
           |> config.repo.all()
+          |> load_source_results(config)
 
         {results, nil}
       end
@@ -124,6 +127,13 @@ defmodule Hawk.Reader do
     }
   end
 
+  defp counted_page_results(query, config, opts) do
+    case run_counted_page_query(query, config) do
+      {results, nil} -> {results, count(config, opts)}
+      counted -> counted
+    end
+  end
+
   @doc """
   Fetches exactly one record, returning `:not_found` when none exists.
   """
@@ -142,6 +152,7 @@ defmodule Hawk.Reader do
       config
       |> build_query(%{opts | page: %{size: 2}, preloads: []})
       |> config.repo.all()
+      |> load_source_results(config)
 
     case results do
       [model] ->
@@ -178,11 +189,11 @@ defmodule Hawk.Reader do
     validate_rank_scope!(config, opts.rank_scope)
 
     query =
-      config.schema
-      |> from(as: :root)
+      config
+      |> source_root_query(opts)
       |> apply_authorized_filter(config, authority, caller_filter, [])
       |> apply_lifecycle_filter(config, opts.deleted)
-      |> apply_scope(config, opts, %{authority: authority})
+      |> apply_scope(config, opts, %{authority: authority, context: opts.context})
 
     distinct_root_count(query, config.repo, identity(config))
   end
@@ -442,9 +453,13 @@ defmodule Hawk.Reader do
 
   defp sort_columns(sort), do: Keyword.values(sort)
 
-  defp apply_select(query, nil), do: query
+  defp apply_select(query, nil, _config), do: query
 
-  defp apply_select(query, fields) do
+  defp apply_select(query, fields, %{source_query: source_query}) when is_function(source_query, 1) do
+    select(query, [root: row], map(row, ^fields))
+  end
+
+  defp apply_select(query, fields, _config) do
     select(query, [root: row], struct(row, ^fields))
   end
 
@@ -453,7 +468,7 @@ defmodule Hawk.Reader do
 
     config
     |> build_base_query_from_normalized(opts, sort)
-    |> apply_select(cursor_select(Map.get(opts, :select), sort))
+    |> apply_select(cursor_select(Map.get(opts, :select), sort), config)
     |> apply_cursor(page, sort, config.schema)
     |> apply_sort(sort)
     |> apply_offset(page)
@@ -468,7 +483,7 @@ defmodule Hawk.Reader do
     if is_nil(base_query.select) and is_nil(opts.rank_scope) do
       counted =
         base_query
-        |> apply_select(fields)
+        |> apply_select(fields, config)
         |> subquery()
         |> then(
           &from(row in &1,
@@ -498,24 +513,41 @@ defmodule Hawk.Reader do
     end
   end
 
-  defp run_counted_page_query(query, repo, schema) do
-    case repo.all(query) do
+  defp run_counted_page_query(query, config) do
+    case config.repo.all(query) do
       [] ->
         {[], nil}
 
       rows ->
         entries =
-          Enum.map(rows, &load_counted_entry(&1.entry, schema, repo.__adapter__(), query.prefix))
+          Enum.map(rows, &load_counted_entry(&1.entry, config, config.repo.__adapter__(), query.prefix))
 
         {entries, rows |> hd() |> Map.fetch!(:total_count)}
     end
   end
 
-  defp load_counted_entry(entry, schema, adapter, prefix) do
+  defp load_counted_entry(entry, config, adapter, prefix) do
+    schema = config.schema
+
     loaded =
       Map.new(entry, fn {field, value} ->
         type = schema.__schema__(:type, field)
-        {:ok, loaded_value} = Ecto.Type.adapter_load(adapter, type, value)
+
+        loaded_value =
+          case {Ecto.Type.adapter_load(adapter, type, value), Map.get(config, :source_query)} do
+            {{:ok, loaded_value}, _source_query} ->
+              loaded_value
+
+            {:error, source_query} when is_function(source_query, 1) ->
+              raise ArgumentError,
+                    "source_query for #{inspect(config.reader)} returned an incompatible value for " <>
+                      "#{inspect(field)} (expected #{inspect(type)}, got #{inspect(value)})"
+
+            {:error, _source_query} ->
+              raise ArgumentError,
+                    "could not load #{inspect(field)} as #{inspect(type)} in counted reader result"
+          end
+
         {field, loaded_value}
       end)
 
@@ -528,13 +560,147 @@ defmodule Hawk.Reader do
     authority = Map.fetch!(opts, :authority)
     caller_filter = Map.fetch!(opts, :filter)
 
-    config.schema
-    |> from(as: :root)
+    config
+    |> source_root_query(opts)
     |> apply_authorized_filter(config, authority, caller_filter, sort_columns(sort))
     |> apply_lifecycle_filter(config, opts.deleted)
-    |> apply_scope(config, opts, %{authority: authority})
-    |> apply_rank_scope(config, opts.rank_scope, opts.params, %{authority: authority})
+    |> apply_scope(config, opts, %{authority: authority, context: opts.context})
+    |> apply_rank_scope(config, opts.rank_scope, opts.params, %{authority: authority, context: opts.context})
     |> maybe_deduplicate_roots(config, authority, caller_filter, sort)
+  end
+
+  defp source_root_query(config, opts) do
+    case Map.get(config, :source_query) do
+      nil ->
+        from(config.schema, as: :root)
+
+      source_query when is_function(source_query, 1) ->
+        validate_source_read_only!(config)
+
+        query =
+          source_query.(%{
+            authority: opts.authority,
+            context: opts.context,
+            params: opts.params
+          })
+
+        unless match?(%Ecto.Query{}, query) do
+          raise ArgumentError,
+                "reader source_query for #{inspect(config.reader)} must return an Ecto.Query, got: #{inspect(query)}"
+        end
+
+        validate_source_projection!(query, config, opts.authority)
+        from(row in subquery(query), as: :root)
+
+      other ->
+        raise ArgumentError,
+              "reader source_query for #{inspect(config.reader)} must be a function of arity 1, got: #{inspect(other)}"
+    end
+  end
+
+  defp validate_source_projection!(query, config, authority) do
+    projection_fields =
+      case query.select do
+        %{expr: {:%{}, _metadata, fields}} ->
+          Enum.map(fields, &elem(&1, 0))
+
+        _ ->
+          raise ArgumentError,
+                "source_query for #{inspect(config.reader)} must return an explicit map projection"
+      end
+
+    handlers = Map.get(config, :filter_handlers, %{}) |> Map.keys() |> MapSet.new()
+
+    policy_fields =
+      config.read_filter.(authority)
+      |> Filter.normalize()
+      |> Filter.keys()
+      |> Enum.to_list()
+      |> Enum.reject(&MapSet.member?(handlers, &1))
+
+    forced_fields =
+      Map.get(config, :forced_filter, :all)
+      |> Filter.normalize()
+      |> Filter.keys()
+      |> Enum.to_list()
+      |> Enum.reject(&MapSet.member?(handlers, &1))
+
+    preload_owner_keys =
+      config
+      |> Map.get(:preload_keys, [])
+      |> Enum.flat_map(fn key ->
+        case config.schema.__schema__(:association, key) do
+          %{owner_key: owner_key} -> [owner_key]
+          _ -> []
+        end
+      end)
+
+    required_fields =
+      [identity(config)] ++
+        (Map.get(config, :filter_keys, []) |> Enum.reject(&MapSet.member?(handlers, &1))) ++
+        Enum.to_list(Map.get(config, :sort_keys, [])) ++
+        policy_fields ++
+        forced_fields ++
+        preload_owner_keys ++
+        case Map.get(config, :soft_delete) do
+          %{field: field} -> [field]
+          _ -> []
+        end
+
+    missing_fields = Enum.uniq(required_fields) -- projection_fields
+
+    if missing_fields != [] do
+      raise ArgumentError,
+            "source_query for #{inspect(config.reader)} is missing required projection fields #{inspect(missing_fields)}"
+    end
+
+    unsupported_fields = projection_fields -- config.schema.__schema__(:fields)
+
+    if unsupported_fields != [] do
+      raise ArgumentError,
+            "source_query for #{inspect(config.reader)} projects fields absent from #{inspect(config.schema)}: #{inspect(unsupported_fields)}"
+    end
+  end
+
+  defp load_source_results(results, %{source_query: source_query} = config) when is_function(source_query, 1) do
+    Enum.map(results, fn
+      %{} = values when not is_struct(values) ->
+        values =
+          Map.new(values, fn {field, value} ->
+            {field, cast_source_value!(config, field, value)}
+          end)
+
+        config.schema
+        |> struct(values)
+        |> Ecto.put_meta(state: :loaded, source: config.schema.__schema__(:source))
+
+      result ->
+        result
+    end)
+  end
+
+  defp load_source_results(results, _config), do: results
+
+  defp cast_source_value!(config, field, value) do
+    case Ecto.Type.cast(config.schema.__schema__(:type, field), value) do
+      {:ok, cast_value} ->
+        cast_value
+
+      :error ->
+        raise ArgumentError,
+              "source_query for #{inspect(config.reader)} returned an incompatible value for " <>
+                "#{inspect(field)} (expected #{inspect(config.schema.__schema__(:type, field))}, got #{inspect(value)})"
+    end
+  end
+
+  defp validate_source_read_only!(config) do
+    policy = config.policy
+
+    unless Code.ensure_loaded?(policy) and function_exported?(policy, :__hawk_policy__, 0) and
+             policy.__hawk_policy__().write == :never do
+      raise ArgumentError,
+            "source-backed reader #{inspect(config.reader)} requires an explicit write(:never) policy"
+    end
   end
 
   defp apply_rank_scope(query, _config, nil, _params, _opts), do: query
