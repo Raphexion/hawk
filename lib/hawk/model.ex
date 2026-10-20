@@ -134,8 +134,17 @@ defmodule Hawk.Model do
       end
 
     quote do
-      unquote_splicing(quote_attrs(:hawk_association_policies, metadata.policies))
-      unquote_splicing(quote_attrs(:hawk_association_readers, metadata.readers))
+      Module.put_attribute(
+        __MODULE__,
+        :hawk_association_policies,
+        unquote(Macro.escape(metadata.policies))
+      )
+
+      Module.put_attribute(
+        __MODULE__,
+        :hawk_association_readers,
+        unquote(Macro.escape(metadata.readers))
+      )
 
       unquote(primary_key_decl)
       @foreign_key_type :binary_id
@@ -147,8 +156,8 @@ defmodule Hawk.Model do
   end
 
   defmacro __before_compile__(env) do
-    policies = env.module |> Module.get_attribute(:hawk_association_policies) |> Enum.reverse()
-    readers = env.module |> Module.get_attribute(:hawk_association_readers) |> Enum.reverse()
+    policies = association_metadata(env.module, :hawk_association_policies)
+    readers = association_metadata(env.module, :hawk_association_readers)
 
     resource = convention_resource(env.module)
 
@@ -160,12 +169,11 @@ defmodule Hawk.Model do
     end
   end
 
-  defp quote_attrs(attribute, values) do
-    Enum.map(values, fn {name, module} ->
-      quote do
-        Module.put_attribute(__MODULE__, unquote(attribute), {unquote(name), unquote(module)})
-      end
-    end)
+  defp association_metadata(module, attribute) do
+    module
+    |> Module.get_attribute(attribute)
+    |> Enum.reverse()
+    |> List.flatten()
   end
 
   defp quote_fetch_function(name, values) do
