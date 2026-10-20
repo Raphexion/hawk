@@ -78,7 +78,7 @@ defmodule Hawk.Policy do
       import Hawk.Policy, only: [read: 1, role: 2, write: 1]
 
       Module.register_attribute(__MODULE__, :hawk_policy_read_roles, accumulate: true)
-      Module.register_attribute(__MODULE__, :hawk_policy_write_mode, persist: false)
+      Module.register_attribute(__MODULE__, :hawk_policy_write_declaration, persist: false)
       @before_compile Hawk.Policy
     end
   end
@@ -130,12 +130,7 @@ defmodule Hawk.Policy do
   """
   defmacro write(:never) do
     quote do
-      @hawk_policy_write_mode :never
-      def create?(%Hawk.MutationContext{}), do: false
-      def update?(%Hawk.MutationContext{}), do: false
-      def delete?(%Hawk.MutationContext{}), do: false
-      def restore?(%Hawk.MutationContext{}), do: false
-      def hard_delete?(%Hawk.MutationContext{}), do: false
+      Module.put_attribute(__MODULE__, :hawk_policy_write_declaration, :never)
     end
   end
 
@@ -146,25 +141,11 @@ defmodule Hawk.Policy do
     owned_by = Keyword.get(opts, :owned_by, [])
 
     quote do
-      @hawk_policy_write_mode :available
-      def create?(%Hawk.MutationContext{} = context),
-        do: write_allowed?(context, unquote(roles), unquote(owned_by))
-
-      def update?(%Hawk.MutationContext{} = context),
-        do: write_allowed?(context, unquote(roles), unquote(owned_by))
-
-      def delete?(%Hawk.MutationContext{} = context),
-        do: write_allowed?(context, unquote(roles), unquote(owned_by))
-
-      def restore?(%Hawk.MutationContext{} = context),
-        do: write_allowed?(context, unquote(restore_roles), unquote(owned_by))
-
-      def hard_delete?(%Hawk.MutationContext{} = context),
-        do: write_allowed?(context, unquote(hard_delete_roles), unquote(owned_by))
-
-      defp write_allowed?(%Hawk.MutationContext{} = context, allowed_roles, ownership) do
-        Hawk.Policy.write_allowed?(context, allowed_roles, ownership)
-      end
+      Module.put_attribute(
+        __MODULE__,
+        :hawk_policy_write_declaration,
+        {:available, unquote(roles), unquote(restore_roles), unquote(hard_delete_roles), unquote(owned_by)}
+      )
     end
   end
 
@@ -217,16 +198,58 @@ defmodule Hawk.Policy do
       |> Module.get_attribute(:hawk_policy_read_roles)
       |> Enum.reverse()
 
-    write_mode = Module.get_attribute(env.module, :hawk_policy_write_mode) || :available
+    write_declaration = Module.get_attribute(env.module, :hawk_policy_write_declaration)
+
+    write_functions = write_functions(write_declaration)
 
     quote do
+      unquote(write_functions)
+
       def read_filter(%Hawk.Authority{} = authority) do
         Hawk.Policy.read_filter(authority, unquote(Macro.escape(read_roles)))
       end
 
       def __hawk_policy__ do
-        %{read: unquote(Macro.escape(read_roles)), write: unquote(write_mode)}
+        %{read: unquote(Macro.escape(read_roles)), write: __hawk_write_mode__()}
       end
+    end
+  end
+
+  defp write_functions(nil) do
+    quote do
+      defp __hawk_write_mode__, do: :available
+    end
+  end
+
+  defp write_functions(:never) do
+    quote do
+      defp __hawk_write_mode__, do: :never
+      def create?(%Hawk.MutationContext{}), do: false
+      def update?(%Hawk.MutationContext{}), do: false
+      def delete?(%Hawk.MutationContext{}), do: false
+      def restore?(%Hawk.MutationContext{}), do: false
+      def hard_delete?(%Hawk.MutationContext{}), do: false
+    end
+  end
+
+  defp write_functions({:available, roles, restore_roles, hard_delete_roles, owned_by}) do
+    quote do
+      defp __hawk_write_mode__, do: :available
+
+      def create?(%Hawk.MutationContext{} = context),
+        do: Hawk.Policy.write_allowed?(context, unquote(roles), unquote(owned_by))
+
+      def update?(%Hawk.MutationContext{} = context),
+        do: Hawk.Policy.write_allowed?(context, unquote(roles), unquote(owned_by))
+
+      def delete?(%Hawk.MutationContext{} = context),
+        do: Hawk.Policy.write_allowed?(context, unquote(roles), unquote(owned_by))
+
+      def restore?(%Hawk.MutationContext{} = context),
+        do: Hawk.Policy.write_allowed?(context, unquote(restore_roles), unquote(owned_by))
+
+      def hard_delete?(%Hawk.MutationContext{} = context),
+        do: Hawk.Policy.write_allowed?(context, unquote(hard_delete_roles), unquote(owned_by))
     end
   end
 
