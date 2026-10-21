@@ -288,50 +288,24 @@ defmodule Hawk.Resource do
   end
 
   defp quote_introspection(modules, runtime_modules) do
-    clauses =
-      static_introspection_clauses(modules) ++
-        [
-          quote_actions_introspection(runtime_modules.actions),
-          quote_capabilities_introspection(modules)
-        ]
+    static_modules =
+      modules
+      |> Map.take([:model, :reader, :policy, :writer, :json_api, :live_view, :identity])
+      |> Macro.escape()
 
-    quote do
-      (unquote_splicing(clauses))
-    end
-  end
-
-  defp static_introspection_clauses(modules) do
-    [
-      model: modules.model,
-      reader: modules.reader,
-      policy: modules.policy,
-      writer: modules.writer,
-      json_api: modules.json_api,
-      live_view: modules.live_view,
-      identity: modules.identity
-    ]
-    |> Enum.map(&quote_introspection_clause/1)
-  end
-
-  defp quote_introspection_clause({key, value}) do
-    quote do
-      def __hawk_resource__(unquote(key)), do: unquote(value)
-    end
-  end
-
-  defp quote_actions_introspection(actions_module) do
-    quote do
-      def __hawk_resource__(:actions), do: Hawk.Resource.available_actions_module(unquote(actions_module))
-    end
-  end
-
-  defp quote_capabilities_introspection(modules) do
     static_capabilities = %{
       json_api: modules.json_api != false,
       live_view: modules.live_view != false
     }
 
     quote do
+      def __hawk_resource__(key)
+          when key in [:model, :reader, :policy, :writer, :json_api, :live_view, :identity],
+          do: Map.fetch!(unquote(static_modules), key)
+
+      def __hawk_resource__(:actions),
+        do: Hawk.Resource.available_actions_module(unquote(runtime_modules.actions))
+
       def __hawk_resource__(:capabilities),
         do:
           Hawk.Resource.capabilities(
