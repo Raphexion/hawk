@@ -68,6 +68,7 @@ defmodule Hawk.MixProject do
           Hawk.JsonApi.Schema,
           Hawk.LiveView,
           Hawk.LiveView.Page,
+          Hawk.LiveView.Composed,
           Hawk.LiveView.AuthorityHook,
           Hawk.OpenApi,
           Hawk.OpenApi.Controller

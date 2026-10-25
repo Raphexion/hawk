@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Composed LiveView refresh coordination.** Added the optional
+  `Hawk.LiveView.Composed` helper for subscribing to resources declared by a
+  `Hawk.LiveView.Page` and re-reading the affected record, collection, or
+  paginated result through the current authority. Refresh results remain
+  application-owned so host applications control assigns and LiveView
+  streams; paginated page specs now retain their page metadata on composed
+  pages.
 - JSON:API attributes accept `nullable: true` to document JSON null values in
   OpenAPI schemas independently of request-level requiredness.
 - **Composable Ecto reader sources.** Readers can declare an arity-1

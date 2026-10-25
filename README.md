@@ -1345,6 +1345,32 @@ Each resource still goes through its own reader and policy. The page helper just
 composes the reads and shared mutation events; it does not create a new bypass
 around Hawk's authorization model.
 
+For a composed page that should react to writes, add the optional coordinator:
+
+```elixir
+def handle_info(%Hawk.PubSub.Event{} = event, socket) do
+  case Hawk.LiveView.Composed.refresh(socket, MyAppWeb.CourseWorkspaceLive, event) do
+    {:ok, %{key: :course, value: course}} ->
+      {:noreply, assign(socket, :course, course)}
+
+    {:ok, %{key: :grades, value: grades}} ->
+      {:noreply, stream(socket, :grades, grades, reset: true)}
+
+    {:ok, %{value: :not_found}} ->
+      {:noreply, assign(socket, :course, nil)}
+
+    {:ignore, _reason} ->
+      {:noreply, socket}
+  end
+end
+```
+
+Call `Hawk.LiveView.Composed.subscribe(socket, MyAppWeb.CourseWorkspaceLive)`
+after assigning the page's routing context. The coordinator uses the resources
+declared by `Hawk.LiveView.Page`, re-reads through the page authority and saved
+filters, and returns typed results. It does not mutate assigns, manage streams,
+or include models in notifications; those remain application concerns.
+
 When the resource writer exposes form changeset helpers, `use Hawk.LiveView`
 also generates keyed form helpers:
 
@@ -1879,6 +1905,13 @@ Applications should import Hawk's formatter settings so the DSL stays tidy:
   inputs: ["{mix,.formatter}.exs", "{config,lib,test}/**/*.{ex,exs}"]
 ]
 ```
+
+## Changelog requirement
+
+Every substantial change to Hawk should include a corresponding entry in
+[`CHANGELOG.md`](CHANGELOG.md), under `Unreleased` until the next release.
+Include user-visible additions, behavior changes, and important fixes; small
+internal-only edits may be omitted.
 
 ## Compile-time contracts and runtime lookup
 

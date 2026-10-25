@@ -31,6 +31,8 @@ defmodule Hawk.LiveView.Page do
     sections = opts |> Keyword.get(:sections, []) |> normalize_sections()
 
     quote do
+      def __hawk_live_view_page_resources__, do: unquote(Macro.escape(resources))
+
       def assign_page(socket, authority, specs) do
         Page.assign_page(socket, unquote(Macro.escape(resources)), authority, specs)
       end
@@ -98,19 +100,30 @@ defmodule Hawk.LiveView.Page do
   end
 
   defp assign_resource(socket, resources, authority, key, {mode, opts})
-       when mode in [:one, :all] do
+       when mode in [:one, :all, :page] do
     resource = fetch_resource!(resources, key)
     opts = Keyword.put(opts, :authority, authority)
 
     case {mode, run_resource(resource, mode, opts)} do
-      {:one, {:ok, model}} -> assign(socket, key, model)
-      {:one, :not_found} -> put_error(socket, key, %{base: ["#{singular(key)} was not found"]})
-      {:all, models} -> assign(socket, key, models)
+      {:one, {:ok, model}} ->
+        assign(socket, key, model)
+
+      {:one, :not_found} ->
+        put_error(socket, key, %{base: ["#{singular(key)} was not found"]})
+
+      {:all, models} ->
+        assign(socket, key, models)
+
+      {:page, %Hawk.Reader.Page{} = page} ->
+        socket
+        |> assign(key, page.entries)
+        |> assign_page_metadata(key, page)
     end
   end
 
   defp run_resource(resource, :one, opts), do: resource.one(opts)
   defp run_resource(resource, :all, opts), do: resource.all(opts)
+  defp run_resource(resource, :page, opts), do: resource.page(opts)
 
   defp refresh_page(socket, resources, authority) do
     specs = Map.get(socket.assigns, :hawk_page_specs, %{})
@@ -138,6 +151,11 @@ defmodule Hawk.LiveView.Page do
   defp put_error(socket, key, error) do
     errors = socket.assigns |> Map.get(:hawk_errors, %{}) |> Map.put(key, error)
     assign(socket, :hawk_errors, errors)
+  end
+
+  defp assign_page_metadata(socket, key, page) do
+    metadata = Map.get(socket.assigns, :hawk_page_metadata, %{})
+    assign(socket, :hawk_page_metadata, Map.put(metadata, key, page))
   end
 
   defp live_error(result) do
