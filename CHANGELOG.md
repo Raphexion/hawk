@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- OpenAPI write documents require attribute and relationship containers when
+  they contain fields required for that operation. Required fields are limited
+  to writable fields; create-only requirements keep PATCH documents partial.
+
 - OpenAPI include parameters now describe comma-separated relationship paths
   without a finite enum or depth limit, including on resource show operations.
 - OpenAPI maps Ecto map and array fields to structured schemas and adds date

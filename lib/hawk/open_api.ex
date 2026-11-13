@@ -797,6 +797,12 @@ defmodule Hawk.OpenApi do
 
     required = if capability == :updatable, do: [:type, :id], else: [:type]
 
+    required =
+      required ++
+        Enum.filter([:attributes, :relationships], fn container ->
+          Map.get(data_properties[container], :required, []) != []
+        end)
+
     %{
       type: "object",
       required: [:data],
@@ -897,6 +903,7 @@ defmodule Hawk.OpenApi do
 
     resource.json_api
     |> Map.fetch!(field_type)
+    |> Map.take(Map.fetch!(resource.json_api, capability))
     |> Enum.filter(fn {_name, metadata} -> operation in Map.get(metadata, :required, []) end)
     |> Enum.map(&elem(&1, 0))
     |> Enum.sort()
