@@ -1,3 +1,13 @@
+defmodule Hawk.JsonApiControllerAdapterContractTest.RestrictedPresentation do
+  def adapter(Videdal.ExternalCourse), do: __MODULE__
+  def adapter(_model), do: nil
+
+  def __hawk_json_api__ do
+    Videdal.ExternalCourses.JsonApi.__hawk_json_api__()
+    |> Map.put(:field_filters, %{public: MapSet.new([:slug, :instructor])})
+  end
+end
+
 defmodule Hawk.JsonApiControllerAdapterContractTest do
   use ExUnit.Case, async: true
 
@@ -60,6 +70,27 @@ defmodule Hawk.JsonApiControllerAdapterContractTest do
              public_slug: "science",
              teacher_id: Videdal.teacher_id()
            }
+  end
+
+  test "mutation responses respect field visibility for links and values" do
+    request =
+      conn(Authority.public())
+      |> Plug.Conn.assign(:hawk_api_presentations, %{
+        Videdal.ExternalCourses => __MODULE__.RestrictedPresentation
+      })
+
+    created =
+      Controller.create(
+        request,
+        create_params(%{"name" => "Science", "slug" => "science"}, %{
+          "instructor" => %{"data" => %{"type" => "teachers", "id" => Videdal.teacher_id()}}
+        })
+      )
+
+    assert created.status == 201
+    assert resp(created).data.attributes == %{name: "Science"}
+    assert resp(created).data.relationships == %{}
+    assert resp(created).data.links.self == "/courses/#{Videdal.course_id()}"
   end
 
   test "update rejects adapter fields that are not updatable" do

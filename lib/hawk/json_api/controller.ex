@@ -951,6 +951,8 @@ defmodule Hawk.JsonApi.Controller do
       conn,
       status,
       Document.document(returned_model,
+        links: true,
+        authority: Map.get(conn.assigns, :hawk_authority, Hawk.Authority.public()),
         context: request_context(conn),
         presentation: ControllerSupport.presentation(conn, resource)
       )

@@ -143,6 +143,27 @@ defmodule Videdal.Controllers.CoursesControllerTest do
 
     created_id = resp(conn).data.id
     assert Repo.get!(Course, created_id).title == "Math"
+    assert resp(conn).data.links.self == "/courses/#{created_id}"
+
+    assert resp(conn).data.relationships.grades == %{
+             links: %{
+               self: "/courses/#{created_id}/relationships/grades",
+               related: "/courses/#{created_id}/grades"
+             }
+           }
+
+    refute Map.has_key?(resp(conn), :included)
+
+    updated =
+      CoursesController.update(conn(school_admin(school)), %{
+        "id" => created_id,
+        "data" => %{"type" => "courses", "id" => created_id, "attributes" => %{"title" => "Science"}}
+      })
+
+    assert updated.status == 200
+    assert resp(updated).data.relationships.grades == resp(conn).data.relationships.grades
+    assert resp(updated).data.attributes.title == "Science"
+    refute Map.has_key?(resp(updated), :included)
   end
 
   test "open-registration action rejects a non-map meta payload" do

@@ -30,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Mutation responses emit resource and relationship links without preloading
+  collections, and apply the request authority’s field visibility rules.
+
 - Resources without custom or lifecycle actions no longer emit empty action
   dispatcher routes. Routers track changes to action modules.
 
