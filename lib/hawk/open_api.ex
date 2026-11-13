@@ -6,7 +6,8 @@ defmodule Hawk.OpenApi do
   alias Hawk.JsonApi.Routes
 
   @doc """
-  Composes an OpenAPI 3.1 spec map from the given Hawk resource facades.
+  Composes an OpenAPI 3.1 spec map from resource facades or a
+  `Hawk.JsonApi.Registry` module.
 
   Resources with `json_api: false` are omitted. This is the function behind
   `mix hawk.openapi` and `Hawk.OpenApi.Controller`; call it directly only when
@@ -27,7 +28,13 @@ defmodule Hawk.OpenApi do
     * `:extra_paths` — application-owned OpenAPI path items merged into the
       generated resource paths (default `%{}`).
   """
-  def spec(resources, opts \\ []) when is_list(resources) do
+  def spec(resources, opts \\ [])
+
+  def spec(registry, opts) when is_atom(registry) do
+    registry |> Hawk.JsonApi.Registry.resources() |> spec(opts)
+  end
+
+  def spec(resources, opts) when is_list(resources) do
     presentation = Keyword.get(opts, :presentation)
     resources = resources |> Enum.map(&normalize_resource(&1, presentation)) |> Enum.reject(&is_nil/1)
 

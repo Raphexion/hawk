@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Hawk.JsonApi.Registry` shares resource/controller declarations between
+  `hawk_json_api_registry/2` routes and `Hawk.OpenApi.spec/2`.
+
 - JSON:API fields accept `schema:` overrides for OpenAPI constraints, including
   enums, bounds, nested properties, and object additional properties.
 

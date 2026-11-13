@@ -53,6 +53,25 @@ defmodule Hawk.JsonApi.Router do
     end)
   end
 
+  @doc "Emits all routes in a shared `Hawk.JsonApi.Registry` using the given options."
+  defmacro hawk_json_api_registry(registry, opts \\ []) do
+    registry = Macro.expand(registry, __CALLER__)
+    Code.ensure_compiled!(registry)
+    entries = Macro.compile_apply(registry, :__hawk_json_api_registry__, [], __CALLER__)
+
+    routes =
+      Enum.map(entries, fn {resource, controller} ->
+        quote do
+          require Hawk.JsonApi.Router
+          Hawk.JsonApi.Router.hawk_json_api(unquote(resource), unquote(controller), unquote(opts))
+        end
+      end)
+
+    quote do
+      (unquote_splicing(routes))
+    end
+  end
+
   @doc "Emits routes for a declarative alternate JSON:API presentation."
   defmacro hawk_json_api_alias(alias_module, controller, opts \\ []) do
     env = __CALLER__
