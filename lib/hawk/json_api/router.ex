@@ -39,6 +39,7 @@ defmodule Hawk.JsonApi.Router do
     controller = Macro.expand(controller, env)
     opts = Macro.expand(opts, env)
     track_policy_dependency!(resource, env)
+    track_actions_dependency!(resource, env)
     routes = Routes.routes(resource, opts)
 
     validate_controller!(controller, routes)
@@ -61,6 +62,7 @@ defmodule Hawk.JsonApi.Router do
     Code.ensure_compiled!(alias_module)
     %{resource: resource} = Macro.compile_apply(alias_module, :__hawk_alias__, [], env)
     track_policy_dependency!(resource, env)
+    track_actions_dependency!(resource, env)
     routes = Routes.alias_routes(alias_module, opts)
     validate_controller!(controller, routes)
 
@@ -90,6 +92,17 @@ defmodule Hawk.JsonApi.Router do
     case Code.ensure_compiled(query) do
       {:module, ^query} ->
         Hawk.Query.validate!(query, :strict)
+
+      _other ->
+        :ok
+    end
+  end
+
+  defp track_actions_dependency!(resource, env) do
+    case Macro.compile_apply(resource, :__hawk_resource__, [:actions], env) do
+      module when is_atom(module) and module not in [nil, false] ->
+        Code.ensure_compiled!(module)
+        Macro.compile_apply(module, :__info__, [:functions], env)
 
       _other ->
         :ok

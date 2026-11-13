@@ -30,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Resources without custom or lifecycle actions no longer emit empty action
+  dispatcher routes. Routers track changes to action modules.
+
 - OpenAPI write documents require attribute and relationship containers when
   they contain fields required for that operation. Required fields are limited
   to writable fields; create-only requirements keep PATCH documents partial.

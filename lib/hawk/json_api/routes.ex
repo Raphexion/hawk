@@ -14,6 +14,7 @@ defmodule Hawk.JsonApi.Routes do
   Write routes are omitted when the resource policy declares `write(:never)`;
   policies with role-scoped writes retain them. `Hawk.OpenApi` consumes the same
   route specs so its documented surface stays consistent with generated routes.
+  Action dispatch routes are emitted only for declared custom or lifecycle actions.
 
   ## Options
 
@@ -81,7 +82,7 @@ defmodule Hawk.JsonApi.Routes do
       route(resource, :get, member_path, :show, :read),
       if(write_routes?, do: route(resource, :patch, member_path, :update, :write)),
       if(write_routes?, do: route(resource, :delete, member_path, :delete, :write)),
-      if write_routes? do
+      if write_routes? and map_size(Hawk.Actions.all_actions(resource.resource)) > 0 do
         route(resource, :post, member_path <> "/-actions/:action", :action, :action, :hawk_action)
       end,
       relationship_route(resource, member_path),

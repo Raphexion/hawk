@@ -45,6 +45,13 @@ defmodule Hawk.JsonApiRoutesTest do
     assert Enum.any?(Routes.routes(Videdal.Courses), &(&1.action == :action))
   end
 
+  test "writable resources without actions omit the dispatcher" do
+    assert Hawk.Actions.all_actions(Videdal.Teachers) == %{}
+    routes = Routes.routes(Videdal.Teachers)
+    assert Enum.any?(routes, &(&1.action == :create))
+    refute Enum.any?(routes, &(&1.action == :action))
+  end
+
   test "routes omit resources with json_api disabled" do
     assert Routes.routes(Videdal.InternalNotes) == []
   end
