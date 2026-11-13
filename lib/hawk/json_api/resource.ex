@@ -30,6 +30,11 @@ defmodule Hawk.JsonApi.Resource do
     * `:required` — `:create`, `:update`, a list of those operations, or `true`
       for both; documents request-level requiredness in OpenAPI.
     * `:doc` / `:example` — surfaced in OpenAPI.
+    * `:schema` — OpenAPI schema map with atom keys, shallow-merged over the
+      inferred attribute schema after doc/example metadata. Nested schemas are
+      replaced as a whole. For example, `schema: %{enum: ["draft", "published"]}`.
+      This documents constraints; runtime validation remains the writer's job.
+      `nullable: true` is applied after the override.
     * `:nullable` — boolean (default false); allows JSON null in the OpenAPI
       attribute schema. Independent of request-level `:required`.
     * `:resolver` — a `&fun/1` computing the attribute from the model (for
@@ -37,6 +42,8 @@ defmodule Hawk.JsonApi.Resource do
 
   ## Relationship options
 
+    * `:schema` — schema map with atom keys, shallow-merged over the whole
+      relationship object (use `properties.data` for linkage constraints).
     * `:source` — the internal association name (default: the relationship name).
     * `:writable` / `:creatable` / `:updatable` — linkage writability.
     * `:required` — `:create`, `:update`, a list of those operations, or `true`
@@ -237,10 +244,21 @@ defmodule Hawk.JsonApi.Resource do
 
   defp field_metadata(opts, caller) do
     opts
-    |> Keyword.take([:doc, :example, :source, :resolver, :nullable])
+    |> Keyword.take([:doc, :example, :source, :resolver, :nullable, :schema])
     |> Map.new(fn {key, value} -> {key, literal!(value, caller)} end)
+    |> validate_schema!()
     |> put_required_metadata(opts)
   end
+
+  defp validate_schema!(%{schema: schema} = metadata) do
+    unless is_map(schema) and Enum.all?(Map.keys(schema), &is_atom/1) do
+      raise ArgumentError, "JSON:API field :schema must be a map with atom keys"
+    end
+
+    metadata
+  end
+
+  defp validate_schema!(metadata), do: metadata
 
   defp put_required_metadata(metadata, opts) do
     case Keyword.get(opts, :required, false) do

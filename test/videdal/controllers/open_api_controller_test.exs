@@ -272,7 +272,7 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
     refute Map.has_key?(update_schema.properties.data.properties.relationships, :required)
 
     assert create_schema.required == [:data]
-    assert create_schema.properties.data.required == [:type]
+    assert create_schema.properties.data.required == [:type, :attributes, :relationships]
     assert update_schema.required == [:data]
     assert update_schema.properties.data.required == [:type, :id]
     assert update_schema.properties.data.properties.id == %{type: "string", format: "uuid"}

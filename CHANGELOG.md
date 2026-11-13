@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- JSON:API fields accept `schema:` overrides for OpenAPI constraints, including
+  enums, bounds, nested properties, and object additional properties.
+
 - **Composed LiveView refresh coordination.** Added the optional
   `Hawk.LiveView.Composed` helper for subscribing to resources declared by a
   `Hawk.LiveView.Page` and re-reading the affected record, collection, or

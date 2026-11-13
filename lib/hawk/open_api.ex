@@ -937,6 +937,7 @@ defmodule Hawk.OpenApi do
         relationship_object_schema(related_type, cardinality, include_links?)
         |> put_optional(:description, metadata, :doc)
         |> put_relationship_example(metadata)
+        |> Map.merge(Map.get(metadata, :schema, %{}))
     end
   end
 
@@ -982,9 +983,10 @@ defmodule Hawk.OpenApi do
   defp field_schema(type, metadata) do
     type
     |> openapi_type()
-    |> nullable_schema(metadata)
     |> put_optional(:description, metadata, :doc)
     |> put_optional(:example, metadata, :example)
+    |> Map.merge(Map.get(metadata, :schema, %{}))
+    |> nullable_schema(metadata)
   end
 
   defp nullable_schema(schema, %{nullable: true}) do
