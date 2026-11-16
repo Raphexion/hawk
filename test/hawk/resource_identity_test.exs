@@ -80,8 +80,8 @@ defmodule Hawk.ResourceIdentityTest do
     assert resource[:"x-resource-type"] == "course-rosters"
 
     assert resource.properties.attributes.properties == %{
-             title: %{type: "string", description: "Course title as shown on the roster.", example: "Math"},
-             enrollment_count: %{type: "integer", description: "Number of enrolled students.", example: 2}
+             title: %{type: "string", description: "Course title as shown on the roster.", examples: ["Math"]},
+             enrollment_count: %{type: "integer", description: "Number of enrolled students.", examples: [2]}
            }
   end
 

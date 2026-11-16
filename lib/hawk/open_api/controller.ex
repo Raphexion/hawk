@@ -9,7 +9,7 @@ defmodule Hawk.OpenApi.Controller do
   `info.license` out of the spec.
 
   All `Hawk.OpenApi.spec/2` options are passed through: `:title`, `:version`,
-  `:path_prefix`, `:license`, `:servers`, `:security`, `:security_schemes`, and
+  `:description`, `:contact`, `:path_prefix`, `:license`, `:servers`, `:security`, `:security_schemes`, and
   `:extra_paths`.
 
   Example:
@@ -35,6 +35,8 @@ defmodule Hawk.OpenApi.Controller do
       Keyword.take(opts, [
         :title,
         :version,
+        :description,
+        :contact,
         :path_prefix,
         :license,
         :servers,

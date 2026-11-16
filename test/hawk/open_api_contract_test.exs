@@ -21,7 +21,9 @@ defmodule Hawk.OpenApiContractTest do
   end
 
   test "all generated secured operations describe authentication errors including deletes and actions" do
-    spec = Hawk.OpenApi.spec([Videdal.Courses], title: "Test API", security: [%{"bearerAuth" => []}])
+    spec =
+      Hawk.OpenApi.spec([Videdal.Courses], title: "Test API", security: [%{"bearerAuth" => []}])
+      |> Hawk.Test.OpenApi.expand()
 
     for {_path, operations} <- spec.paths, {_method, operation} <- operations do
       assert operation.responses["401"].content["application/vnd.api+json"].schema == %{
@@ -36,7 +38,7 @@ defmodule Hawk.OpenApiContractTest do
   end
 
   test "combined includes and recursive paths are not constrained by a finite enum" do
-    spec = Hawk.OpenApi.spec([Videdal.ExternalCourses], title: "Test API")
+    spec = Hawk.OpenApi.spec([Videdal.ExternalCourses], title: "Test API") |> Hawk.Test.OpenApi.expand()
 
     for path <- ["/courses", "/courses/{id}"] do
       include = Enum.find(spec.paths[path].get.parameters, &(&1.name == "include"))

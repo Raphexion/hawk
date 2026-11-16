@@ -9,6 +9,8 @@ end
 defmodule Videdal.Controllers.OpenApiWithExtrasController do
   use Hawk.OpenApi.Controller,
     title: "Videdal API",
+    description: "Videdal's teaching API.",
+    contact: %{name: "Videdal API team"},
     version: "1.0.0",
     path_prefix: "/api/v1",
     resources: [Videdal.Courses],
@@ -37,7 +39,7 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
   end
 
   test "index operations expose JSON:API query parameters from reader and relationships" do
-    spec = OpenApiController.spec()
+    spec = OpenApiController.spec() |> Hawk.Test.OpenApi.expand()
     operation = spec.paths["/api/v1/courses"].get
     parameters = operation.parameters
 
@@ -89,7 +91,7 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
   end
 
   test "filter parameters document the coordinate near contract" do
-    spec = Hawk.OpenApi.spec([Videdal.Schools], title: "Videdal API")
+    spec = Hawk.OpenApi.spec([Videdal.Schools], title: "Videdal API") |> Hawk.Test.OpenApi.expand()
 
     filter =
       spec.paths["/schools"].get.parameters
@@ -124,7 +126,7 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
   end
 
   test "filter parameters document object-valued custom filters" do
-    spec = OpenApiController.spec()
+    spec = OpenApiController.spec() |> Hawk.Test.OpenApi.expand()
 
     filter =
       spec.paths["/api/v1/grades"].get.parameters
@@ -141,7 +143,7 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
   end
 
   test "filter parameters document the integer operator contract" do
-    spec = OpenApiController.spec()
+    spec = OpenApiController.spec() |> Hawk.Test.OpenApi.expand()
 
     filter =
       spec.paths["/api/v1/grades"].get.parameters
@@ -153,7 +155,7 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
   end
 
   test "operations document JSON:API content negotiation failures" do
-    spec = OpenApiController.spec()
+    spec = OpenApiController.spec() |> Hawk.Test.OpenApi.expand()
     index_responses = spec.paths["/api/v1/courses"].get.responses
     create_responses = spec.paths["/api/v1/courses"].post.responses
     action_responses = spec.paths["/api/v1/courses/{id}/-actions/open-registration"].post.responses
@@ -233,7 +235,7 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
     assert course.properties.attributes.properties.title == %{
              type: "string",
              description: "Human-readable course title.",
-             example: "Math"
+             examples: ["Math"]
            }
 
     assert course.properties.relationships.properties.teacher.description ==
@@ -253,7 +255,7 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
              title: %{
                type: "string",
                description: "Human-readable course title.",
-               example: "Math"
+               examples: ["Math"]
              }
            }
 
@@ -264,7 +266,7 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
              title: %{
                type: "string",
                description: "Human-readable course title.",
-               example: "Math"
+               examples: ["Math"]
              }
            }
 
@@ -282,7 +284,7 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
   end
 
   test "action operations use JSON:API meta request schemas" do
-    spec = OpenApiController.spec()
+    spec = OpenApiController.spec() |> Hawk.Test.OpenApi.expand()
 
     open_registration = spec.paths["/api/v1/courses/{id}/-actions/open-registration"].post
     close_registration = spec.paths["/api/v1/courses/{id}/-actions/close-registration"].post
@@ -295,7 +297,13 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
     assert open_registration.tags == ["Academics"]
 
     assert open_registration.parameters == [
-             %{name: "id", in: "path", required: true, schema: %{type: "string", format: "uuid"}}
+             %{
+               name: "id",
+               in: "path",
+               required: true,
+               schema: %{type: "string", format: "uuid"},
+               description: "Full UUID required; short IDs are supported only for read-only member lookups."
+             }
            ]
 
     action_response = open_registration.responses["200"].content["application/vnd.api+json"].schema
@@ -312,12 +320,12 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
                    seat_count: %{
                      type: "integer",
                      description: "Seats offered immediately when registration opens.",
-                     example: 2
+                     examples: [2]
                    },
                    waitlist_count: %{
                      type: "integer",
                      description: "How many waitlist places should be tracked for this course.",
-                     example: 1
+                     examples: [1]
                    }
                  }
                }
@@ -338,7 +346,7 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
            }
 
     assert Map.keys(open_registration.responses) == ["200", "400", "403", "404", "406", "415", "422"]
-    assert open_registration.responses["403"].description == "Forbidden by Hawk policy"
+    assert open_registration.responses["403"].description == "Forbidden by authorization policy"
     assert open_registration.responses["422"].description == "Validation failed"
   end
 
@@ -365,7 +373,7 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
   end
 
   test "show and related operations expose sparse fieldsets" do
-    spec = OpenApiController.spec()
+    spec = OpenApiController.spec() |> Hawk.Test.OpenApi.expand()
 
     show = spec.paths["/api/v1/courses/{id}"].get
     fields = Enum.find(show.parameters, &(&1.name == "fields"))
@@ -388,6 +396,8 @@ defmodule Videdal.Controllers.OpenApiControllerTest do
     spec = Videdal.Controllers.OpenApiWithExtrasController.spec()
 
     assert spec.servers == [%{url: "https://api.example.com"}]
+    assert spec.info.description == "Videdal's teaching API."
+    assert spec.info.contact == %{name: "Videdal API team"}
     assert spec.security == [%{"bearerAuth" => []}]
 
     assert spec.components.securitySchemes == %{

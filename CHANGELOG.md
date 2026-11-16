@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- JSON:API adapters can declare supported route actions with `operations/1`.
+  Routing and OpenAPI share this allowlist; authorization policies remain
+  independent. `name/1` supplies a singular external label for summaries.
+- OpenAPI info accepts host-owned `:description` and `:contact` metadata,
+  including through `Hawk.OpenApi.Controller`.
+
 - `Hawk.JsonApi.Registry` shares resource/controller declarations between
   `hawk_json_api_registry/2` routes and `Hawk.OpenApi.spec/2`.
 
@@ -31,7 +37,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   source-backed readers require `write(:never)`. Their own preloads use related
   readers; using one as an incoming association preload remains unsupported.
 
+### Changed
+
+- OpenAPI common errors and ID/include parameters now use reusable component
+  references by default. Consumers inspecting spec maps must resolve `$ref`.
+- OpenAPI schema examples use JSON Schema `examples` arrays instead of the
+  deprecated `example` keyword; adapter `example:` declarations are unchanged.
+- Every OpenAPI operation has a description and tag, with neutral defaults.
+
 ### Fixed
+
+- OpenAPI read-ID schemas express UUID/eight-hex-prefix alternatives. Summaries
+  no longer guess singular names by trimming external type suffixes. Error and
+  include documentation no longer leaks framework or example-domain wording.
 
 - Mutation responses emit resource and relationship links without preloading
   collections, and apply the request authority’s field visibility rules.

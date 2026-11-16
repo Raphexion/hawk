@@ -18,6 +18,8 @@ defmodule Hawk.OpenApi do
     * `:title` (required) — the info title. The host app must name its API; Hawk
       does not pick one. OpenAPI requires `info.title`.
     * `:version` — the info version (default `"1.0.0"`).
+    * `:description` — optional host-owned API description.
+    * `:contact` — optional OpenAPI contact object.
     * `:license` — the `info.license` object. Accepts a string (rendered as
       `%{name: string}`) or a `%{name: ..., url: ...}` map; omitted when not set.
       Hawk is a library and does not choose a license for the host app.
@@ -48,6 +50,8 @@ defmodule Hawk.OpenApi do
         version: Keyword.get(opts, :version, "1.0.0")
       }
       |> maybe_put_license(Keyword.get(opts, :license))
+      |> put_optional(:description, Map.new(opts), :description)
+      |> put_optional(:contact, Map.new(opts), :contact)
 
     components =
       %{schemas: schemas(resources)}
@@ -61,10 +65,11 @@ defmodule Hawk.OpenApi do
       tags: tags(resources),
       paths:
         paths(resources, Keyword.get(opts, :path_prefix, ""))
-        |> put_authentication_responses(Keyword.get(opts, :security, []))
-        |> Map.merge(Keyword.get(opts, :extra_paths, %{})),
+        |> put_authentication_responses(Keyword.get(opts, :security, [])),
       components: components
     }
+    |> Hawk.OpenApi.Components.extract()
+    |> update_in([:paths], &Map.merge(&1, Keyword.get(opts, :extra_paths, %{})))
   end
 
   # `info.license` is the host app's choice, not Hawk's. Accept a name string
@@ -115,17 +120,16 @@ defmodule Hawk.OpenApi do
   defp tags(resources) do
     resources
     |> Enum.map(&tag_object(&1.json_api))
-    |> Enum.reject(&is_nil/1)
     |> dedupe_tags()
     |> Enum.sort_by(& &1[:name])
     |> Enum.map(&maybe_put_description/1)
   end
 
   defp tag_object(json_api) do
-    case Map.get(json_api, :tag) do
-      nil -> nil
-      name -> %{name: name, description: Map.get(json_api, :tag_description)}
-    end
+    %{
+      name: Map.get(json_api, :tag, json_api.type),
+      description: Map.get(json_api, :tag_description)
+    }
   end
 
   # Multiple resources can share a tag name. Collapse them to one entry per
@@ -138,7 +142,9 @@ defmodule Hawk.OpenApi do
     end)
   end
 
-  defp maybe_put_description(%{description: nil} = tag), do: Map.delete(tag, :description)
+  defp maybe_put_description(%{description: nil} = tag),
+    do: %{tag | description: "JSON:API resources grouped under #{tag.name}."}
+
   defp maybe_put_description(tag), do: tag
 
   defp paths(resources, path_prefix) do
@@ -262,7 +268,7 @@ defmodule Hawk.OpenApi do
     |> Map.merge(%{
       operationId: "run#{pascalize(resource.json_api.type)}#{pascalize(name)}",
       summary: "Run #{name} for #{resource_name(resource)}",
-      description: metadata[:doc],
+      description: metadata[:doc] || "Run the #{name} action on this resource.",
       parameters: [uuid_id_parameter()],
       requestBody: action_request_body(metadata),
       responses: responses(resource, 200, data_schema(resource))
@@ -284,8 +290,9 @@ defmodule Hawk.OpenApi do
 
   defp operation_metadata(resource) do
     %{}
-    |> put_metadata(resource.json_api, :tag, :tags, &List.wrap/1)
+    |> Map.put(:tags, [Map.get(resource.json_api, :tag, resource.json_api.type)])
     |> put_metadata(resource.json_api, :group, :"x-resource-group")
+    |> Map.put(:description, Map.get(resource.json_api, :doc, "JSON:API operations for #{resource.json_api.type}."))
     |> Map.put(:"x-resource-type", resource.json_api.type)
   end
 
@@ -557,8 +564,8 @@ defmodule Hawk.OpenApi do
       name: "include",
       in: "query",
       description:
-        "Comma-separated relationship paths. Use dots for nested relationships " <>
-          "(for example, lessons.cards.blocks). Each segment uses the selected " <>
+        "Comma-separated relationship paths. Use dots for nested paths. " <>
+          "Each segment uses the selected " <>
           "presentation's relationship names and must be allowed by the reader and policy. " <>
           "An empty value includes no related resources; supported paths have no fixed depth limit.",
       schema: %{type: "string"}
@@ -585,13 +592,22 @@ defmodule Hawk.OpenApi do
       name: "id",
       in: "path",
       required: true,
-      schema: %{type: "string"},
+      schema: %{
+        type: "string",
+        pattern: "^(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$"
+      },
       description: "Full UUID, or the first 8 hex characters of a UUID (short id) for read-only member lookups."
     }
   end
 
   defp uuid_id_parameter do
-    %{name: "id", in: "path", required: true, schema: %{type: "string", format: "uuid"}}
+    %{
+      name: "id",
+      in: "path",
+      required: true,
+      schema: %{type: "string", format: "uuid"},
+      description: "Full UUID required; short IDs are supported only for read-only member lookups."
+    }
   end
 
   defp relationship_parameter(resource) do
@@ -628,22 +644,16 @@ defmodule Hawk.OpenApi do
     }
   end
 
-  defp responses(_resource, 204, nil) do
-    %{
-      "204" => %{description: "No content"},
-      "400" => json_api_content("Invalid JSON:API query parameters", error_document_ref()),
-      "403" => json_api_content("Forbidden by Hawk policy", error_document_ref()),
-      "404" => json_api_content("Resource not found", error_document_ref()),
-      "422" => json_api_content("Validation failed", error_document_ref())
-    }
-    |> put_negotiation_responses()
-  end
-
   defp responses(_resource, success_status, success_schema) do
+    success =
+      if success_status == 204,
+        do: %{description: "No content"},
+        else: json_api_content(success_description(success_status), success_schema)
+
     %{
-      Integer.to_string(success_status) => json_api_content(success_description(success_status), success_schema),
-      "400" => json_api_content("Invalid JSON:API query parameters", error_document_ref()),
-      "403" => json_api_content("Forbidden by Hawk policy", error_document_ref()),
+      Integer.to_string(success_status) => success,
+      "400" => json_api_content("Invalid JSON:API request (parameters or document)", error_document_ref()),
+      "403" => json_api_content("Forbidden by authorization policy", error_document_ref()),
       "404" => json_api_content("Resource not found", error_document_ref()),
       "422" => json_api_content("Validation failed", error_document_ref())
     }
@@ -991,7 +1001,7 @@ defmodule Hawk.OpenApi do
     type
     |> openapi_type()
     |> put_optional(:description, metadata, :doc)
-    |> put_optional(:example, metadata, :example)
+    |> put_schema_example(metadata)
     |> Map.merge(Map.get(metadata, :schema, %{}))
     |> nullable_schema(metadata)
   end
@@ -1099,7 +1109,13 @@ defmodule Hawk.OpenApi do
     resource.model |> Module.split() |> List.last() |> Kernel.<>("Resource") |> String.to_atom()
   end
 
-  defp resource_name(resource), do: resource.json_api.type |> String.trim_trailing("s")
+  # Use the model's singular name rather than guessing English inflections from
+  # an arbitrary external type (entries, courses, status, people, ...).
+  defp resource_name(resource) do
+    Map.get_lazy(resource.json_api, :name, fn ->
+      resource.model |> Module.split() |> List.last() |> Macro.underscore() |> String.replace("_", "-")
+    end)
+  end
 
   defp sort_keys(reader) do
     if Code.ensure_loaded?(reader) and function_exported?(reader, :sort_keys, 0) do
@@ -1125,14 +1141,18 @@ defmodule Hawk.OpenApi do
     end
   end
 
-  # A JSON:API relationship object wraps its identifiers under `data`, so the
-  # user-facing `example:` describes the `data` payload (a single identifier
-  # object for to-one, an array of them for to-many). The OpenAPI example must
-  # be nested under `data` to match the emitted schema and validate against
-  # it; emitting it at the wrapper level produces stray `id`/`type` properties.
+  defp put_schema_example(schema, metadata) do
+    case Map.fetch(metadata, :example) do
+      {:ok, example} -> Map.put(schema, :examples, [example])
+      :error -> schema
+    end
+  end
+
+  # Relationship examples describe the `data` payload, not its wrapper.
+  # JSON Schema examples must include that wrapper to match the emitted schema.
   defp put_relationship_example(schema, metadata) do
     case Map.fetch(metadata, :example) do
-      {:ok, example} -> Map.put(schema, :example, %{data: example})
+      {:ok, example} -> Map.put(schema, :examples, [%{data: example}])
       :error -> schema
     end
   end

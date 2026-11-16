@@ -1624,8 +1624,9 @@ end
 ```
 
 The controller serves the spec as `application/json` (an OpenAPI document is
-JSON, not a JSON:API resource). It passes `:title`, `:version`, `:path_prefix`,
-`:license`, `:servers`, `:security`, and `:security_schemes` straight through to
+JSON, not a JSON:API resource). It passes `:title`, `:version`, `:description`,
+`:contact`, `:path_prefix`, `:license`, `:servers`, `:security`,
+`:security_schemes`, and `:extra_paths` straight through to
 `Hawk.OpenApi.spec/2`.
 `Hawk.OpenApi.spec/2` takes `Hawk.Resource` facades. Facades with `json_api: false`
 are omitted because this OpenAPI generator documents the JSON:API surface only.
@@ -1641,6 +1642,52 @@ spec also includes JSON:API adapter schemas, request bodies, error documents,
 parameters, valid include paths, declared
 `/-actions/` operations, relationship routes, the optional `path_prefix`, and
 optional resource organization metadata.
+
+### Declaring supported operations
+
+Supported operations are API capabilities, not authorization decisions. Declare
+an allowlist in the JSON:API adapter when a resource supports only some actions:
+
+```elixir
+use Hawk.JsonApi.Resource
+
+type("course-entries")
+name("course entry")
+operations([:index, :show, :create, :delete, :action])
+```
+
+Both generated routes and OpenAPI use this declaration: this example has no
+PATCH route. Supported names are `:index`, `:show`, `:create`, `:update`,
+`:delete`, `:action`, `:relationship`, and `:related`. Omit `operations/1` for
+all available operations, or pass `[]` for no routes. Policies still authorize
+each request; an allowlist cannot enable mutations under `write(:never)` or
+invent undeclared custom/lifecycle actions. Empty writable field lists do not
+implicitly remove operations: actions may intentionally require no input.
+Manually mounted controller actions are the host's responsibility; the allowlist
+controls Hawk-generated routes, not the exported controller functions.
+
+`name/1` is a singular external label for operation summaries, avoiding English
+pluralization guesses. Without it Hawk uses the singular model module name.
+Resource `doc/1` describes both the resource schema and standard operations;
+custom actions retain their own documentation.
+
+### Contract structure
+
+OpenAPI 3.1 output uses JSON Schema `examples` arrays (the adapter's `example:`
+DSL remains a single example). Common errors are references to
+`components.responses`; read IDs, UUID-only IDs and includes use
+`components.parameters`. Consumers inspecting the spec map must resolve those
+references rather than assume inline objects. Resource-dependent query parameters
+and successful responses remain inline. Application-owned `extra_paths` are
+merged unchanged; Hawk does not rewrite their media types or error contracts.
+
+Member GET IDs have a pattern accepting a full UUID or exactly eight hex
+characters. Mutations, actions and relationship endpoints require full UUIDs.
+JSON:API content negotiation can return 406 for Accept and 415 for a supplied
+unsupported Content-Type, including on bodyless requests. Security declarations
+and authentication enforcement remain host-owned; declaring global security
+also documents 401 on generated operations. No concurrency policy is inferred:
+hosts must document and enforce any version headers or compare-and-swap fields.
 
 Custom actions automatically appear in the OpenAPI/Swagger spec as `POST`
 operations under paths such as `/api/v1/courses/{id}/-actions/open-registration`.
@@ -1672,8 +1719,10 @@ free of `tag-description` warnings:
 tag("Academics", description: "Academic resources: courses, grades, and enrollments.")
 ```
 
-Multiple resources sharing a tag name collapse to one top-level tag entry;
-when any of them declares a description, that description wins.
+Every resource has an operation tag, defaulting to its external type when no
+`tag/1` is declared. Multiple resources sharing a tag name collapse to one
+top-level tag entry; when any declares a description, that description wins.
+Otherwise Hawk supplies a neutral description.
 
 Relationship schemas are typed from the model association: a `belongs_to`/
 `has_one` relationship renders as a to-one `data` identifier or `null`, and a

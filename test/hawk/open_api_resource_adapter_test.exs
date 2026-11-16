@@ -13,8 +13,8 @@ defmodule Hawk.OpenApiResourceAdapterTest do
     assert course[:"x-resource-type"] == "courses"
 
     assert course.properties.attributes.properties == %{
-             name: %{type: "string", description: "Public course name.", example: "Math"},
-             slug: %{type: "string", description: "Public course slug.", example: "math"}
+             name: %{type: "string", description: "Public course name.", examples: ["Math"]},
+             slug: %{type: "string", description: "Public course slug.", examples: ["math"]}
            }
 
     assert course.properties.relationships.properties.instructor == %{
@@ -49,12 +49,12 @@ defmodule Hawk.OpenApiResourceAdapterTest do
       spec.paths["/courses/{id}"].patch.requestBody.content["application/vnd.api+json"].schema
 
     assert create_schema.properties.data.properties.attributes.properties == %{
-             name: %{type: "string", description: "Public course name.", example: "Math"},
-             slug: %{type: "string", description: "Public course slug.", example: "math"}
+             name: %{type: "string", description: "Public course name.", examples: ["Math"]},
+             slug: %{type: "string", description: "Public course slug.", examples: ["math"]}
            }
 
     assert update_schema.properties.data.properties.attributes.properties == %{
-             name: %{type: "string", description: "Public course name.", example: "Math"}
+             name: %{type: "string", description: "Public course name.", examples: ["Math"]}
            }
 
     assert create_schema.properties.data.properties.relationships.properties == %{
@@ -98,7 +98,7 @@ defmodule Hawk.OpenApiResourceAdapterTest do
   end
 
   test "include and sort parameters expose adapter names where applicable" do
-    spec = Hawk.OpenApi.spec([Videdal.ExternalCourses], title: "Test API")
+    spec = Hawk.OpenApi.spec([Videdal.ExternalCourses], title: "Test API") |> Hawk.Test.OpenApi.expand()
     parameters = spec.paths["/courses"].get.parameters
 
     assert %{
@@ -122,7 +122,7 @@ defmodule Hawk.OpenApiResourceAdapterTest do
 
   test "soft-delete lifecycle modes are documented as a filter" do
     spec = Hawk.OpenApi.spec([Videdal.Students], title: "Test API")
-    parameter = Enum.find(spec.paths["/students"].get.parameters, &(&1.name == "filter"))
+    parameter = Enum.find(spec.paths["/students"].get.parameters, &(Map.get(&1, :name) == "filter"))
 
     assert parameter.schema.properties.deleted == %{
              type: "string",
@@ -166,11 +166,12 @@ defmodule Hawk.OpenApiResourceAdapterTest do
   end
 
   test "show id parameter documents short ids; mutations/actions/relationships require full UUIDs" do
-    spec = Hawk.OpenApi.spec([Videdal.Courses], title: "Test API")
+    spec = Hawk.OpenApi.spec([Videdal.Courses], title: "Test API") |> Hawk.Test.OpenApi.expand()
 
     show_param = hd(spec.paths["/courses/{id}"].get.parameters)
     assert show_param.name == "id"
-    assert show_param.schema == %{type: "string"}
+    assert show_param.schema.type == "string"
+    assert is_binary(show_param.schema.pattern)
     assert show_param[:description] =~ "short id"
     refute Map.has_key?(show_param.schema, :format)
 
@@ -188,7 +189,7 @@ defmodule Hawk.OpenApiResourceAdapterTest do
       assert id_param.schema == %{type: "string", format: "uuid"},
              "expected #{method} #{path} id parameter to require a full UUID"
 
-      refute Map.has_key?(id_param, :description)
+      assert id_param.description =~ "Full UUID required"
     end
   end
 

@@ -70,12 +70,12 @@ defmodule Hawk.OpenApiActionsTest do
              seat_count: %{
                type: "integer",
                description: "Seats offered immediately when registration opens.",
-               example: 2
+               examples: [2]
              },
              waitlist_count: %{
                type: "integer",
                description: "How many waitlist places should be tracked for this course.",
-               example: 1
+               examples: [1]
              }
            }
   end

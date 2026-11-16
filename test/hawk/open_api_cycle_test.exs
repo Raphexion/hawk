@@ -64,7 +64,7 @@ defmodule Hawk.OpenApiCycleTest do
   use ExUnit.Case, async: true
 
   test "OpenAPI permits recursive includes without enumerating self-referential readers" do
-    spec = Hawk.OpenApi.spec([Hawk.OpenApiCycleTest.Nodes], title: "Test API")
+    spec = Hawk.OpenApi.spec([Hawk.OpenApiCycleTest.Nodes], title: "Test API") |> Hawk.Test.OpenApi.expand()
 
     include =
       spec.paths["/nodes"].get.parameters

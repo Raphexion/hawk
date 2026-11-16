@@ -12,7 +12,10 @@ defmodule Hawk.JsonApi.Resource do
   ## DSL
 
     * `type/1` — the JSON:API `type` string (e.g. `"courses"`).
-    * `doc/1` — the resource description (OpenAPI schema description).
+    * `name/1` — singular external name for operation summaries (defaults to the model name).
+    * `operations/1` — supported route actions; defaults to all available actions.
+      This declares API capability, not authority; policies still authorize every request.
+    * `doc/1` — the resource description (OpenAPI schema and operation description).
     * `tag/1`, `tag/2` — OpenAPI operation tag; `tag/2` takes a `:description`
       for the top-level tag entry.
     * `group/1` — emitted as `x-resource-group`.
@@ -93,6 +96,8 @@ defmodule Hawk.JsonApi.Resource do
         only: [
           attribute: 2,
           doc: 1,
+          name: 1,
+          operations: 1,
           visibility: 1,
           group: 1,
           relationship: 2,
@@ -121,7 +126,35 @@ defmodule Hawk.JsonApi.Resource do
   end
 
   @doc """
-  Declares the resource description, used as the OpenAPI schema description.
+  Declares a singular external name without guessing the inflection of `type/1`.
+  """
+  defmacro name(name) when is_binary(name) do
+    quote do
+      @hawk_json_api_name unquote(name)
+    end
+  end
+
+  @doc """
+  Declares supported JSON:API route actions. Both routing and OpenAPI use this
+  allowlist. Available actions are `:index`, `:show`, `:create`, `:update`,
+  `:delete`, `:action`, `:relationship`, and `:related`. Empty lists expose no
+  routes. Omit this declaration to expose every available route. This cannot
+  enable writes forbidden by `write(:never)` or invent undeclared actions.
+  """
+  defmacro operations(actions) when is_list(actions) do
+    allowed = [:index, :show, :create, :update, :delete, :action, :relationship, :related]
+
+    unless Enum.all?(actions, &(&1 in allowed)) and Enum.uniq(actions) == actions do
+      raise ArgumentError, "operations/1 expects unique supported JSON:API route actions, got: #{inspect(actions)}"
+    end
+
+    quote do
+      @hawk_json_api_operations unquote(actions)
+    end
+  end
+
+  @doc """
+  Declares the resource description, used in OpenAPI schemas and operations.
   """
   defmacro doc(doc) when is_binary(doc) do
     quote do
@@ -211,6 +244,8 @@ defmodule Hawk.JsonApi.Resource do
     metadata =
       put_optional(metadata, :type, Module.get_attribute(env.module, :hawk_json_api_type))
 
+    metadata = put_optional(metadata, :name, Module.get_attribute(env.module, :hawk_json_api_name))
+    metadata = put_optional(metadata, :operations, Module.get_attribute(env.module, :hawk_json_api_operations))
     metadata = put_optional(metadata, :doc, Module.get_attribute(env.module, :hawk_json_api_doc))
     metadata = put_optional(metadata, :tag, Module.get_attribute(env.module, :hawk_json_api_tag))
 

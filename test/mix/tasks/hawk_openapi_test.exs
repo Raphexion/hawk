@@ -145,7 +145,7 @@ defmodule Mix.Tasks.Hawk.OpenapiTest do
         "school"
       ]
 
-    assert school["example"] == %{"data" => %{"type" => "schools", "id" => Videdal.school_id()}}
+    assert school["examples"] == [%{"data" => %{"type" => "schools", "id" => Videdal.school_id()}}]
   end
 
   test "to-many relationship examples are nested under data", %{tmp: tmp} do
@@ -160,7 +160,7 @@ defmodule Mix.Tasks.Hawk.OpenapiTest do
         "grades"
       ]
 
-    assert grades["example"] == %{"data" => [%{"type" => "grades", "id" => "1"}]}
+    assert grades["examples"] == [%{"data" => [%{"type" => "grades", "id" => "1"}]}]
   end
 
   test "no unused component schemas are emitted", %{tmp: tmp} do
@@ -190,7 +190,7 @@ defmodule Mix.Tasks.Hawk.OpenapiTest do
              "Academic resources: courses, grades, and enrollments."
   end
 
-  test "top-level tags omit description when none is declared", %{tmp: tmp} do
+  test "top-level tags have a neutral description when none is declared", %{tmp: tmp} do
     output = Path.join(tmp, "openapi.json")
 
     Mix.Tasks.Hawk.Openapi.run(["Videdal.Grades", "-o", output, "--title", "Test API"])
@@ -199,7 +199,7 @@ defmodule Mix.Tasks.Hawk.OpenapiTest do
 
     academics = Enum.find(spec["tags"], &(&1["name"] == "Academics"))
 
-    refute Map.has_key?(academics, "description")
+    assert academics["description"] == "JSON:API resources grouped under Academics."
   end
 
   test "info.license is omitted by default", %{tmp: tmp} do

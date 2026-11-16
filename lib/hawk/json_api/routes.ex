@@ -15,6 +15,8 @@ defmodule Hawk.JsonApi.Routes do
   policies with role-scoped writes retain them. `Hawk.OpenApi` consumes the same
   route specs so its documented surface stays consistent with generated routes.
   Action dispatch routes are emitted only for declared custom or lifecycle actions.
+  An adapter's `operations/1` declaration further restricts the generated routes;
+  it never grants authority or enables routes otherwise unavailable.
 
   ## Options
 
@@ -89,7 +91,11 @@ defmodule Hawk.JsonApi.Routes do
       related_route(resource, member_path)
     ]
     |> Enum.reject(&is_nil/1)
+    |> Enum.filter(&operation_available?(resource.json_api, &1.action))
   end
+
+  defp operation_available?(%{operations: operations}, action), do: action in operations
+  defp operation_available?(_metadata, _action), do: true
 
   # Unknown/custom policy metadata is treated as writable for compatibility.
   # Only the explicit DSL declaration `write(:never)` removes routes.

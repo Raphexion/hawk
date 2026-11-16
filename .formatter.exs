@@ -7,6 +7,8 @@
     model: 2,
     json_api: 1,
     type: 1,
+    name: 1,
+    operations: 1,
     doc: 1,
     attribute: 1,
     attribute: 2,

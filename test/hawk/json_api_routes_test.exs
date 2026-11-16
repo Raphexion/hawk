@@ -52,6 +52,32 @@ defmodule Hawk.JsonApiRoutesTest do
     refute Enum.any?(routes, &(&1.action == :action))
   end
 
+  test "operation allowlists restrict routes without enabling globally forbidden writes" do
+    metadata = Videdal.CourseCatalog.JsonApi.__hawk_json_api__()
+
+    for operations <- [[], [:show], [:create, :update, :delete, :action]] do
+      resource = %{resource: Videdal.CourseCatalog, json_api: Map.put(metadata, :operations, operations)}
+      routes = Routes.routes(resource)
+      assert Enum.all?(routes, &(&1.action in operations))
+      refute Enum.any?(routes, &(&1.capability in [:write, :action]))
+    end
+  end
+
+  test "invalid or duplicated operation declarations fail at compile time" do
+    for operations <- [[:patch], [:show, :show]] do
+      assert_raise ArgumentError, ~r/operations\/1 expects unique supported/, fn ->
+        Code.compile_quoted(
+          quote do
+            defmodule Hawk.Test.InvalidApiOperations do
+              use Hawk.JsonApi.Resource
+              operations(unquote(operations))
+            end
+          end
+        )
+      end
+    end
+  end
+
   test "routes omit resources with json_api disabled" do
     assert Routes.routes(Videdal.InternalNotes) == []
   end
