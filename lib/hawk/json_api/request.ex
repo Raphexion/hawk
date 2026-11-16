@@ -234,6 +234,12 @@ defmodule Hawk.JsonApi.Request do
         raise ArgumentError, "unknown relationship #{inspect(name)}"
       end
 
+      metadata = Map.fetch!(json_api.relationships, String.to_existing_atom(name))
+
+      if match?(%{"data" => nil}, relationship) and Map.get(metadata, :nullable, true) == false do
+        raise ArgumentError, "relationship #{name} data must not be null"
+      end
+
       validate_relationship_identifier!(model, Schema.relationship_source!(json_api, name), relationship)
     end)
   end

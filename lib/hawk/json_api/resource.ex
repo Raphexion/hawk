@@ -49,6 +49,11 @@ defmodule Hawk.JsonApi.Resource do
       relationship object (use `properties.data` for linkage constraints).
     * `:source` — the internal association name (default: the relationship name).
     * `:writable` / `:creatable` / `:updatable` — linkage writability.
+    * `:nullable` — for to-one request linkage, defaults to true. Set false to
+      reject explicitly submitted `data: null` and omit null from write schemas.
+      This does not require presence; `:required` and writer validation determine
+      presence. Read linkage remains nullable because authorization can hide the
+      related resource. To-many linkage always requires an array, possibly empty.
     * `:required` — `:create`, `:update`, a list of those operations, or `true`
       for both; documents request-level requiredness in OpenAPI.
     * `:doc` / `:example` — surfaced in OpenAPI. The `example` describes the

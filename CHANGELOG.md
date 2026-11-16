@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- To-one relationship `nullable: false` declarations reject explicit null request
+  linkage and document non-null write linkage independently of requiredness.
+  Omitted PATCH relationships remain unchanged, and read linkage remains nullable
+  for policy-filtered relationships.
+- OpenAPI included-resource schemas describe declared resource types using typed
+  alternatives that honor the selected presentation. An unknown-type-only fallback
+  preserves undeclared includes without allowing known types to bypass their schemas.
+  Sparse fieldsets and policy projections remain supported without association crawling.
+- Compound-document contract tests validate rendered JSON:API responses against
+  generated OpenAPI schemas using the test-only JSV dependency. Coverage includes
+  invalid known types, the unknown-type fallback, sparse fieldsets, renamed
+  relationships, and nullable read linkage.
+
+### Fixed
+
+- OpenAPI page-size schemas now expose per-reader defaults and maximum sizes,
+  matching runtime callbacks and omitting explicitly unconfigured values.
+
 ## [0.13.1] - 2026-11-16
 
 ### Fixed

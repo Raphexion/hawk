@@ -5,7 +5,9 @@ defmodule Videdal.Courses.Reader do
 
   use Hawk.Reader.Resource,
     repo: Videdal.Repo,
-    schema: Videdal.Course
+    schema: Videdal.Course,
+    default_page_size: 10,
+    max_page_size: 50
 
   filter(:id)
   filter(:school_id)

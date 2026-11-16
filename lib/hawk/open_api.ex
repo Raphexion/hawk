@@ -300,7 +300,7 @@ defmodule Hawk.OpenApi do
     [
       include_parameter(resource),
       sort_parameter(resource),
-      %{name: "page[size]", in: "query", schema: %{type: "integer", minimum: 1}},
+      page_size_parameter(resource.reader),
       %{name: "page[number]", in: "query", schema: %{type: "integer", minimum: 1}},
       %{
         name: "page[after]",
@@ -317,6 +317,20 @@ defmodule Hawk.OpenApi do
       filter_parameter(resource),
       fields_parameter(resource)
     ]
+  end
+
+  defp page_size_parameter(reader) do
+    Code.ensure_loaded(reader)
+    default = if function_exported?(reader, :default_page_size, 0), do: reader.default_page_size(), else: 100
+    maximum = if function_exported?(reader, :max_page_size, 0), do: reader.max_page_size(), else: 100
+
+    %{
+      name: "page[size]",
+      in: "query",
+      schema:
+        %{type: "integer", minimum: 1, default: default, maximum: maximum}
+        |> Map.reject(fn {_key, value} -> is_nil(value) end)
+    }
   end
 
   # Sparse fieldsets: `fields[type]=a,b` selects which attributes to return
@@ -863,7 +877,7 @@ defmodule Hawk.OpenApi do
     Map.merge(resource_schemas, %{
       JsonApiError: error_schema(),
       JsonApiErrorDocument: error_document_schema(),
-      JsonApiIncludedResource: included_resource_schema(),
+      JsonApiIncludedResource: included_resource_schema(resources),
       JsonApiLinks: links_schema(),
       JsonApiMeta: meta_schema()
     })
@@ -954,7 +968,7 @@ defmodule Hawk.OpenApi do
         field_schema(:map, metadata)
 
       {related_type, cardinality} ->
-        relationship_object_schema(related_type, cardinality, include_links?)
+        relationship_object_schema(related_type, cardinality, include_links?, metadata)
         |> put_optional(:description, metadata, :doc)
         |> put_relationship_example(metadata)
         |> Map.merge(Map.get(metadata, :schema, %{}))
@@ -971,17 +985,19 @@ defmodule Hawk.OpenApi do
     end
   end
 
-  defp relationship_object_schema(related_type, :one, include_links?) do
-    properties = %{
-      data: %{
-        anyOf: [required_resource_identifier_object_schema(related_type), %{type: "null"}]
-      }
-    }
+  defp relationship_object_schema(related_type, :one, include_links?, metadata) do
+    identifier = required_resource_identifier_object_schema(related_type)
+    # Read linkage may be null after policy filtering even when writes require
+    # a parent. Nullability here constrains submitted linkage, not visibility.
+    data =
+      if include_links? or Map.get(metadata, :nullable, true),
+        do: %{anyOf: [identifier, %{type: "null"}]},
+        else: identifier
 
-    relationship_object(properties, include_links?)
+    relationship_object(%{data: data}, include_links?)
   end
 
-  defp relationship_object_schema(related_type, :many, include_links?) do
+  defp relationship_object_schema(related_type, :many, include_links?, _metadata) do
     properties = %{
       data: %{
         type: "array",
@@ -1040,6 +1056,23 @@ defmodule Hawk.OpenApi do
   end
 
   defp links_ref, do: %{"$ref": "#/components/schemas/JsonApiLinks"}
+
+  defp included_resource_schema(resources) do
+    schema = included_resource_schema()
+
+    case resources do
+      [] ->
+        schema
+
+      resources ->
+        types = resources |> Enum.map(& &1.json_api.type) |> Enum.uniq() |> Enum.sort()
+        known = resources |> Enum.sort_by(& &1.json_api.type) |> Enum.map(&schema_ref/1) |> Enum.uniq()
+        # Only unknown types can use the generic branch: otherwise it would
+        # swallow invalid known resources and erase the union's guarantees.
+        fallback = %{properties: %{type: %{not: %{enum: types}}}}
+        Map.put(schema, :anyOf, known ++ [fallback])
+    end
+  end
 
   defp included_resource_schema do
     %{

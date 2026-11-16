@@ -66,8 +66,8 @@ defmodule Hawk.PaginationTest do
   end
 
   test "reader rejects page sizes above the configured maximum" do
-    assert_raise ArgumentError, ~r/page size 101 exceeds maximum 100/, fn ->
-      Courses.all(authority: Authority.system(), page: %{size: 101})
+    assert_raise ArgumentError, ~r/page size 51 exceeds maximum 50/, fn ->
+      Courses.all(authority: Authority.system(), page: %{size: 51})
     end
   end
 

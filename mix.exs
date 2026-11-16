@@ -157,8 +157,9 @@ defmodule Hawk.MixProject do
       {:phoenix_pubsub, "~> 2.1"},
       {:jason, "~> 1.4"},
       {:jose, "~> 1.11"},
-      # Test factories
+      # Test factories and response schema validation
       {:ex_machina, "~> 2.8", only: :test},
+      {:jsv, "~> 0.27.0", only: :test},
       # Code quality
       {:dialyxir, "~> 1.3", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

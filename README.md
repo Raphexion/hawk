@@ -1681,6 +1681,11 @@ references rather than assume inline objects. Resource-dependent query parameter
 and successful responses remain inline. Application-owned `extra_paths` are
 merged unchanged; Hawk does not rewrite their media types or error contracts.
 
+Collection `page[size]` parameters expose the reader's `default_page_size/0`
+and `max_page_size/0` as schema `default` and `maximum`, rather than inventing
+API-wide limits. Explicitly unconfigured (`nil`) values are omitted. Readers
+without those callbacks use the controller's fallback of 100.
+
 Member GET IDs have a pattern accepting a full UUID or exactly eight hex
 characters. Mutations, actions and relationship endpoints require full UUIDs.
 JSON:API content negotiation can return 406 for Accept and 415 for a supplied
@@ -1731,6 +1736,28 @@ Request relationship objects require `data`, and each non-null identifier
 requires the related JSON:API `type` and an `id`, matching request validation.
 The target type is resolved from the association (or the related model's adapter
 by convention), so no per-relationship `:resource` opt is needed.
+
+For a non-null parent on writes, declare the constraint explicitly:
+
+```elixir
+relationship(:school, writable: true, required: :create, nullable: false)
+```
+
+`required: :create` documents that the key must be present on creation;
+`nullable: false` rejects an explicitly submitted `data: null` and removes null
+from that write schema, including PATCH. Omitted PATCH relationships remain
+unchanged. Existing to-one relationships permit null unless explicitly
+constrained. Writers still enforce requiredness and domain validation. Read
+linkage remains nullable because the related resource may be hidden by policy.
+To-many linkage is always an array, including when empty.
+
+`JsonApiIncludedResource` uses typed alternatives for resources supplied to the
+spec, honoring the selected presentation. A generic branch permits **only types
+not declared in the spec**, since related resources may be reachable through
+includes without being registered as standalone endpoints. Known types cannot
+use this fallback to evade their schema. Hawk does not crawl associations or
+impose a closed include graph, and optional fields remain optional for sparse
+fieldsets and policy projections.
 
 Frontend teams can generate TypeScript from that OpenAPI contract with their
 preferred tooling, for example:
