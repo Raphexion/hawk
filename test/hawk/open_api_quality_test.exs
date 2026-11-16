@@ -24,7 +24,14 @@ defmodule Hawk.OpenApiQualityTest do
       assert Regex.match?(pattern, value)
     end
 
-    for value <- ["123", "abcdefgh", "123456789", "00000000-0000-0000-0000-00000000000x"] do
+    for value <- [
+          "123",
+          "abcdefgh",
+          "123456789",
+          "00000000-0000-0000-0000-00000000000x",
+          "12345678\n",
+          Ecto.UUID.generate() <> "\n"
+        ] do
       refute Regex.match?(pattern, value)
     end
 

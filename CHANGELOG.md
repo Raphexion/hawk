@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-11-16
+
+### Fixed
+
+- OpenAPI read-ID patterns now reject trailing newlines, matching request
+  validation. The end assertion uses JSON Schema-compatible ECMA regex syntax.
+
 ## [0.13.0] - 2026-11-16
 
 ### Added
@@ -449,7 +456,8 @@ Initial tracked release. Adds the MIT License and Hex package metadata
 (`licenses`, `links`, `files`) in `mix.exs`. Earlier 0.x versions are
 untracked history.
 
-[Unreleased]: https://github.com/Raphexion/hawk/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/Raphexion/hawk/compare/v0.13.1...HEAD
+[0.13.1]: https://github.com/Raphexion/hawk/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/Raphexion/hawk/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/Raphexion/hawk/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/Raphexion/hawk/compare/v0.10.0...v0.11.0

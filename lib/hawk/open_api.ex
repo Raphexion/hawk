@@ -594,7 +594,10 @@ defmodule Hawk.OpenApi do
       required: true,
       schema: %{
         type: "string",
-        pattern: "^(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$"
+        # JSON Schema uses ECMA regexes: `$` also matches before a final newline.
+        # This negative lookahead requires the actual end without PCRE-only `\\z`.
+        pattern:
+          "^(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})(?![\\s\\S])"
       },
       description: "Full UUID, or the first 8 hex characters of a UUID (short id) for read-only member lookups."
     }
